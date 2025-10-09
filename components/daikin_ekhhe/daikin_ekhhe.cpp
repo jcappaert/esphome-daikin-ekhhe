@@ -79,6 +79,17 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   // Read the rest of the packet
   this->read_array(packet.data() + 1, expected_length - 1);
 
+  // Checksum test
+  const uint8_t received_chk = packet.back();
+  const uint8_t calc_chk = ekhhe_checksum(packet);
+  if (received_chk != calc_chk) {
+    ESP_LOGW(TAG,
+             "Dropped packet 0x%X due to checksum mismatch (got 0x%02X, expected 0x%02X)",
+             byte, received_chk, calc_chk);
+
+    return;  // Discard corrupt packet
+  }
+
   // Store only the latest version of each packet
   latest_packets_[byte] = packet;
 
