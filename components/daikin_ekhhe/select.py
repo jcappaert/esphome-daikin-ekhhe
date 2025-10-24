@@ -61,59 +61,59 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
-            cv.Optional(POWER_STATUS): select.SELECT_SCHEMA.extend({
+            cv.Optional(POWER_STATUS): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Standby', 1: 'On'}): ensure_option_map
             }),
-            cv.Optional(OPERATIONAL_MODE): select.SELECT_SCHEMA.extend({
+            cv.Optional(OPERATIONAL_MODE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Auto', 1: 'Eco', 2: 'Boost', 3: 'Electric', 4: 'Fan', 5: 'Vacation'}): ensure_option_map
             }),
-            cv.Optional(P5_DEFROST_MODE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P5_DEFROST_MODE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Compressor-stop', 1: 'Hot-gas'}): ensure_option_map
             }),
-            cv.Optional(P6_EHEATER_DEFROSTING): select.SELECT_SCHEMA.extend({
+            cv.Optional(P6_EHEATER_DEFROSTING): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Off', 1: 'On'}): ensure_option_map
             }),
-            cv.Optional(P11_DISP_WAT_T_PROBE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P11_DISP_WAT_T_PROBE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Lower', 1: 'Upper'}): ensure_option_map
             }),
-            cv.Optional(P12_EXT_PUMP_MODE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P12_EXT_PUMP_MODE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Always-off', 1: 'Hot water recirculation', 2: 'Thermal Solar System'}): ensure_option_map
             }),
-            cv.Optional(P13_HW_CIRC_PUMP_MODE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P13_HW_CIRC_PUMP_MODE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'With heat pump', 1: 'Always on'}): ensure_option_map
             }),
-            cv.Optional(P14_EVA_BLOWER_TYPE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P14_EVA_BLOWER_TYPE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'EC', 1: 'AC', 2: 'AC double speed', 3: 'EC dynamic speed control'}): ensure_option_map
             }),
-            cv.Optional(P15_SAFETY_SW_TYPE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P15_SAFETY_SW_TYPE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'NC', 1: 'NO'}): ensure_option_map
             }),
-            cv.Optional(P16_SOLAR_MODE_INT): select.SELECT_SCHEMA.extend({
+            cv.Optional(P16_SOLAR_MODE_INT): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'DIG1', 2: 'direct control'}): ensure_option_map
             }),
-            cv.Optional(P23_PV_MODE_INT): select.SELECT_SCHEMA.extend({
+            cv.Optional(P23_PV_MODE_INT): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'activated'}): ensure_option_map
             }),
-            cv.Optional(P24_OFF_PEAK_MODE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P24_OFF_PEAK_MODE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'activated with eco', 2: 'activated with auto'}): ensure_option_map
             }),
-            cv.Optional(P33_EEV_CONTROL): select.SELECT_SCHEMA.extend({
+            cv.Optional(P33_EEV_CONTROL): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'activated'}): ensure_option_map
             }),
-            cv.Optional(P39_EEV_MODE): select.SELECT_SCHEMA.extend({
+            cv.Optional(P39_EEV_MODE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'automatic', 1: 'manual'}): ensure_option_map
             }),
