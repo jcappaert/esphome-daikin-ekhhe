@@ -23,6 +23,7 @@ AUTO_T_TEMPERATURE      = "auto_target_temperature"
 ECO_T_TEMPERATURE       = "eco_target_temperature"
 BOOST_T_TEMPERATURE     = "boost_target_temperature"
 ELECTRIC_T_TEMPERATURE  = "electric_target_temperature"
+VAC_DAYS                = "vacation_days"
 
 P1_LOW_WAT_PROBE_HYST   = "low_water_hp_hysteris"
 P2_HEAT_ON_DELAY        = "elec_heater_switch_on_delay"
@@ -81,3 +82,22 @@ P50_ANTIFREEZE_SET      = "antifreeze_low_water_temp_setpoint"
 
 P51_EVA_HIGH_SET        = "evaporator_blower_high_speed_set"
 P52_EVA_LOW_SET         = "evaporator_blower_low_speed_set"
+
+DAIKIN_RAW_FRAME_HEX = "daikin_raw_frame_hex"
+DAIKIN_RAW_FRAME_META = "daikin_raw_frame_meta"
+DAIKIN_UNKNOWN_FIELDS = "daikin_unknown_fields"
+DAIKIN_FRAME_DIFF = "daikin_frame_diff"
+
+FRAMES_CAPTURED_TOTAL = "frames_captured_total"
+FRAMES_DROPPED_TOTAL = "frames_dropped_total"
+FRAMES_TRUNCATED_TOTAL = "frames_truncated_total"
+CRC_ERRORS_TOTAL = "crc_errors_total"
+FRAMING_ERRORS_TOTAL = "framing_errors_total"
+BYTES_CAPTURED_TOTAL = "bytes_captured_total"
+CYCLE_PARSE_TIME_MS = "cycle_parse_time_ms"
+CYCLE_TOTAL_TIME_MS = "cycle_total_time_ms"
+CYCLE_OVER_BUDGET_TOTAL = "cycle_over_budget_total"
+
+DAIKIN_DEBUG_PACKET = "daikin_debug_packet"
+DAIKIN_DEBUG_FREEZE = "daikin_debug_freeze"
+

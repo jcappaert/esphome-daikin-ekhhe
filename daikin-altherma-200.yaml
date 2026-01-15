@@ -9,7 +9,7 @@ esp32:
 
 # Enable logging
 logger:
-  level: DEBUG
+  level: INFO
 
 # Enable Home Assistant API
 api:
@@ -58,13 +58,12 @@ uart:
   parity: NONE
   stop_bits: 1
   id: my_uart
-  debug:
-    direction: TX
 
 # Initialize the daikin UART receiver
 daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
+    mode: production
 
 sensor:
   - platform: daikin_ekhhe

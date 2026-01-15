@@ -31,6 +31,7 @@ static const std::string AUTO_T_TEMPERATURE      = "auto_target_temperature";
 static const std::string ECO_T_TEMPERATURE       = "eco_target_temperature";
 static const std::string BOOST_T_TEMPERATURE     = "boost_target_temperature";
 static const std::string ELECTRIC_T_TEMPERATURE  = "electric_target_temperature";
+static const std::string VAC_DAYS                = "vacation_days";
 
 static const std::string P1_LOW_WAT_PROBE_HYST   = "low_water_hp_hysteris";
 static const std::string P2_HEAT_ON_DELAY        = "elec_heater_switch_on_delay";

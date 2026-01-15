@@ -1,10 +1,10 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import text_sensor
-from esphome.const import CONF_ID, DEVICE_CLASS_TIMESTAMP
+from esphome.const import CONF_ID, DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
 
 from . import CONF_EKHHE_ID, DaikinEkhhe
-from .const import CURRENT_TIME
+from .const import CURRENT_TIME, DAIKIN_RAW_FRAME_HEX, DAIKIN_RAW_FRAME_META, DAIKIN_UNKNOWN_FIELDS, DAIKIN_FRAME_DIFF
 
 
 CONFIG_SCHEMA = cv.Schema(
@@ -12,6 +12,18 @@ CONFIG_SCHEMA = cv.Schema(
         cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
         cv.Optional(CURRENT_TIME): text_sensor.text_sensor_schema(
             device_class=DEVICE_CLASS_TIMESTAMP,
+        ),
+        cv.Optional(DAIKIN_RAW_FRAME_HEX): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(DAIKIN_RAW_FRAME_META): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(DAIKIN_UNKNOWN_FIELDS): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(DAIKIN_FRAME_DIFF): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
     }
 )
@@ -22,3 +34,15 @@ async def to_code(config):
     if CURRENT_TIME in config:
         sens = await text_sensor.new_text_sensor(config[CURRENT_TIME])
         cg.add(hub.register_timestamp_sensor(sens))
+    if DAIKIN_RAW_FRAME_HEX in config:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_RAW_FRAME_HEX])
+        cg.add(hub.register_debug_text_sensor(DAIKIN_RAW_FRAME_HEX, sens))
+    if DAIKIN_RAW_FRAME_META in config:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_RAW_FRAME_META])
+        cg.add(hub.register_debug_text_sensor(DAIKIN_RAW_FRAME_META, sens))
+    if DAIKIN_UNKNOWN_FIELDS in config:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_UNKNOWN_FIELDS])
+        cg.add(hub.register_debug_text_sensor(DAIKIN_UNKNOWN_FIELDS, sens))
+    if DAIKIN_FRAME_DIFF in config:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_FRAME_DIFF])
+        cg.add(hub.register_debug_text_sensor(DAIKIN_FRAME_DIFF, sens))
