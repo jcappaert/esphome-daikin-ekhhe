@@ -357,6 +357,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                             std::map<std::string, std::string> &last_values,
                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
   struct RawFrameEntry;
+
   bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
   void publish_debug_outputs_();
   void publish_cc_snapshot_(const char *override_text);
@@ -370,6 +371,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::string format_raw_frame_hex_(const RawFrameEntry &entry) const;
   std::string format_raw_frame_hex_data_(const uint8_t *data, size_t length) const;
   std::string format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back, uint32_t now_ms) const;
+
   std::string format_unknown_fields_(const RawFrameEntry &entry) const;
   std::string format_frame_diff_(const RawFrameEntry &entry, const RawFrameEntry *prev) const;
   bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;

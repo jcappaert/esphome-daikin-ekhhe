@@ -1586,6 +1586,13 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
     this->write_array(command);
     this->flush();
 
+    if (apply_change) {
+      ESP_LOGI(TAG, "TX CD sent: index=%u value=0x%02X bit=%u len=%u",
+               index, value, bit_position, static_cast<unsigned>(command.size()));
+    } else {
+      ESP_LOGI(TAG, "TX CD sent: snapshot len=%u", static_cast<unsigned>(command.size()));
+    }
+
     // Trigger a new read cycle w/ small timeout
     set_timeout(10, [this]() {
           uart_tx_active_ = false;
