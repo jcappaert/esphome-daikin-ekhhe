@@ -138,6 +138,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void restore_cc_snapshot();
   void set_debug_packet(const std::string &value);
   void set_debug_freeze(bool enabled);
+  void update_number_cache(const std::string &number_name, float value);
+  void update_select_cache(const std::string &select_name, const std::string &value);
 
 
   enum EkkheDDPacket {
@@ -310,6 +312,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kDebugTimingPublishMinIntervalMs = 1000;
   static constexpr size_t kRawFrameMaxLen = 71;
   static constexpr size_t kRawFrameBufferSize = 16;
+  static constexpr uint8_t kBitPositionNoBitmask = 255;
 
   static constexpr uint8_t kPacketMaskDD = 1 << 0;
   static constexpr uint8_t kPacketMaskD2 = 1 << 1;
@@ -379,6 +382,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::string packet_type_to_string_(uint8_t packet_type) const;
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
+  void check_pending_tx_(const std::vector<uint8_t> &buffer);
 
   std::vector<uint8_t> last_d2_packet_;
   std::vector<uint8_t> last_dd_packet_;
@@ -416,6 +420,15 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint8_t cc_snapshot_len_ = 0;
   uint8_t cc_snapshot_data_[kRawFrameMaxLen];
   uint32_t cc_snapshot_ts_ms_ = 0;
+
+  struct PendingTx {
+    bool active = false;
+    uint8_t index = 0;
+    uint8_t value = 0;
+    uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t cycles_left = 0;
+  };
+  PendingTx pending_tx_;
 
   enum RawFrameFlags : uint8_t {
     RAW_FRAME_CRC_ERROR = 1 << 0,

@@ -62,10 +62,60 @@ You will need the esp32 UART hooked up to a UART/RS485 converter, connected to A
 ## Reverse Engineering
 A lot of the protocol reverse engineering has been done by lorbetzki [here](https://github.com/lorbetzki/Daikin-EKHHE).
 
+## RX/TX behavior
+The component listens on the UART/RS485 bus and processes a repeating read cycle. Each cycle collects a set of packet
+types (DD, D2, D4, C1, CC). Frames are assembled by detecting a start byte and then reading the expected length from
+the packet size table. Packets that require a checksum are validated before they are accepted into the cycle set.
+
+When all required packets are present, parsing runs and sensors are updated. The CC packet is always stored because it
+is also the base for any writes.
+
+For TX, the component reuses the last received CC packet, changes a single byte/bit (or sends a snapshot), rewrites the
+checksum, and transmits a CD packet. TX is gated by an RX-idle delay to reduce bus contention, and a short timeout
+restarts the RX cycle after TX. A confirmation check compares subsequent CC packets to the requested value and logs
+either a "TX applied" info or a "TX not applied" warning.
+
+While a TX is pending, CC updates for the targeted byte/bit are temporarily ignored so the UI stays on the requested
+value. If the request is applied, the pending state is cleared on the first matching CC packet. If it is not applied,
+the pending state is cleared after a small number of CC cycles and the UI is immediately rolled back to the current CC
+value in that same cycle.
+
+## Debug / Reverse Engineering
+Debug mode enables a raw-frame ring buffer and optional Home Assistant entities for inspection. These entities are
+created only when `mode: debug` is set on the component and you enable them in YAML.
+
+Text sensors:
+* daikin_raw_frame_hex
+* daikin_raw_frame_meta
+* daikin_unknown_fields
+* daikin_frame_diff
+* daikin_cc_snapshot_hex
+
+Sensors:
+* frames_captured_total
+* frames_dropped_total
+* frames_truncated_total
+* crc_errors_total
+* framing_errors_total
+* bytes_captured_total
+* cycle_parse_time_ms
+* cycle_total_time_ms
+* cycle_over_budget_total
+
+Controls:
+* daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
+* daikin_debug_freeze (switch)
+* daikin_save_cc_snapshot (button)
+* daikin_restore_cc_snapshot (button)
+
+## CC snapshot / restore (RAM only)
+In debug mode you can store the latest valid CC frame in RAM and later re-send it as a CD packet. The snapshot is
+volatile (not persisted to flash) and displayed as hex via `daikin_cc_snapshot_hex`. If no valid CC frame is available,
+the snapshot is marked as EMPTY and restore does nothing.
+
 ## TODO
 Some main TODOs to get to full functionality are:
 
-* Implement better TX UART flow control and match the Daikin protocol as indicate by lorbetzki [here](https://github.com/lorbetzki/Daikin-EKHHE/discussions/2#discussioncomment-12176862).
 * Find where in the packets the following items are:
   - Protection and fault codes
   - Silent mode  
