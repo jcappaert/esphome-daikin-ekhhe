@@ -87,6 +87,7 @@ DAIKIN_RAW_FRAME_HEX = "daikin_raw_frame_hex"
 DAIKIN_RAW_FRAME_META = "daikin_raw_frame_meta"
 DAIKIN_UNKNOWN_FIELDS = "daikin_unknown_fields"
 DAIKIN_FRAME_DIFF = "daikin_frame_diff"
+DAIKIN_CC_SNAPSHOT_HEX = "daikin_cc_snapshot_hex"
 
 FRAMES_CAPTURED_TOTAL = "frames_captured_total"
 FRAMES_DROPPED_TOTAL = "frames_dropped_total"
@@ -100,4 +101,6 @@ CYCLE_OVER_BUDGET_TOTAL = "cycle_over_budget_total"
 
 DAIKIN_DEBUG_PACKET = "daikin_debug_packet"
 DAIKIN_DEBUG_FREEZE = "daikin_debug_freeze"
+DAIKIN_SAVE_CC_SNAPSHOT = "daikin_save_cc_snapshot"
+DAIKIN_RESTORE_CC_SNAPSHOT = "daikin_restore_cc_snapshot"
 

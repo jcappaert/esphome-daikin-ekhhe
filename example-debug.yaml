@@ -219,6 +219,13 @@ switch:
     daikin_debug_freeze:
       name: "Daikin Debug Freeze"
 
+button:
+  - platform: daikin_ekhhe
+    daikin_save_cc_snapshot:
+      name: "Save CC snapshot"
+    daikin_restore_cc_snapshot:
+      name: "Restore CC snapshot"
+
 text_sensor:
   - platform: daikin_ekhhe
     current_time:
@@ -231,3 +238,5 @@ text_sensor:
       name: "Daikin Unknown Fields"
     daikin_frame_diff:
       name: "Daikin Frame Diff"
+    daikin_cc_snapshot_hex:
+      name: "CC snapshot hex"

@@ -44,6 +44,11 @@ Sensors:
 Controls:
 * daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
 * daikin_debug_freeze (switch)
+* daikin_save_cc_snapshot (button)
+* daikin_restore_cc_snapshot (button)
+
+Snapshot text sensor:
+* daikin_cc_snapshot_hex
 
 ### Example YAML files
 See `example-production.yaml` and `example-debug.yaml` in the repository root.
