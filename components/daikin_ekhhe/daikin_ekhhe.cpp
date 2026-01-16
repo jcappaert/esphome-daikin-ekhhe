@@ -1456,6 +1456,60 @@ void DaikinEkhheSelect::control(const std::string &value) {
     this->publish_state(value);
 }
 
+void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
+                                                uint8_t index, uint8_t value, uint8_t bit_position) {
+    if (base_packet.empty()) {
+        DAIKIN_WARN(TAG, "Base CC packet empty, cannot send.");
+        return;
+    }
+    if (base_packet.size() < CD_PACKET_SIZE) {
+        DAIKIN_WARN(TAG, "Base CC packet length %u invalid, cannot send.", static_cast<unsigned>(base_packet.size()));
+        return;
+    }
+
+    // UART flow control
+    uart_active_ = false;
+    uart_tx_active_ = true;
+
+    // Construct command packet
+    std::vector<uint8_t> command = base_packet;
+    command[0] = CD_PACKET_START_BYTE;
+
+    if (apply_change) {
+      // Reconstruct array byte depending on bitmask or not
+      if (bit_position != BIT_POSITION_NO_BITMASK) {
+        uint8_t current_value = command[index];
+
+        // Clear the specific bit and set to selected value
+        current_value &= ~(1 << bit_position);
+        current_value |= (value << bit_position);
+        command[index] = current_value;
+      } else {
+        // If it's a normal parameter, just assign the value
+        command[index] = value;
+      }
+    }
+
+    command.back() = ekhhe_checksum(command);
+
+    // Send the updated packet over UART
+    this->write_array(command);
+    this->flush();
+
+    if (apply_change) {
+      ESP_LOGI(TAG, "TX CD sent: index=%u value=0x%02X bit=%u len=%u",
+               index, value, bit_position, static_cast<unsigned>(command.size()));
+    } else {
+      ESP_LOGI(TAG, "TX CD sent: snapshot len=%u", static_cast<unsigned>(command.size()));
+    }
+
+    // Trigger a new read cycle w/ small timeout
+    set_timeout(10, [this]() {
+          uart_tx_active_ = false;
+          start_uart_cycle();
+    });
+}
+
 void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
     // Check that a CC packet is stored
     // since we need the last one as a basis for the new packet
@@ -1478,39 +1532,7 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     }
     */
 
-    // UART flow control
-    uart_active_ = false;
-    uart_tx_active_ = true;  
-
-    // Construct command packet
-    std::vector<uint8_t> command = last_cc_packet_;
-    command[0] = CD_PACKET_START_BYTE;
-
-    // Reconstruct array byte depending on bitmask or not
-    if (bit_position != BIT_POSITION_NO_BITMASK) {  
-      uint8_t current_value = command[index];
-
-      // Clear the specific bit and set to selected value
-      current_value &= ~(1 << bit_position);
-      current_value |= (value << bit_position);
-      command[index] = current_value;
-    } 
-    else {
-      // If it's a normal parameter, just assign the value
-      command[index] = value;
-    }
-
-    command.back() = ekhhe_checksum(command);
-
-    // Send the updated packet over UART
-    this->write_array(command);
-    this->flush();
-
-    // Trigger a new read cycle w/ small t imeout
-    set_timeout(10, [this]() {
-          uart_tx_active_ = false;
-          start_uart_cycle();
-    });
+    send_uart_cc_packet_(last_cc_packet_, true, index, value, bit_position);
 }
 
 

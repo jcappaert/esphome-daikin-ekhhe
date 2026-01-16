@@ -352,6 +352,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;
   uint8_t packet_type_from_string_(const std::string &value) const;
   std::string packet_type_to_string_(uint8_t packet_type) const;
+  void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
+                            uint8_t index, uint8_t value, uint8_t bit_position);
 
   std::vector<uint8_t> last_d2_packet_;
   std::vector<uint8_t> last_dd_packet_;
