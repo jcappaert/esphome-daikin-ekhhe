@@ -1123,6 +1123,10 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : U_NUMBER_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
+    if (pending_tx_.active && pending_tx_.index == param_index &&
+        pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+      continue;
+    }
     uint8_t value = buffer[param_index];
     set_number_value(param_name, value);
   }
@@ -1130,6 +1134,10 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : I_NUMBER_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
+    if (pending_tx_.active && pending_tx_.index == param_index &&
+        pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+      continue;
+    }
     int8_t value = static_cast<int8_t>(buffer[param_index]);  // cast as signed
     set_number_value(param_name, value);
   }
@@ -1138,6 +1146,10 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : SELECT_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
+    if (pending_tx_.active && pending_tx_.index == param_index &&
+        pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+      continue;
+    }
     uint8_t value = buffer[param_index];
     set_select_value(param_name, value);
   }
@@ -1147,11 +1159,17 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second.first;  // The byte index
     uint8_t bit_position = entry.second.second;  // The specific bit to extract
+    if (pending_tx_.active && pending_tx_.index == param_index &&
+        pending_tx_.bit_position == bit_position) {
+      continue;
+    }
     uint8_t bit_value = (buffer[param_index] >> bit_position) & 0x01;  // Extract the bit
     set_select_value(param_name, bit_value);
   }
 
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
+
+  check_pending_tx_(buffer);
 
   return;
 }
@@ -1330,6 +1348,18 @@ void DaikinEkhheComponent::update_timestamp(uint8_t hour, uint8_t minute) {
     }
 }
 
+void DaikinEkhheComponent::update_number_cache(const std::string &number_name, float value) {
+  uint32_t now = millis();
+  last_published_number_values_[number_name] = value;
+  last_published_number_ms_[number_name] = now;
+}
+
+void DaikinEkhheComponent::update_select_cache(const std::string &select_name, const std::string &value) {
+  uint32_t now = millis();
+  last_published_select_values_[select_name] = value;
+  last_published_select_ms_[select_name] = now;
+}
+
 uint8_t DaikinEkhheComponent::ekhhe_checksum(const std::vector<uint8_t>& data_bytes) {
   // Compute the checksum as (sum of data bytes) mod 256 + 170
   uint16_t sum = std::accumulate(data_bytes.begin(), data_bytes.end()-1, 0);
@@ -1487,11 +1517,13 @@ void DaikinEkhheNumber::control(float value) {
     if (it_u != U_NUMBER_PARAM_INDEX.end()) {
         uint8_t index = it_u->second;
         this->parent_->send_uart_cc_command(index, (uint8_t)value, BIT_POSITION_NO_BITMASK);
+        this->parent_->update_number_cache(name, value);
         this->publish_state(value);
     } 
     else if (it_i != I_NUMBER_PARAM_INDEX.end()) {
         uint8_t index = it_i->second;
         this->parent_->send_uart_cc_command(index, (int8_t)value, BIT_POSITION_NO_BITMASK);
+        this->parent_->update_number_cache(name, value);
         this->publish_state(value);
     }
     else {
@@ -1538,11 +1570,12 @@ void DaikinEkhheSelect::control(const std::string &value) {
         param_index = bitmask_it->second.first;  // Get the byte index
         bit_position = bitmask_it->second.second;  // Get the bit position
     } else {
-            DAIKIN_WARN(TAG, "Select %s NOT found in SELECT_BITMASKS", name.c_str());
+            DAIKIN_DBG(TAG, "Select %s not in SELECT_BITMASKS", name.c_str());
     }
 
     // Update value in ESPHome
     this->parent_->send_uart_cc_command(param_index, uart_value, bit_position);
+    this->parent_->update_select_cache(name, value);
     this->publish_state(value);
 }
 
@@ -1554,6 +1587,16 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
     }
     if (base_packet.size() < CD_PACKET_SIZE) {
         DAIKIN_WARN(TAG, "Base CC packet length %u invalid, cannot send.", static_cast<unsigned>(base_packet.size()));
+        return;
+    }
+
+    // Wait for RX to be idle before TX to reduce bus contention.
+    unsigned long now = millis();
+    unsigned long time_since_last_rx = now - last_rx_time_;
+    if (time_since_last_rx < 50) {
+        set_timeout(50 - time_since_last_rx, [this, base_packet, apply_change, index, value, bit_position]() {
+            send_uart_cc_packet_(base_packet, apply_change, index, value, bit_position);
+        });
         return;
     }
 
@@ -1576,8 +1619,14 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
         command[index] = current_value;
       } else {
         // If it's a normal parameter, just assign the value
-        command[index] = value;
-      }
+      command[index] = value;
+    }
+
+    pending_tx_.active = true;
+    pending_tx_.index = index;
+    pending_tx_.value = value;
+    pending_tx_.bit_position = bit_position;
+    pending_tx_.cycles_left = 2;
     }
 
     command.back() = ekhhe_checksum(command);
@@ -1598,6 +1647,78 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
           uart_tx_active_ = false;
           start_uart_cycle();
     });
+}
+
+void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer) {
+  if (!pending_tx_.active) {
+    return;
+  }
+  if (pending_tx_.index >= buffer.size()) {
+    pending_tx_.active = false;
+    return;
+  }
+
+  bool matched = false;
+  if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+    matched = (buffer[pending_tx_.index] == pending_tx_.value);
+  } else {
+    uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+    matched = (bit == (pending_tx_.value & 0x01));
+  }
+
+  if (matched) {
+    if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+      ESP_LOGI(TAG, "TX applied: index=%u value=0x%02X",
+               pending_tx_.index, pending_tx_.value);
+    } else {
+      uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+      ESP_LOGI(TAG, "TX applied: index=%u bit=%u value=%u",
+               pending_tx_.index, pending_tx_.bit_position, bit);
+    }
+    pending_tx_.active = false;
+    return;
+  }
+
+  if (pending_tx_.cycles_left > 0) {
+    pending_tx_.cycles_left--;
+  }
+  if (pending_tx_.cycles_left == 0) {
+    if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+      DAIKIN_WARN(TAG, "TX not applied: index=%u expected=0x%02X current=0x%02X",
+                  pending_tx_.index, pending_tx_.value, buffer[pending_tx_.index]);
+    } else {
+      uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+      DAIKIN_WARN(TAG, "TX not applied: index=%u bit=%u expected=%u current=%u",
+                  pending_tx_.index, pending_tx_.bit_position,
+                  pending_tx_.value & 0x01, bit);
+    }
+    uint8_t index = pending_tx_.index;
+    if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+      for (const auto &entry : U_NUMBER_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_number_value(entry.first, buffer[index]);
+        }
+      }
+      for (const auto &entry : I_NUMBER_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_number_value(entry.first, static_cast<int8_t>(buffer[index]));
+        }
+      }
+      for (const auto &entry : SELECT_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_select_value(entry.first, buffer[index]);
+        }
+      }
+    } else {
+      uint8_t bit = (buffer[index] >> pending_tx_.bit_position) & 0x01;
+      for (const auto &entry : SELECT_BITMASKS) {
+        if (entry.second.first == index && entry.second.second == pending_tx_.bit_position) {
+          set_select_value(entry.first, bit);
+        }
+      }
+    }
+    pending_tx_.active = false;
+  }
 }
 
 void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
