@@ -7,6 +7,7 @@ from esphome.const import (
 
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_MODE = "mode"
+DEBUG_COMPONENTS = set()
 
 CODEOWNERS = ["@jcappaert"]
 
@@ -39,3 +40,5 @@ async def to_code(config):
     cg.add(var.set_update_interval(update_interval_ms))
     debug_mode = config[CONF_MODE] == "debug"
     cg.add_build_flag(f"-DDAIKIN_EKHHE_DEBUG={1 if debug_mode else 0}")
+    if debug_mode:
+        DEBUG_COMPONENTS.add(str(config[CONF_ID]))

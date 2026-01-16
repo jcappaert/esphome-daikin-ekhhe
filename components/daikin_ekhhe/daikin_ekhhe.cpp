@@ -538,6 +538,27 @@ std::string DaikinEkhheComponent::format_raw_frame_hex_(const RawFrameEntry &ent
   return out;
 }
 
+std::string DaikinEkhheComponent::format_raw_frame_hex_data_(const uint8_t *data, size_t length) const {
+  static const char hex[] = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(length * 4);
+  for (size_t i = 0; i < length; ++i) {
+    if (i % 16 == 0) {
+      char header[8];
+      snprintf(header, sizeof(header), "%02X:", static_cast<unsigned>(i));
+      if (!out.empty()) {
+        out.push_back('\n');
+      }
+      out.append(header);
+    }
+    out.push_back(' ');
+    uint8_t byte = data[i];
+    out.push_back(hex[(byte >> 4) & 0x0F]);
+    out.push_back(hex[byte & 0x0F]);
+  }
+  return out;
+}
+
 std::string DaikinEkhheComponent::format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back,
                                                          uint32_t now_ms) const {
   std::string flags = raw_frame_flags_to_string_(entry.flags);
@@ -870,6 +891,22 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
   publish_debug_text("daikin_frame_diff", format_frame_diff_(*entry, prev));
 }
 
+void DaikinEkhheComponent::publish_cc_snapshot_(const char *override_text) {
+  if (cc_snapshot_sensor_ == nullptr || !debug_mode_) {
+    return;
+  }
+  if (override_text != nullptr) {
+    cc_snapshot_sensor_->publish_state(override_text);
+    return;
+  }
+  if (!cc_snapshot_valid_ || cc_snapshot_len_ == 0) {
+    cc_snapshot_sensor_->publish_state("EMPTY");
+    return;
+  }
+  std::string formatted = format_raw_frame_hex_data_(cc_snapshot_data_, cc_snapshot_len_);
+  cc_snapshot_sensor_->publish_state(formatted);
+}
+
 bool DaikinEkhheComponent::packet_set_complete() {
     return latest_packets_.count(DD_PACKET_START_BYTE) &&
            latest_packets_.count(D2_PACKET_START_BYTE) &&
@@ -1176,6 +1213,13 @@ void DaikinEkhheComponent::register_debug_switch(DaikinEkhheDebugSwitch *sw) {
   }
 }
 
+void DaikinEkhheComponent::register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor) {
+  this->cc_snapshot_sensor_ = sensor;
+  if (this->cc_snapshot_sensor_ != nullptr) {
+    publish_cc_snapshot_(nullptr);
+  }
+}
+
 void DaikinEkhheComponent::set_sensor_value(const std::string &sensor_name, float value) {
   if (sensors_.find(sensor_name) != sensors_.end()) {
     if (!cycle_publish_allowed_) {
@@ -1366,6 +1410,41 @@ void DaikinEkhheComponent::set_debug_freeze(bool enabled) {
   }
 }
 
+void DaikinEkhheComponent::save_cc_snapshot() {
+  if (!debug_mode_) {
+    return;
+  }
+  size_t index = 0;
+  const RawFrameEntry *entry = find_latest_frame_by_type_(CC_PACKET_START_BYTE, index, true);
+  if (entry == nullptr) {
+    cc_snapshot_valid_ = false;
+    cc_snapshot_len_ = 0;
+    publish_cc_snapshot_("EMPTY");
+    return;
+  }
+  cc_snapshot_len_ = entry->length;
+  if (cc_snapshot_len_ > kRawFrameMaxLen) {
+    cc_snapshot_len_ = kRawFrameMaxLen;
+  }
+  std::memcpy(cc_snapshot_data_, entry->data, cc_snapshot_len_);
+  cc_snapshot_ts_ms_ = millis();
+  cc_snapshot_valid_ = true;
+  publish_cc_snapshot_(nullptr);
+}
+
+void DaikinEkhheComponent::restore_cc_snapshot() {
+  if (!debug_mode_) {
+    return;
+  }
+  if (!cc_snapshot_valid_ || cc_snapshot_len_ == 0) {
+    publish_cc_snapshot_("EMPTY");
+    return;
+  }
+  std::vector<uint8_t> packet(cc_snapshot_data_, cc_snapshot_data_ + cc_snapshot_len_);
+  send_uart_cc_packet_(packet, false, 0, 0, BIT_POSITION_NO_BITMASK);
+  publish_cc_snapshot_(nullptr);
+}
+
 void DaikinEkhheDebugSelect::control(const std::string &value) {
   if (this->parent_ == nullptr) {
     return;
@@ -1378,6 +1457,17 @@ void DaikinEkhheDebugSwitch::write_state(bool state) {
     return;
   }
   this->parent_->set_debug_freeze(state);
+}
+
+void DaikinEkhheDebugButton::press_action() {
+  if (this->parent_ == nullptr) {
+    return;
+  }
+  if (this->action_ == Action::SAVE_SNAPSHOT) {
+    this->parent_->save_cc_snapshot();
+  } else if (this->action_ == Action::RESTORE_SNAPSHOT) {
+    this->parent_->restore_cc_snapshot();
+  }
 }
 
 
@@ -1456,6 +1546,53 @@ void DaikinEkhheSelect::control(const std::string &value) {
     this->publish_state(value);
 }
 
+void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
+                                                uint8_t index, uint8_t value, uint8_t bit_position) {
+    if (base_packet.empty()) {
+        DAIKIN_WARN(TAG, "Base CC packet empty, cannot send.");
+        return;
+    }
+    if (base_packet.size() < CD_PACKET_SIZE) {
+        DAIKIN_WARN(TAG, "Base CC packet length %u invalid, cannot send.", static_cast<unsigned>(base_packet.size()));
+        return;
+    }
+
+    // UART flow control
+    uart_active_ = false;
+    uart_tx_active_ = true;
+
+    // Construct command packet
+    std::vector<uint8_t> command = base_packet;
+    command[0] = CD_PACKET_START_BYTE;
+
+    if (apply_change) {
+      // Reconstruct array byte depending on bitmask or not
+      if (bit_position != BIT_POSITION_NO_BITMASK) {
+        uint8_t current_value = command[index];
+
+        // Clear the specific bit and set to selected value
+        current_value &= ~(1 << bit_position);
+        current_value |= (value << bit_position);
+        command[index] = current_value;
+      } else {
+        // If it's a normal parameter, just assign the value
+        command[index] = value;
+      }
+    }
+
+    command.back() = ekhhe_checksum(command);
+
+    // Send the updated packet over UART
+    this->write_array(command);
+    this->flush();
+
+    // Trigger a new read cycle w/ small timeout
+    set_timeout(10, [this]() {
+          uart_tx_active_ = false;
+          start_uart_cycle();
+    });
+}
+
 void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
     // Check that a CC packet is stored
     // since we need the last one as a basis for the new packet
@@ -1478,39 +1615,7 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     }
     */
 
-    // UART flow control
-    uart_active_ = false;
-    uart_tx_active_ = true;  
-
-    // Construct command packet
-    std::vector<uint8_t> command = last_cc_packet_;
-    command[0] = CD_PACKET_START_BYTE;
-
-    // Reconstruct array byte depending on bitmask or not
-    if (bit_position != BIT_POSITION_NO_BITMASK) {  
-      uint8_t current_value = command[index];
-
-      // Clear the specific bit and set to selected value
-      current_value &= ~(1 << bit_position);
-      current_value |= (value << bit_position);
-      command[index] = current_value;
-    } 
-    else {
-      // If it's a normal parameter, just assign the value
-      command[index] = value;
-    }
-
-    command.back() = ekhhe_checksum(command);
-
-    // Send the updated packet over UART
-    this->write_array(command);
-    this->flush();
-
-    // Trigger a new read cycle w/ small t imeout
-    set_timeout(10, [this]() {
-          uart_tx_active_ = false;
-          start_uart_cycle();
-    });
+    send_uart_cc_packet_(last_cc_packet_, true, index, value, bit_position);
 }
 
 
