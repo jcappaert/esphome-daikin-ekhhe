@@ -3,7 +3,8 @@ import esphome.config_validation as cv
 from esphome.components import select
 from esphome.const import (
     CONF_ID,
-    CONF_OPTIONS
+    CONF_OPTIONS,
+    ENTITY_CATEGORY_DIAGNOSTIC
 )
 
 from . import (
@@ -37,6 +38,11 @@ TYPES = [
 DaikinEkhheSelect = daikin_ekhhe_ns.class_(
     "DaikinEkhheSelect", select.Select, cg.Component
     )
+DaikinEkhheDebugSelect = daikin_ekhhe_ns.class_(
+    "DaikinEkhheDebugSelect", select.Select, cg.Component
+    )
+
+DEBUG_PACKET_OPTIONS = ["latest", "DD", "D2", "D4", "C1", "CC"]
 
 
 # taken from tuya select
@@ -117,6 +123,9 @@ CONFIG_SCHEMA = (
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'automatic', 1: 'manual'}): ensure_option_map
             }),
+            cv.Optional(DAIKIN_DEBUG_PACKET): select.select_schema(
+                DaikinEkhheDebugSelect, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
         }
     )
 )
@@ -147,3 +156,8 @@ async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
     for key in TYPES:
         await setup_conf(config, key, hub)
+    if DAIKIN_DEBUG_PACKET in config:
+        conf = config[DAIKIN_DEBUG_PACKET]
+        sens = await select.new_select(conf, options=DEBUG_PACKET_OPTIONS)
+        cg.add(hub.register_debug_select(sens))
+        cg.add(sens.set_parent(hub))

@@ -6,6 +6,7 @@ from esphome.const import (
 )
 
 CONF_UPDATE_INTERVAL = "update_interval"
+CONF_MODE = "mode"
 
 CODEOWNERS = ["@jcappaert"]
 
@@ -22,6 +23,7 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(): cv.declare_id(DaikinEkhhe),
             cv.Optional(CONF_UPDATE_INTERVAL, default=10): cv.positive_int,
+            cv.Optional(CONF_MODE, default="production"): cv.one_of("production", "debug", lower=True),
         }
     )
     .extend(uart.UART_DEVICE_SCHEMA)
@@ -35,3 +37,5 @@ async def to_code(config):
 
     update_interval_ms = config[CONF_UPDATE_INTERVAL] * 1000 
     cg.add(var.set_update_interval(update_interval_ms))
+    debug_mode = config[CONF_MODE] == "debug"
+    cg.add_build_flag(f"-DDAIKIN_EKHHE_DEBUG={1 if debug_mode else 0}")

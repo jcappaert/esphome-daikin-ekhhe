@@ -10,11 +10,16 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
+#include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/time/real_time_clock.h"
 
 #include "daikin_ekhhe_const.h"
+
+#ifndef DAIKIN_EKHHE_DEBUG
+#define DAIKIN_EKHHE_DEBUG 0
+#endif
 
 namespace esphome {
 namespace daikin_ekkhe {
@@ -53,6 +58,24 @@ class DaikinEkhheSelect : public select::Select, public Component {
    std::string internal_id_;
 };
 
+class DaikinEkhheDebugSelect : public select::Select, public Component {
+ public:
+  void control(const std::string &value) override;
+  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
+
+ private:
+  DaikinEkhheComponent *parent_;
+};
+
+class DaikinEkhheDebugSwitch : public switch_::Switch {
+ public:
+  void write_state(bool state) override;
+  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
+
+ private:
+  DaikinEkhheComponent *parent_;
+};
+
 class DaikinEkhheComponent : public Component, public uart::UARTDevice {
  public:
 
@@ -79,6 +102,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_number(const std::string &number_name, esphome::number::Number *number);
   void register_select(const std::string &select_name, select::Select *select);
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
+  void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
+  void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
+  void register_debug_select(DaikinEkhheDebugSelect *select);
+  void register_debug_switch(DaikinEkhheDebugSwitch *sw);
 
   // Methods to update values dynamically (only for registered components)
   void set_sensor_value(const std::string &sensor_name, float value);
@@ -89,6 +116,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   // Allow UART command sending for Number/Select control
   void send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  void set_debug_packet(const std::string &value);
+  void set_debug_freeze(bool enabled);
 
 
   enum EkkheDDPacket {
@@ -187,7 +216,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     CC_PACKET_P4_IDX    = 4,
     CC_PACKET_P7_IDX    = 5,
     CC_PACKET_P10_IDX   = 6,
-    CC_PACKET_P2_IDX    = 7, 
+    CC_PACKET_P2_IDX    = 7,
+    CC_PACKET_VAC_DAYS  = 8,
     CC_PACKET_P29_IDX   = 9,
     CC_PACKET_P31_IDX   = 10,
     CC_PACKET_P8_IDX    = 11,
@@ -248,12 +278,37 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   };
 
  private:
+  static constexpr float kFloatPublishEpsilon = 0.5f;
+  static constexpr uint32_t kFastPublishMinIntervalMs = 1000;
+  static constexpr uint32_t kSlowPublishRefreshMs = 30 * 60 * 1000;
+  static constexpr uint32_t kTimestampRefreshMs = 5 * 60 * 1000;
+  static constexpr uint32_t kCycleTimeoutMs = 2000;
+  static constexpr uint32_t kFrameReadTimeoutMs = 120;
+  static constexpr uint32_t kCycleOverBudgetMs = 2000;
+  static constexpr uint32_t kDebugTextPublishMinIntervalMs = 1000;
+  static constexpr uint32_t kDebugCounterPublishIntervalMs = 30000;
+  static constexpr uint32_t kDebugTimingPublishMinIntervalMs = 1000;
+  static constexpr size_t kRawFrameMaxLen = 71;
+  static constexpr size_t kRawFrameBufferSize = 16;
+
+  static constexpr uint8_t kPacketMaskDD = 1 << 0;
+  static constexpr uint8_t kPacketMaskD2 = 1 << 1;
+  static constexpr uint8_t kPacketMaskD4 = 1 << 2;
+  static constexpr uint8_t kPacketMaskC1 = 1 << 3;
+  static constexpr uint8_t kPacketMaskCC = 1 << 4;
+  static constexpr uint8_t kRequiredPacketMask = kPacketMaskDD | kPacketMaskD2 | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskCC;
+  static constexpr uint8_t kChecksumPacketMask = kPacketMaskDD | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskCC;
+
   // variables for sensors etc.
   std::map<std::string, esphome::sensor::Sensor *> sensors_;
   std::map<std::string, esphome::binary_sensor::BinarySensor *> binary_sensors_;
   std::map<std::string, esphome::number::Number *> numbers_;
   std::map<std::string, DaikinEkhheSelect *> selects_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
+  std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
+  std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
+  DaikinEkhheDebugSelect *debug_packet_select_ = nullptr;
+  DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
   esphome::time::RealTimeClock *clock;
 
   // UART Processing
@@ -267,6 +322,36 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void process_packet_set();
   bool packet_set_complete();
   void store_latest_packet(uint8_t byte);
+  bool read_packet_bytes_(uint8_t *dest, size_t length, uint32_t timeout_ms);
+  void store_raw_frame_(uint8_t packet_type, const uint8_t *data, size_t length, uint8_t flags);
+  void reset_cycle_stats_();
+  uint8_t packet_mask_for_start_(uint8_t start_byte) const;
+  std::string packet_mask_to_string_(uint8_t mask) const;
+  bool should_publish_float_(const std::string &key, float value, std::map<std::string, float> &last_values,
+                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t min_interval_ms,
+                             float epsilon, uint32_t refresh_ms);
+  bool should_publish_bool_(const std::string &key, bool value, std::map<std::string, bool> &last_values,
+                            std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
+ bool should_publish_text_(const std::string &key, const std::string &value,
+                            std::map<std::string, std::string> &last_values,
+                            std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
+  struct RawFrameEntry;
+  bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
+  void publish_debug_outputs_();
+  const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
+  const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
+  const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
+  const RawFrameEntry *find_previous_frame_by_type_(uint8_t packet_type, uint32_t seq, size_t &index,
+                                                    bool require_ok) const;
+  bool is_frame_ok_(const RawFrameEntry &entry) const;
+  std::string raw_frame_flags_to_string_(uint8_t flags) const;
+  std::string format_raw_frame_hex_(const RawFrameEntry &entry) const;
+  std::string format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back, uint32_t now_ms) const;
+  std::string format_unknown_fields_(const RawFrameEntry &entry) const;
+  std::string format_frame_diff_(const RawFrameEntry &entry, const RawFrameEntry *prev) const;
+  bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;
+  uint8_t packet_type_from_string_(const std::string &value) const;
+  std::string packet_type_to_string_(uint8_t packet_type) const;
 
   std::vector<uint8_t> last_d2_packet_;
   std::vector<uint8_t> last_dd_packet_;
@@ -279,6 +364,70 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool processing_updates_ = false;
   bool uart_tx_active_ = false; // used for SW "flow control" to avoid RS485 bus contention
   unsigned long last_rx_time_ = 0;
+  static constexpr bool debug_mode_ = DAIKIN_EKHHE_DEBUG;
+
+  uint32_t cycle_start_ms_ = 0;
+  uint32_t cycle_bytes_read_ = 0;
+  uint32_t cycle_packets_seen_ = 0;
+  uint32_t cycle_packets_parsed_ = 0;
+  uint32_t cycle_parse_ms_ = 0;
+  uint32_t cycle_total_ms_ = 0;
+  uint32_t cycle_over_budget_total_ = 0;
+  uint32_t cycle_timeouts_ = 0;
+  uint32_t cycle_checksum_errors_ = 0;
+  uint8_t cycle_checksum_error_mask_ = 0;
+  uint32_t cycle_framing_errors_ = 0;
+  uint8_t cycle_framing_error_start_ = 0;
+  uint8_t cycle_packet_types_seen_ = 0;
+  bool cycle_timeout_logged_ = false;
+  bool cycle_publish_allowed_ = true;
+  bool cycle_synced_ = false;
+  uint32_t debug_frozen_seq_ = 0;
+  bool debug_freeze_ = false;
+  uint8_t debug_packet_type_ = 0;
+
+  enum RawFrameFlags : uint8_t {
+    RAW_FRAME_CRC_ERROR = 1 << 0,
+    RAW_FRAME_TIMEOUT = 1 << 1,
+    RAW_FRAME_TRUNCATED = 1 << 2,
+    RAW_FRAME_UNKNOWN_TYPE = 1 << 3,
+  };
+
+  struct RawFrameEntry {
+    uint32_t seq;
+    uint32_t timestamp_ms;
+    uint8_t packet_type;
+    uint8_t length;
+    uint8_t flags;
+    uint8_t data[kRawFrameMaxLen];
+  };
+
+  RawFrameEntry raw_frames_[kRawFrameBufferSize];
+  size_t raw_frame_head_ = 0;
+  size_t raw_frame_count_ = 0;
+  uint32_t raw_frame_seq_ = 0;
+  uint32_t raw_frames_captured_ = 0;
+  uint32_t raw_frames_dropped_ = 0;
+  uint32_t raw_frames_truncated_ = 0;
+  uint32_t raw_frames_error_ = 0;
+  uint32_t raw_bytes_captured_ = 0;
+  uint32_t raw_crc_errors_total_ = 0;
+  uint32_t raw_framing_errors_total_ = 0;
+
+  std::map<std::string, float> last_published_sensor_values_;
+  std::map<std::string, uint32_t> last_published_sensor_ms_;
+  std::map<std::string, float> last_published_number_values_;
+  std::map<std::string, uint32_t> last_published_number_ms_;
+  std::map<std::string, bool> last_published_binary_values_;
+  std::map<std::string, uint32_t> last_published_binary_ms_;
+  std::map<std::string, std::string> last_published_select_values_;
+  std::map<std::string, uint32_t> last_published_select_ms_;
+  std::string last_published_timestamp_;
+  uint32_t last_published_timestamp_ms_ = 0;
+  std::map<std::string, float> debug_last_published_values_;
+  std::map<std::string, uint32_t> debug_last_published_values_ms_;
+  std::map<std::string, std::string> debug_last_published_text_;
+  std::map<std::string, uint32_t> debug_last_published_text_ms_;
 
   // Cycle management
   unsigned long last_process_time_ = 0;
@@ -319,6 +468,7 @@ static const std::map<std::string, uint8_t> U_NUMBER_PARAM_INDEX = {
   {AUTO_T_TEMPERATURE,      DaikinEkhheComponent::CC_PACKET_AUTO_TTARGET_IDX},
   {BOOST_T_TEMPERATURE,     DaikinEkhheComponent::CC_PACKET_BOOST_TTGARGET_IDX},
   {ELECTRIC_T_TEMPERATURE,  DaikinEkhheComponent::CC_PACKET_ELECTRIC_TTARGET_IDX},
+  {VAC_DAYS,                DaikinEkhheComponent::CC_PACKET_VAC_DAYS}
 };
 
 // int8_t variables

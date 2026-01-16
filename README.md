@@ -12,12 +12,41 @@ This component has some basic functionality now but still needs to be further de
 ## YAML setup
 In the YAML you can enter which sensors/numbers/selects etc. you want to use. In the example yaml, all available entitiesare listed, you can remove what you don't need. 
 
-When you download the repo, you need to point the yaml to the repository location. Eventually, this repo will be openede up, and a git link can be used. 
 
 Other than this, the only customization available for the module is:
 * update_interval
+* mode (production or debug)
 
 Which sets the interval at which all entities update in seconds. 
+
+## Debug / Reverse Engineering
+There is a debug mode that enables internal raw UART capture and optional Home Assistant entities for inspection. These
+entities are only active when `mode: debug` is set on the component.
+
+### Debug entities (optional)
+Text sensors:
+* daikin_raw_frame_hex
+* daikin_raw_frame_meta
+* daikin_unknown_fields
+* daikin_frame_diff
+
+Sensors:
+* frames_captured_total
+* frames_dropped_total
+* frames_truncated_total
+* crc_errors_total
+* framing_errors_total
+* bytes_captured_total
+* cycle_parse_time_ms
+* cycle_total_time_ms
+* cycle_over_budget_total
+
+Controls:
+* daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
+* daikin_debug_freeze (switch)
+
+### Example YAML files
+See `example-production.yaml` and `example-debug.yaml` in the repository root.
 
 If all goes well, you should get something like this in the UI (there are a lot of paramters and variables ...):
 ![esphome UI example](https://github.com/jcappaert/esphome-daikin-ekhhe/blob/main/images/ekhhe_all.PNG)
@@ -31,4 +60,7 @@ A lot of the protocol reverse engineering has been done by lorbetzki [here](http
 ## TODO
 Some main TODOs to get to full functionality are:
 
-* Implement better UART flow control and match the Daikin protocol as indicate by lorbetzki [here](https://github.com/lorbetzki/Daikin-EKHHE/discussions/2#discussioncomment-12176862).  
+* Implement better TX UART flow control and match the Daikin protocol as indicate by lorbetzki [here](https://github.com/lorbetzki/Daikin-EKHHE/discussions/2#discussioncomment-12176862).
+* Find where in the packets the following items are:
+  - Protection and fault codes
+  - Silent mode  

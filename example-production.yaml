@@ -1,0 +1,200 @@
+esphome:
+  name: daikin-altherma-200
+  friendly_name: daikin-altherma-200
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+web_server:
+  port: 80
+  version: 3
+
+external_components:
+  - source:
+      type: local
+      path: C:\Users\jeroe\git\esphome-daikin-ekhhe/components
+    components: [daikin_ekhhe]
+
+uart:
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+  id: my_uart
+
+daikin_ekhhe:
+  - id: daikin_component
+    update_interval: 10
+    mode: production
+
+sensor:
+  - platform: daikin_ekhhe
+    low_water_temp_probe:
+      name: "A: Low Water Temperature probe"
+    upper_water_temp_probe:
+      name: "B: Upper Water Temperature probe"
+    defrost_temp_probe:
+      name: "C: Defrost Temperature probe"
+    supply_air_temp_probe:
+      name: "D: Supply Air Temperature probe"
+    evaporator_inlet_gas_temp_probe:
+      name: "E: Evaporator Inlet Gas Temperature probe"
+    evaporator_outlet_gas_temp_probe:
+      name: "F: Evaporator Outlet Gas Temperature probe"
+    compressor_discharge_gas_temp_probe:
+      name: "G: Compressor Discharge Gas Temperature probe"
+    solar_collector_temp_probe:
+      name: "H: Solar Collector Temperature probe"
+    eev_opening_step:
+      name: "I: EEV opening step"
+
+binary_sensor:
+  - platform: daikin_ekhhe
+    dig1_config:
+      name: "DIG1 setting"
+    dig2_config:
+      name: "DIG2 setting"
+    dig3_config:
+      name: "DIG3 setting"
+
+number:
+  - platform: daikin_ekhhe
+    low_water_hp_hysteris:
+      name: "P1: Lower water temp hysteresis"
+    elec_heater_switch_on_delay:
+      name: "P2: Electric heater switch-on delay"
+    antilegionella_setpoint_temp:
+      name: "P3: Antilegionella setpoint temp"
+    antilegionella_duration:
+      name: "P4: Antilegionella duration"
+    defrosting_cycle_delay:
+      name: "P7: Defrosting cycle delay"
+    defrosting_start_temp_threshold:
+      name: "P8: Defrosting start temperature threshold"
+    defrosting_stop_temp_threshold:
+      name: "P9: Defrosting stop temperature threshold"
+    max_defrosting_duration:
+      name: "P10: Max defrosting duration"
+    dig1_hp_start_delay:
+      name: "P17: DIG1 HP start delay"
+    dig1_low_water_temp_threshold:
+      name: "P18: DIG1 lower temperature water threshold"
+    low_wat_probe_solar_hysteresis:
+      name: "P19: Lower water probe solar hysteresis"
+    solar_drain_temp_threshold:
+      name: "P20: Solar drain temperature threshold"
+    low_water_hp_pv_mode_threshold:
+      name: "P21: Lower water sensor heat pump PV mode threshold"
+    upper_water_eh_pv_mode_threshold:
+      name: "P22: Upper water sensor electric heater PV mode threshold"
+    upper_water_temp_probe_offset:
+      name: "P25: Upper water temp probe offset"
+    lower_water_temp_probe_offset:
+      name: "P26: Lower water temp probe offset"
+    air_inlet_temp_probe_offset:
+      name: "P27: Air inlet temp probe offset"
+    defrost_temp_probe_offset:
+      name: "P28: Defrost temp probe offset"
+    antilegionella_start_hour:
+      name: "P29: Antilegionelle start hour"
+    upper_water_hysteresis_eh:
+      name: "P30: Upper water hysteresis for EH"
+    hp_period_auto_mode_calc:
+      name: "P31: HP period auto mode calc"
+    eh_auto_mode_temp_threshold:
+      name: "P32: EH auto mode temp threshold"
+    eev_superheating_calc_period:
+      name: "P34: EEV superheating calc period"
+    eev_control_superheating_setpoint:
+      name: "P35: EEV control superheating setpoint"
+    eev_control_desuperheating_setpoint:
+      name: "P36: EEV control desuperheating setpoint"
+    defrosting_mode_eev_step:
+      name: "P37: defrosting mode EEV step"
+    auto_mode_min_eev_step:
+      name: "P38: Auto mode min EEV step"
+    eev_step_opening_initial:
+      name: "P40: Inivital EEV opening step"
+    eev_kp1_gain_akp1_temp_threshold:
+      name: "P41: EEV KP1 AKP1 temp threshold"
+    eev_kp2_gain_akp2_temp_threshold:
+      name: "P42: EEV KP2 AKP2 temp threshold"
+    eev_kp3_gain_akp3_temp_threshold:
+      name: "P43: EEV KP3 AKP3 temp threshold"
+    eev_kp1_gain:
+      name: "P44: EEV KP1 gain"
+    eev_kp2_gain:
+      name: "P45: EEV KP2 gain"
+    eev_kp3_gain:
+      name: "P46: EEV KP3 gain"
+    max_inlet_temp_hp_working:
+      name: "P47: Max inlet temp with HP working"
+    min_inlet_temp_hp_working:
+      name: "P48: Min inlet temp with HP working"
+    evaporator_inlet_temp_threshold_blower:
+      name: "P49: Evaporator inlet temperature threshold for blower"
+    antifreeze_low_water_temp_setpoint:
+      name: "P50: Antifreeze lower temp setpoint"
+    evaporator_blower_high_speed_set:
+      name: "P51: Evaporator blower high speed set"
+    evaporator_blower_low_speed_set:
+      name: "P52: Evaporator blower low speed set"
+    auto_target_temperature:
+      name: "Auto mode target temperature"
+    eco_target_temperature:
+      name: "Eco mode target temperature"
+    boost_target_temperature:
+      name: "Boost mode target temperature"
+    electric_target_temperature:
+      name: "Electric mode target temperature"
+
+select:
+  - platform: daikin_ekhhe
+    power_status:
+      name: "Power status"
+    operational_mode:
+      name: "Operational mode"
+    defrosting_mode:
+      name: "P5: Defrosting mode"
+    elec_heater_during_defrosting:
+      name: "P6: Electric heater during defrosting"
+    display_water_probe_temp:
+      name: "P11: Display water probe"
+    external_pump_mode:
+      name: "P12: External pump mode"
+    hw_circ_pump_mode:
+      name: "P13: HW Circulation pump mode"
+    evaporator_blower_type:
+      name: "P14: Evaporator blower type"
+    safety_flow_switch_type:
+      name: "P15: Safety flow switch type"
+    solar_mode_integration:
+      name: "P16: Solar mode integration"
+    pv_mode_integration:
+      name: "P23: PV mode integration"
+    off_peak_working_mode:
+      name: "P24: Off peak mode"
+    eev_control:
+      name: "P33: EEV control"
+    eev_control_mode:
+      name: "P39: EEV control mode"
+
+text_sensor:
+  - platform: daikin_ekhhe
+    current_time:
+      name: "Current Time UTC"

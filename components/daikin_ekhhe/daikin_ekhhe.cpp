@@ -1,11 +1,14 @@
 #include "daikin_ekhhe.h"
 #include "daikin_ekhhe_const.h"
-#include "esphome/core/log.h"
+#include "daikin_ekhhe_log.h"
 
 
 #include <cinttypes>
+#include <cstdio>
 #include <numeric>
 #include <ctime>
+#include <cmath>
+#include <cstring>
 
 namespace esphome {
 namespace daikin_ekkhe {
@@ -34,7 +37,6 @@ static const std::map<uint8_t, uint8_t> PACKET_SIZES = {
 
 
 void DaikinEkhheComponent::setup() {
-    ESP_LOGI(TAG, "Setting up Daikin EKHHE component...");
     start_uart_cycle();
 }
 
@@ -56,7 +58,24 @@ void DaikinEkhheComponent::loop() {
     // Receive bytes
     while (this->available()) {
       uint8_t byte = this->read();
+      cycle_bytes_read_++;
       store_latest_packet(byte);
+      if (packet_set_complete()) {
+        break;
+      }
+    }
+
+    now = millis();
+    if (uart_active_ && !packet_set_complete()) {
+      if (last_rx_time_ > 0 && (now - last_rx_time_) > kCycleTimeoutMs && !cycle_timeout_logged_) {
+        cycle_timeouts_++;
+        cycle_timeout_logged_ = true;
+        uint8_t missing_mask = kRequiredPacketMask & ~cycle_packet_types_seen_;
+        std::string missing = packet_mask_to_string_(missing_mask);
+        DAIKIN_WARN(TAG, "Cycle partial: missing=%s bytes=%u packets=%u crc=%u frame=%u",
+                   missing.c_str(), cycle_bytes_read_, cycle_packets_seen_, cycle_checksum_errors_,
+                   cycle_framing_errors_);
+      }
     }
 
     // Check if all packets have been stored and process them
@@ -69,7 +88,9 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   last_rx_time_ = millis();
 
   // Wait for a start byte
-  if (PACKET_SIZES.find(byte) == PACKET_SIZES.end()) return;
+  if (PACKET_SIZES.find(byte) == PACKET_SIZES.end()) {
+    return;
+  }
 
   // Read the expected packet size
   uint8_t expected_length = PACKET_SIZES.at(byte);
@@ -77,12 +98,776 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   packet[0] = byte;
 
   // Read the rest of the packet
-  this->read_array(packet.data() + 1, expected_length - 1);
+  if (!read_packet_bytes_(packet.data() + 1, expected_length - 1, kFrameReadTimeoutMs)) {
+    raw_frames_error_++;
+    raw_framing_errors_total_++;
+    if (cycle_synced_) {
+      cycle_framing_errors_++;
+      cycle_framing_error_start_ = byte;
+    }
+    return;
+  }
 
-  // Store only the latest version of each packet
+  uint8_t packet_mask = packet_mask_for_start_(byte);
+  uint8_t flags = 0;
+  bool crc_ok = true;
+  if ((packet_mask & kChecksumPacketMask) != 0) {
+    crc_ok = (ekhhe_checksum(packet) == packet.back());
+    if (!crc_ok) {
+      flags |= RAW_FRAME_CRC_ERROR;
+    }
+  }
+
+  store_raw_frame_(byte, packet.data(), expected_length, flags);
+
+  if (!crc_ok) {
+    if (cycle_synced_) {
+      if (latest_packets_.count(byte) == 0) {
+        cycle_checksum_errors_++;
+        cycle_checksum_error_mask_ |= packet_mask;
+      }
+    }
+    return;
+  }
+
+  if (!cycle_synced_) {
+    cycle_synced_ = true;
+    latest_packets_.clear();
+    cycle_packets_seen_ = 0;
+    cycle_packet_types_seen_ = 0;
+    cycle_checksum_errors_ = 0;
+    cycle_checksum_error_mask_ = 0;
+    cycle_framing_errors_ = 0;
+    cycle_framing_error_start_ = 0;
+    cycle_bytes_read_ = expected_length;
+  }
+
+  if (cycle_synced_ && latest_packets_.count(byte) > 0) {
+    return;
+  }
+
+  // Store only the latest version of each valid packet
   latest_packets_[byte] = packet;
+  cycle_packets_seen_++;
+  cycle_packet_types_seen_ |= packet_mask;
+}
 
-  ESP_LOGI(TAG, "Stored latest packet type: 0x%X", byte);
+bool DaikinEkhheComponent::read_packet_bytes_(uint8_t *dest, size_t length, uint32_t timeout_ms) {
+  uint32_t start_ms = millis();
+  size_t offset = 0;
+
+  while (offset < length) {
+    if (this->available()) {
+      dest[offset++] = this->read();
+      cycle_bytes_read_++;
+    } else if (millis() - start_ms >= timeout_ms) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void DaikinEkhheComponent::store_raw_frame_(uint8_t packet_type, const uint8_t *data, size_t length, uint8_t flags) {
+  if (length > kRawFrameMaxLen) {
+    raw_frames_truncated_++;
+    raw_frames_error_++;
+    length = kRawFrameMaxLen;
+    flags |= RAW_FRAME_TRUNCATED;
+  }
+
+  if (raw_frame_count_ == kRawFrameBufferSize) {
+    raw_frames_dropped_++;
+    raw_frame_head_ = (raw_frame_head_ + 1) % kRawFrameBufferSize;
+    raw_frame_count_--;
+  }
+
+  size_t index = (raw_frame_head_ + raw_frame_count_) % kRawFrameBufferSize;
+  RawFrameEntry &entry = raw_frames_[index];
+  raw_frame_seq_++;
+  entry.seq = raw_frame_seq_;
+  entry.timestamp_ms = millis();
+  entry.packet_type = packet_type;
+  entry.length = static_cast<uint8_t>(length);
+  entry.flags = flags;
+  std::memcpy(entry.data, data, length);
+  raw_frame_count_++;
+  raw_frames_captured_++;
+  raw_bytes_captured_ += length;
+  if ((flags & RAW_FRAME_CRC_ERROR) != 0) {
+    raw_crc_errors_total_++;
+  }
+  if ((flags & (RAW_FRAME_CRC_ERROR | RAW_FRAME_TIMEOUT | RAW_FRAME_TRUNCATED | RAW_FRAME_UNKNOWN_TYPE)) != 0) {
+    raw_frames_error_++;
+  }
+}
+
+void DaikinEkhheComponent::reset_cycle_stats_() {
+  cycle_start_ms_ = millis();
+  last_rx_time_ = cycle_start_ms_;
+  cycle_bytes_read_ = 0;
+  cycle_packets_seen_ = 0;
+  cycle_packets_parsed_ = 0;
+  cycle_parse_ms_ = 0;
+  cycle_total_ms_ = 0;
+  cycle_timeouts_ = 0;
+  cycle_checksum_errors_ = 0;
+  cycle_checksum_error_mask_ = 0;
+  cycle_framing_errors_ = 0;
+  cycle_framing_error_start_ = 0;
+  cycle_packet_types_seen_ = 0;
+  cycle_timeout_logged_ = false;
+  cycle_publish_allowed_ = true;
+  cycle_synced_ = false;
+}
+
+uint8_t DaikinEkhheComponent::packet_mask_for_start_(uint8_t start_byte) const {
+  switch (start_byte) {
+    case DD_PACKET_START_BYTE:
+      return kPacketMaskDD;
+    case D2_PACKET_START_BYTE:
+      return kPacketMaskD2;
+    case D4_PACKET_START_BYTE:
+      return kPacketMaskD4;
+    case C1_PACKET_START_BYTE:
+      return kPacketMaskC1;
+    case CC_PACKET_START_BYTE:
+      return kPacketMaskCC;
+    default:
+      return 0;
+  }
+}
+
+std::string DaikinEkhheComponent::packet_mask_to_string_(uint8_t mask) const {
+  std::string out;
+  if (mask & kPacketMaskDD) out += "DD,";
+  if (mask & kPacketMaskD2) out += "D2,";
+  if (mask & kPacketMaskD4) out += "D4,";
+  if (mask & kPacketMaskC1) out += "C1,";
+  if (mask & kPacketMaskCC) out += "CC,";
+  if (out.empty()) {
+    return "none";
+  }
+  out.pop_back();
+  return out;
+}
+
+bool DaikinEkhheComponent::should_publish_float_(const std::string &key, float value,
+                                                 std::map<std::string, float> &last_values,
+                                                 std::map<std::string, uint32_t> &last_publish_ms,
+                                                 uint32_t min_interval_ms, float epsilon,
+                                                 uint32_t refresh_ms) {
+  uint32_t now = millis();
+  auto it = last_values.find(key);
+  if (it == last_values.end()) {
+    last_values[key] = value;
+    last_publish_ms[key] = now;
+    return true;
+  }
+
+  float last_value = it->second;
+  uint32_t last_ms = last_publish_ms[key];
+  float delta = fabsf(value - last_value);
+  bool refresh_due = refresh_ms > 0 && (now - last_ms) >= refresh_ms;
+  bool interval_ok = min_interval_ms == 0 || (now - last_ms) >= min_interval_ms;
+
+  if (delta > epsilon && interval_ok) {
+    last_values[key] = value;
+    last_publish_ms[key] = now;
+    return true;
+  }
+
+  if (refresh_due) {
+    last_values[key] = value;
+    last_publish_ms[key] = now;
+    return true;
+  }
+
+  return false;
+}
+
+bool DaikinEkhheComponent::should_publish_bool_(const std::string &key, bool value,
+                                                std::map<std::string, bool> &last_values,
+                                                std::map<std::string, uint32_t> &last_publish_ms,
+                                                uint32_t refresh_ms) {
+  uint32_t now = millis();
+  auto it = last_values.find(key);
+  if (it == last_values.end()) {
+    last_values[key] = value;
+    last_publish_ms[key] = now;
+    return true;
+  }
+
+  uint32_t last_ms = last_publish_ms[key];
+  bool refresh_due = refresh_ms > 0 && (now - last_ms) >= refresh_ms;
+  if (it->second != value || refresh_due) {
+    last_values[key] = value;
+    last_publish_ms[key] = now;
+    return true;
+  }
+
+  return false;
+}
+
+bool DaikinEkhheComponent::should_publish_text_(const std::string &key, const std::string &value,
+                                                std::map<std::string, std::string> &last_values,
+                                                std::map<std::string, uint32_t> &last_publish_ms,
+                                                uint32_t refresh_ms) {
+  uint32_t now = millis();
+  auto it = last_values.find(key);
+  if (it == last_values.end()) {
+    last_values[key] = value;
+    last_publish_ms[key] = now;
+    return true;
+  }
+
+  uint32_t last_ms = last_publish_ms[key];
+  bool refresh_due = refresh_ms > 0 && (now - last_ms) >= refresh_ms;
+  if (it->second != value || refresh_due) {
+    last_values[key] = value;
+    last_publish_ms[key] = now;
+    return true;
+  }
+
+  return false;
+}
+
+bool DaikinEkhheComponent::should_publish_debug_text_(const std::string &key, const std::string &value,
+                                                      uint32_t min_interval_ms) {
+  uint32_t now = millis();
+  auto it = debug_last_published_text_.find(key);
+  if (it == debug_last_published_text_.end()) {
+    debug_last_published_text_[key] = value;
+    debug_last_published_text_ms_[key] = now;
+    return true;
+  }
+
+  uint32_t last_ms = debug_last_published_text_ms_[key];
+  if (now - last_ms < min_interval_ms) {
+    return false;
+  }
+
+  if (it->second != value) {
+    it->second = value;
+    debug_last_published_text_ms_[key] = now;
+    return true;
+  }
+
+  return false;
+}
+
+uint8_t DaikinEkhheComponent::packet_type_from_string_(const std::string &value) const {
+  if (value == "DD") return DD_PACKET_START_BYTE;
+  if (value == "D2") return D2_PACKET_START_BYTE;
+  if (value == "D4") return D4_PACKET_START_BYTE;
+  if (value == "C1") return C1_PACKET_START_BYTE;
+  if (value == "CC") return CC_PACKET_START_BYTE;
+  return 0;
+}
+
+std::string DaikinEkhheComponent::packet_type_to_string_(uint8_t packet_type) const {
+  switch (packet_type) {
+    case DD_PACKET_START_BYTE:
+      return "DD";
+    case D2_PACKET_START_BYTE:
+      return "D2";
+    case D4_PACKET_START_BYTE:
+      return "D4";
+    case C1_PACKET_START_BYTE:
+      return "C1";
+    case CC_PACKET_START_BYTE:
+      return "CC";
+    default:
+      return "latest";
+  }
+}
+
+const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_raw_frame_by_seq_(uint32_t seq,
+                                                                                        size_t &index) const {
+  if (raw_frame_count_ == 0) {
+    return nullptr;
+  }
+  for (size_t i = 0; i < raw_frame_count_; ++i) {
+    size_t idx = (raw_frame_head_ + i) % kRawFrameBufferSize;
+    const RawFrameEntry &entry = raw_frames_[idx];
+    if (entry.seq == seq) {
+      index = idx;
+      return &entry;
+    }
+  }
+  return nullptr;
+}
+
+const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_latest_frame_by_type_(uint8_t packet_type,
+                                                                                            size_t &index,
+                                                                                            bool require_ok) const {
+  if (raw_frame_count_ == 0) {
+    return nullptr;
+  }
+  if (packet_type == 0) {
+    if (!require_ok) {
+      index = (raw_frame_head_ + raw_frame_count_ - 1) % kRawFrameBufferSize;
+      return &raw_frames_[index];
+    }
+    for (size_t i = 0; i < raw_frame_count_; ++i) {
+      size_t idx = (raw_frame_head_ + raw_frame_count_ - 1 - i) % kRawFrameBufferSize;
+      const RawFrameEntry &entry = raw_frames_[idx];
+      if (is_frame_ok_(entry)) {
+        index = idx;
+        return &entry;
+      }
+    }
+    return nullptr;
+  }
+  for (size_t i = 0; i < raw_frame_count_; ++i) {
+    size_t idx = (raw_frame_head_ + raw_frame_count_ - 1 - i) % kRawFrameBufferSize;
+    const RawFrameEntry &entry = raw_frames_[idx];
+    if (entry.packet_type == packet_type) {
+      if (require_ok && !is_frame_ok_(entry)) {
+        continue;
+      }
+      index = idx;
+      return &entry;
+    }
+  }
+  return nullptr;
+}
+
+const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_previous_frame_by_type_(
+    uint8_t packet_type, uint32_t seq, size_t &index, bool require_ok) const {
+  if (raw_frame_count_ == 0 || packet_type == 0) {
+    return nullptr;
+  }
+  bool past_current = false;
+  for (size_t i = 0; i < raw_frame_count_; ++i) {
+    size_t idx = (raw_frame_head_ + raw_frame_count_ - 1 - i) % kRawFrameBufferSize;
+    const RawFrameEntry &entry = raw_frames_[idx];
+    if (entry.packet_type != packet_type) {
+      continue;
+    }
+    if (!past_current) {
+      if (entry.seq == seq) {
+        past_current = true;
+      }
+      continue;
+    }
+    if (require_ok && !is_frame_ok_(entry)) {
+      continue;
+    }
+    index = idx;
+    return &entry;
+  }
+  return nullptr;
+}
+
+bool DaikinEkhheComponent::is_frame_ok_(const RawFrameEntry &entry) const {
+  return entry.flags == 0;
+}
+
+const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::select_raw_frame_(size_t &index, size_t &back) {
+  if (raw_frame_count_ == 0) {
+    return nullptr;
+  }
+
+  if (debug_freeze_ && debug_frozen_seq_ != 0) {
+    const RawFrameEntry *entry = find_raw_frame_by_seq_(debug_frozen_seq_, index);
+    if (entry != nullptr) {
+      size_t newest_index = (raw_frame_head_ + raw_frame_count_ - 1) % kRawFrameBufferSize;
+      back = (newest_index + kRawFrameBufferSize - index) % kRawFrameBufferSize;
+      if (back >= raw_frame_count_) {
+        back = raw_frame_count_ - 1;
+      }
+      return entry;
+    }
+
+    debug_freeze_ = false;
+    debug_frozen_seq_ = 0;
+    if (debug_freeze_switch_ != nullptr) {
+      debug_freeze_switch_->publish_state(false);
+    }
+  }
+
+  const RawFrameEntry *entry = find_latest_frame_by_type_(debug_packet_type_, index, true);
+  if (entry == nullptr) {
+    entry = find_latest_frame_by_type_(debug_packet_type_, index, false);
+  }
+  if (entry == nullptr) {
+    return nullptr;
+  }
+  size_t newest_index = (raw_frame_head_ + raw_frame_count_ - 1) % kRawFrameBufferSize;
+  back = (newest_index + kRawFrameBufferSize - index) % kRawFrameBufferSize;
+  if (back >= raw_frame_count_) {
+    back = raw_frame_count_ - 1;
+  }
+  return entry;
+}
+
+std::string DaikinEkhheComponent::raw_frame_flags_to_string_(uint8_t flags) const {
+  if (flags == 0) {
+    return "none";
+  }
+  std::string out;
+  if (flags & RAW_FRAME_CRC_ERROR) out += "crc,";
+  if (flags & RAW_FRAME_TIMEOUT) out += "timeout,";
+  if (flags & RAW_FRAME_TRUNCATED) out += "truncated,";
+  if (flags & RAW_FRAME_UNKNOWN_TYPE) out += "unknown,";
+  if (!out.empty()) {
+    out.pop_back();
+  }
+  return out;
+}
+
+std::string DaikinEkhheComponent::format_raw_frame_hex_(const RawFrameEntry &entry) const {
+  static const char hex[] = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(entry.length * 4);
+  for (size_t i = 0; i < entry.length; ++i) {
+    if (i % 16 == 0) {
+      char header[8];
+      snprintf(header, sizeof(header), "%02X:", static_cast<unsigned>(i));
+      if (!out.empty()) {
+        out.push_back('\n');
+      }
+      out.append(header);
+    }
+    out.push_back(' ');
+    uint8_t byte = entry.data[i];
+    out.push_back(hex[(byte >> 4) & 0x0F]);
+    out.push_back(hex[byte & 0x0F]);
+  }
+  return out;
+}
+
+std::string DaikinEkhheComponent::format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back,
+                                                         uint32_t now_ms) const {
+  std::string flags = raw_frame_flags_to_string_(entry.flags);
+  char buffer[160];
+  uint32_t age_ms = now_ms - entry.timestamp_ms;
+  snprintf(buffer, sizeof(buffer), "type=0x%02X len=%u flags=%s ts_ms=%u pos=%u back=%u age_ms=%u seq=%u",
+           entry.packet_type, entry.length, flags.c_str(), entry.timestamp_ms, static_cast<unsigned>(index),
+           static_cast<unsigned>(back), age_ms, entry.seq);
+  return std::string(buffer);
+}
+
+bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const {
+  if (offset == 0 || offset == length - 1) {
+    return true;
+  }
+
+  auto has_offset = [](const uint8_t *list, size_t count, size_t value) {
+    for (size_t i = 0; i < count; ++i) {
+      if (list[i] == value) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  switch (packet_type) {
+    case DD_PACKET_START_BYTE: {
+      static const uint8_t dd_known[] = {
+          DD_PACKET_START_IDX,
+          DD_PACKET_B_IDX,
+          DD_PACKET_A_IDX,
+          DD_PACKET_C_IDX,
+          DD_PACKET_D_IDX,
+          DD_PACKET_E_IDX,
+          DD_PACKET_F_IDX,
+          DD_PACKET_G_IDX,
+          DD_PACKET_H_IDX,
+          DD_PACKET_I_IDX,
+          DD_PACKET_DIG_IDX,
+          DD_PACKET_END,
+      };
+      return has_offset(dd_known, sizeof(dd_known) / sizeof(dd_known[0]), offset);
+    }
+    case D2_PACKET_START_BYTE: {
+      static const uint8_t d2_known[] = {
+          D2_PACKET_START_IDX,
+          D2_PACKET_MASK1_IDX,
+          D2_PACKET_MASK2_IDX,
+          D2_PACKET_MODE_IDX,
+          D2_PACKET_P4_IDX,
+          D2_PACKET_P7_IDX,
+          D2_PACKET_P10_IDX,
+          D2_PACKET_P2_IDX,
+          D2_PACKET_P29_IDX,
+          D2_PACKET_P31_IDX,
+          D2_PACKET_P8_IDX,
+          D2_PACKET_P9_IDX,
+          D2_PACKET_ECO_TTARGET_IDX,
+          D2_PACKET_AUTO_TTARGET_IDX,
+          D2_PACKET_BOOST_TTGARGET_IDX,
+          D2_PACKET_ELECTRIC_TTARGET_IDX,
+          D2_PACKET_P1_IDX,
+          D2_PACKET_P32_IDX,
+          D2_PACKET_P3_IDX,
+          D2_PACKET_P30_IDX,
+          D2_PACKET_P25_IDX,
+          D2_PACKET_P26_IDX,
+          D2_PACKET_P27_IDX,
+          D2_PACKET_P28_IDX,
+          D2_PACKET_P12_IDX,
+          D2_PACKET_P14_IDX,
+          D2_PACKET_P24_IDX,
+          D2_PACKET_P16_IDX,
+          D2_PACKET_P23_IDX,
+          D2_PACKET_P17_IDX,
+          D2_PACKET_P18_IDX,
+          D2_PACKET_P19_IDX,
+          D2_PACKET_P20_IDX,
+          D2_PACKET_P21_IDX,
+          D2_PACKET_P22_IDX,
+          D2_PACKET_P34_IDX,
+          D2_PACKET_P37_IDX,
+          D2_PACKET_P38_IDX,
+          D2_PACKET_P40_IDX,
+          D2_PACKET_P36_IDX,
+          D2_PACKET_P35_IDX,
+          D2_PACKET_P41_IDX,
+          D2_PACKET_P42_IDX,
+          D2_PACKET_P43_IDX,
+          D2_PACKET_P44_IDX,
+          D2_PACKET_P45_IDX,
+          D2_PACKET_P46_IDX,
+          D2_PACKET_HOUR_IDX,
+          D2_PACKET_MIN_IDX,
+          D2_PACKET_P47_IDX,
+          D2_PACKET_P48_IDX,
+          D2_PACKET_P49_IDX,
+          D2_PACKET_P50_IDX,
+          D2_PACKET_P51_IDX,
+          D2_PACKET_P52_IDX,
+          D2_PACKET_END,
+      };
+      return has_offset(d2_known, sizeof(d2_known) / sizeof(d2_known[0]), offset);
+    }
+    case D4_PACKET_START_BYTE: {
+      static const uint8_t d4_known[] = {
+          D4_PACKET_START_IDX,
+          D4_PACKET_END,
+      };
+      return has_offset(d4_known, sizeof(d4_known) / sizeof(d4_known[0]), offset);
+    }
+    case C1_PACKET_START_BYTE: {
+      static const uint8_t c1_known[] = {
+          C1_PACKET_START_IDX,
+          C1_PACKET_END,
+      };
+      return has_offset(c1_known, sizeof(c1_known) / sizeof(c1_known[0]), offset);
+    }
+    case CC_PACKET_START_BYTE: {
+      static const uint8_t cc_known[] = {
+          CC_PACKET_START_IDX,
+          CC_PACKET_MASK1_IDX,
+          CC_PACKET_MASK2_IDX,
+          CC_PACKET_MODE_IDX,
+          CC_PACKET_P4_IDX,
+          CC_PACKET_P7_IDX,
+          CC_PACKET_P10_IDX,
+          CC_PACKET_P2_IDX,
+          CC_PACKET_P29_IDX,
+          CC_PACKET_P31_IDX,
+          CC_PACKET_P8_IDX,
+          CC_PACKET_P9_IDX,
+          CC_PACKET_ECO_TTARGET_IDX,
+          CC_PACKET_AUTO_TTARGET_IDX,
+          CC_PACKET_BOOST_TTGARGET_IDX,
+          CC_PACKET_ELECTRIC_TTARGET_IDX,
+          CC_PACKET_P1_IDX,
+          CC_PACKET_P32_IDX,
+          CC_PACKET_P3_IDX,
+          CC_PACKET_P30_IDX,
+          CC_PACKET_P25_IDX,
+          CC_PACKET_P26_IDX,
+          CC_PACKET_P27_IDX,
+          CC_PACKET_P28_IDX,
+          CC_PACKET_P12_IDX,
+          CC_PACKET_P14_IDX,
+          CC_PACKET_P24_IDX,
+          CC_PACKET_P16_IDX,
+          CC_PACKET_P23_IDX,
+          CC_PACKET_P17_IDX,
+          CC_PACKET_P18_IDX,
+          CC_PACKET_P19_IDX,
+          CC_PACKET_P20_IDX,
+          CC_PACKET_P21_IDX,
+          CC_PACKET_P22_IDX,
+          CC_PACKET_P34_IDX,
+          CC_PACKET_P37_IDX,
+          CC_PACKET_P38_IDX,
+          CC_PACKET_P40_IDX,
+          CC_PACKET_P36_IDX,
+          CC_PACKET_P35_IDX,
+          CC_PACKET_P41_IDX,
+          CC_PACKET_P42_IDX,
+          CC_PACKET_P43_IDX,
+          CC_PACKET_P44_IDX,
+          CC_PACKET_P45_IDX,
+          CC_PACKET_P46_IDX,
+          CC_PACKET_HOUR_IDX,
+          CC_PACKET_MIN_IDX,
+          CC_PACKET_P47_IDX,
+          CC_PACKET_P48_IDX,
+          CC_PACKET_P49_IDX,
+          CC_PACKET_P50_IDX,
+          CC_PACKET_P51_IDX,
+          CC_PACKET_P52_IDX,
+          CC_PACKET_P54_IDX,
+          CC_PACKET_END,
+      };
+      return has_offset(cc_known, sizeof(cc_known) / sizeof(cc_known[0]), offset);
+    }
+    default:
+      return false;
+  }
+}
+
+std::string DaikinEkhheComponent::format_unknown_fields_(const RawFrameEntry &entry) const {
+  std::string out;
+  char header[64];
+  snprintf(header, sizeof(header), "type=0x%02X len=%u unknown:", entry.packet_type, entry.length);
+  out.append(header);
+  bool any = false;
+  size_t rows = (entry.length + 15) / 16;
+  for (size_t row = 0; row < rows; ++row) {
+    size_t row_start = row * 16;
+    size_t row_end = row_start + 16;
+    if (row_end > entry.length) {
+      row_end = entry.length;
+    }
+    bool row_has_unknown = false;
+    for (size_t i = row_start; i < row_end; ++i) {
+      if (!is_known_offset_(entry.packet_type, i, entry.length)) {
+        row_has_unknown = true;
+        break;
+      }
+    }
+    if (!row_has_unknown) {
+      continue;
+    }
+    any = true;
+    out.push_back('\n');
+    char row_buf[16];
+    snprintf(row_buf, sizeof(row_buf), "%u:", static_cast<unsigned>(row_start));
+    out.append(row_buf);
+    for (size_t i = row_start; i < row_end; ++i) {
+      out.push_back(' ');
+      if (is_known_offset_(entry.packet_type, i, entry.length)) {
+        out.append("--");
+      } else {
+        char byte_buf[4];
+        snprintf(byte_buf, sizeof(byte_buf), "%02X", entry.data[i]);
+        out.append(byte_buf);
+      }
+    }
+  }
+  if (!any) {
+    out.append("\nnone");
+  }
+  return out;
+}
+
+std::string DaikinEkhheComponent::format_frame_diff_(const RawFrameEntry &entry,
+                                                     const RawFrameEntry *prev) const {
+  static const char hex[] = "0123456789ABCDEF";
+  char header[96];
+  if (prev == nullptr) {
+    snprintf(header, sizeof(header), "type=0x%02X len=%u diff=none (no previous)", entry.packet_type, entry.length);
+    return std::string(header);
+  }
+  size_t length = entry.length < prev->length ? entry.length : prev->length;
+  size_t changes = 0;
+  std::string out;
+  snprintf(header, sizeof(header), "type=0x%02X len=%u prev_len=%u diff:", entry.packet_type, entry.length,
+           prev->length);
+  out.append(header);
+  for (size_t i = 0; i < length; ++i) {
+    uint8_t now = entry.data[i];
+    uint8_t before = prev->data[i];
+    if (now == before) {
+      continue;
+    }
+    if (changes % 8 == 0) {
+      out.push_back('\n');
+    }
+    char chunk[24];
+    snprintf(chunk, sizeof(chunk), "%u:%02X>%02X ", static_cast<unsigned>(i), before, now);
+    out.append(chunk);
+    changes++;
+    if (changes >= 32) {
+      out.append("...");
+      break;
+    }
+  }
+  if (changes == 0 && entry.length != prev->length) {
+    out.append("\nlen change only");
+  } else if (changes == 0) {
+    out.append("\nno changes");
+  }
+  return out;
+}
+
+void DaikinEkhheComponent::publish_debug_outputs_() {
+  if (!debug_mode_) {
+    return;
+  }
+
+  uint32_t now_ms = millis();
+  auto publish_debug_sensor = [this](const std::string &key, float value, uint32_t min_interval_ms,
+                                     uint32_t refresh_ms) {
+    if (debug_sensors_.find(key) == debug_sensors_.end()) {
+      return;
+    }
+    if (should_publish_float_(key, value, debug_last_published_values_, debug_last_published_values_ms_,
+                              min_interval_ms, 0.0f, refresh_ms)) {
+      defer([this, key, value]() { debug_sensors_[key]->publish_state(value); });
+    }
+  };
+
+  publish_debug_sensor("frames_captured_total", raw_frames_captured_, kDebugCounterPublishIntervalMs,
+                       kDebugCounterPublishIntervalMs);
+  publish_debug_sensor("frames_dropped_total", raw_frames_dropped_, kDebugCounterPublishIntervalMs,
+                       kDebugCounterPublishIntervalMs);
+  publish_debug_sensor("frames_truncated_total", raw_frames_truncated_, kDebugCounterPublishIntervalMs,
+                       kDebugCounterPublishIntervalMs);
+  publish_debug_sensor("crc_errors_total", raw_crc_errors_total_, kDebugCounterPublishIntervalMs,
+                       kDebugCounterPublishIntervalMs);
+  publish_debug_sensor("framing_errors_total", raw_framing_errors_total_, kDebugCounterPublishIntervalMs,
+                       kDebugCounterPublishIntervalMs);
+  publish_debug_sensor("bytes_captured_total", raw_bytes_captured_, kDebugCounterPublishIntervalMs,
+                       kDebugCounterPublishIntervalMs);
+  publish_debug_sensor("cycle_parse_time_ms", cycle_parse_ms_, kDebugTimingPublishMinIntervalMs, 0);
+  publish_debug_sensor("cycle_total_time_ms", cycle_total_ms_, kDebugTimingPublishMinIntervalMs, 0);
+  publish_debug_sensor("cycle_over_budget_total", cycle_over_budget_total_, kDebugCounterPublishIntervalMs,
+                       kDebugCounterPublishIntervalMs);
+
+  size_t index = 0;
+  size_t back = 0;
+  const RawFrameEntry *entry = select_raw_frame_(index, back);
+  if (entry == nullptr) {
+    return;
+  }
+
+  auto publish_debug_text = [this](const std::string &key, const std::string &value) {
+    if (debug_text_sensors_.find(key) == debug_text_sensors_.end()) {
+      return;
+    }
+    if (should_publish_debug_text_(key, value, kDebugTextPublishMinIntervalMs)) {
+      defer([this, key, value]() { debug_text_sensors_[key]->publish_state(value); });
+    }
+  };
+
+  publish_debug_text("daikin_raw_frame_hex", format_raw_frame_hex_(*entry));
+  publish_debug_text("daikin_raw_frame_meta", format_raw_frame_meta_(*entry, index, back, now_ms));
+  publish_debug_text("daikin_unknown_fields", format_unknown_fields_(*entry));
+
+  size_t prev_index = 0;
+  const RawFrameEntry *prev = find_previous_frame_by_type_(entry->packet_type, entry->seq, prev_index, true);
+  if (prev == nullptr) {
+    prev = find_previous_frame_by_type_(entry->packet_type, entry->seq, prev_index, false);
+  }
+  publish_debug_text("daikin_frame_diff", format_frame_diff_(*entry, prev));
 }
 
 bool DaikinEkhheComponent::packet_set_complete() {
@@ -94,14 +879,18 @@ bool DaikinEkhheComponent::packet_set_complete() {
 }
 
 void DaikinEkhheComponent::start_uart_cycle() {
-    ESP_LOGI(TAG, "Starting UART read cycle...");
     uart_active_ = true;
     latest_packets_.clear();
+    reset_cycle_stats_();
 }
 
 void DaikinEkhheComponent::process_packet_set() {
-  ESP_LOGI(TAG, "Processing latest set of packets...");
   processing_updates_ = true;
+
+  uint32_t parse_start_ms = millis();
+
+  bool has_required = (cycle_packet_types_seen_ & kRequiredPacketMask) == kRequiredPacketMask;
+  cycle_publish_allowed_ = has_required;
 
   // Assign stored packets to last known packet values
   last_dd_packet_ = latest_packets_[DD_PACKET_START_BYTE];
@@ -111,16 +900,55 @@ void DaikinEkhheComponent::process_packet_set() {
   last_cc_packet_ = latest_packets_[CC_PACKET_START_BYTE];
 
   parse_dd_packet(last_dd_packet_);
+  cycle_packets_parsed_++;
   //parse_d2_packet(last_d2_packet);  // Don't process D2 since all info is in CC as well
   parse_d4_packet(last_d4_packet_);
+  cycle_packets_parsed_++;
   parse_c1_packet(last_c1_packet_);
+  cycle_packets_parsed_++;
   parse_cc_packet(last_cc_packet_);
+  cycle_packets_parsed_++;
+
+  uint32_t now_ms = millis();
+  cycle_parse_ms_ = now_ms - parse_start_ms;
+  cycle_total_ms_ = now_ms - cycle_start_ms_;
+  if (cycle_total_ms_ > kCycleOverBudgetMs) {
+    cycle_over_budget_total_++;
+  }
+  bool success = has_required && !cycle_timeout_logged_;
+  if (success) {
+    std::string types = packet_mask_to_string_(cycle_packet_types_seen_);
+    DAIKIN_HEALTH(TAG, "Cycle ok: bytes=%u packets=%u parsed=%u types=%s parse_ms=%u chk_err=%u frm_err=%u",
+                 cycle_bytes_read_, cycle_packets_seen_, cycle_packets_parsed_, types.c_str(),
+                 cycle_parse_ms_, cycle_checksum_errors_, cycle_framing_errors_);
+  } else {
+    if (!has_required) {
+      uint8_t missing_mask = kRequiredPacketMask & ~cycle_packet_types_seen_;
+      std::string missing = packet_mask_to_string_(missing_mask);
+      DAIKIN_WARN(TAG, "Cycle partial: missing=%s bytes=%u packets=%u crc=%u frame=%u",
+                 missing.c_str(), cycle_bytes_read_, cycle_packets_seen_, cycle_checksum_errors_,
+                 cycle_framing_errors_);
+    }
+    if (cycle_framing_errors_ > 0 && !cycle_timeout_logged_) {
+      DAIKIN_WARN(TAG, "Cycle warn: framing=%u last_start=0x%02X bytes=%u packets=%u",
+                  cycle_framing_errors_, cycle_framing_error_start_, cycle_bytes_read_,
+                  cycle_packets_seen_);
+    }
+    if (!has_required && cycle_checksum_errors_ > 0) {
+      std::string types = packet_mask_to_string_(cycle_packet_types_seen_);
+      std::string checksum_types = packet_mask_to_string_(cycle_checksum_error_mask_);
+      DAIKIN_ERROR(TAG, "Cycle error: checksum=%u checksum_types=%s types=%s bytes=%u packets=%u",
+                   cycle_checksum_errors_, checksum_types.c_str(), types.c_str(),
+                   cycle_bytes_read_, cycle_packets_seen_);
+    }
+  }
+
+  publish_debug_outputs_();
 
   // Reset UART cycle
   processing_updates_ = false;
   uart_active_ = false;
   last_process_time_ = millis();
-  ESP_LOGI(TAG, "UART cycle completed. Waiting for next update interval...");
 }
 
 void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
@@ -294,7 +1122,6 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
 void DaikinEkhheComponent::register_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor) {
   if (sensor != nullptr) {
     sensors_[sensor_name] = sensor;
-    ESP_LOGI(TAG, "Registered Sensor: %s", sensor_name.c_str());
   }
 }
 
@@ -302,14 +1129,12 @@ void DaikinEkhheComponent::register_sensor(const std::string &sensor_name, espho
 void DaikinEkhheComponent::register_binary_sensor(const std::string &sensor_name, esphome::binary_sensor::BinarySensor *binary_sensor) {
   if (binary_sensor != nullptr) {
     binary_sensors_[sensor_name] = binary_sensor;
-    ESP_LOGI(TAG, "Registered Binary Sensor: %s", sensor_name.c_str());
   }
 }
 
 void DaikinEkhheComponent::register_number(const std::string &number_name, esphome::number::Number *number) {
   if (number != nullptr) {
     numbers_[number_name] = number;
-    ESP_LOGI(TAG, "Registered Number: %s", number_name.c_str());
   }
 }
 
@@ -317,30 +1142,67 @@ void DaikinEkhheComponent::register_select(const std::string &select_name, selec
   if (select != nullptr) {
       //selects_[select_name] = select;
       selects_[select_name] = static_cast<DaikinEkhheSelect *>(select);
-      ESP_LOGI(TAG, "Registered Select: %s", select_name.c_str());
   }
 }
 
 void DaikinEkhheComponent::register_timestamp_sensor(text_sensor::TextSensor *sensor) {
     this->timestamp_sensor_ = sensor;
-    ESP_LOGI(TAG, "Registered timestamp sensor");
+}
+
+void DaikinEkhheComponent::register_debug_text_sensor(const std::string &sensor_name,
+                                                      esphome::text_sensor::TextSensor *sensor) {
+  if (sensor != nullptr) {
+    debug_text_sensors_[sensor_name] = sensor;
+  }
+}
+
+void DaikinEkhheComponent::register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor) {
+  if (sensor != nullptr) {
+    debug_sensors_[sensor_name] = sensor;
+  }
+}
+
+void DaikinEkhheComponent::register_debug_select(DaikinEkhheDebugSelect *select) {
+  this->debug_packet_select_ = select;
+  if (this->debug_packet_select_ != nullptr) {
+    this->debug_packet_select_->publish_state(packet_type_to_string_(debug_packet_type_));
+  }
+}
+
+void DaikinEkhheComponent::register_debug_switch(DaikinEkhheDebugSwitch *sw) {
+  this->debug_freeze_switch_ = sw;
+  if (this->debug_freeze_switch_ != nullptr) {
+    this->debug_freeze_switch_->publish_state(debug_freeze_);
+  }
 }
 
 void DaikinEkhheComponent::set_sensor_value(const std::string &sensor_name, float value) {
   if (sensors_.find(sensor_name) != sensors_.end()) {
-    defer([this, sensor_name, value]() {
-      sensors_[sensor_name]->publish_state(value);
-    });
+    if (!cycle_publish_allowed_) {
+      return;
+    }
+    if (should_publish_float_(sensor_name, value, last_published_sensor_values_,
+                              last_published_sensor_ms_, kFastPublishMinIntervalMs,
+                              kFloatPublishEpsilon, 0)) {
+      defer([this, sensor_name, value]() {
+        sensors_[sensor_name]->publish_state(value);
+      });
+    }
   }
 
 }
 
 void DaikinEkhheComponent::set_binary_sensor_value(const std::string &sensor_name, bool value) {
   if (binary_sensors_.find(sensor_name) != binary_sensors_.end()) {
-    defer([this, sensor_name, value]() {
-      binary_sensors_[sensor_name]->publish_state(value);
-      ESP_LOGI(TAG, "Setting binary sensor %s to %i", sensor_name.c_str(), value);
-    });
+    if (!cycle_publish_allowed_) {
+      return;
+    }
+    if (should_publish_bool_(sensor_name, value, last_published_binary_values_,
+                             last_published_binary_ms_, kSlowPublishRefreshMs)) {
+      defer([this, sensor_name, value]() {
+        binary_sensors_[sensor_name]->publish_state(value);
+      });
+    }
   }
 }
 
@@ -348,9 +1210,16 @@ void DaikinEkhheComponent::set_number_value(const std::string &number_name, floa
   // This sets a number value that's been gotten from the UART stream, not something that's 
   // set through the API or UI
   if (numbers_.find(number_name) != numbers_.end()) {
-    defer([this, number_name, value]() {
-        numbers_[number_name]->publish_state(value);
-    });
+    if (!cycle_publish_allowed_) {
+      return;
+    }
+    if (should_publish_float_(number_name, value, last_published_number_values_,
+                              last_published_number_ms_, 0, kFloatPublishEpsilon,
+                              kSlowPublishRefreshMs)) {
+      defer([this, number_name, value]() {
+          numbers_[number_name]->publish_state(value);
+      });
+    }
   }
 }
 
@@ -358,15 +1227,21 @@ void DaikinEkhheComponent::set_select_value(const std::string &select_name, int 
   // This sets a select value that's been gotten from the UART stream, not something that's 
   // set through the API or UI
   if (selects_.count(select_name)) {
+    if (!cycle_publish_allowed_) {
+      return;
+    }
     DaikinEkhheSelect *select = selects_[select_name];
 
         // Find the corresponding string option for the numeric value
         for (const auto &entry : select->get_select_mappings()) {
             if (entry.second == value) {                
-                // Update ESPHome with the new selected value
-                defer([this, select, entry]() {
-                  select->publish_state(entry.first);
-                });
+                if (should_publish_text_(select_name, entry.first, last_published_select_values_,
+                                         last_published_select_ms_, kSlowPublishRefreshMs)) {
+                  // Update ESPHome with the new selected value
+                  defer([this, select, entry]() {
+                    select->publish_state(entry.first);
+                  });
+                }
                 return;
             }
         }
@@ -375,10 +1250,13 @@ void DaikinEkhheComponent::set_select_value(const std::string &select_name, int 
 
 void DaikinEkhheComponent::update_timestamp(uint8_t hour, uint8_t minute) {
     if (this->timestamp_sensor_ != nullptr) {
+        if (!cycle_publish_allowed_) {
+            return;
+        }
         ESPTime now = (*clock).now();
 
         if (!now.is_valid()) {
-            ESP_LOGW(TAG, "Time not available yet. Skipping timestamp update.");
+            DAIKIN_WARN(TAG, "Time not available yet. Skipping timestamp update.");
             return;
         }
 
@@ -398,8 +1276,13 @@ void DaikinEkhheComponent::update_timestamp(uint8_t hour, uint8_t minute) {
         strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&adjusted_time));
 
         // Publish the timestamp to Home Assistant
-        this->timestamp_sensor_->publish_state(timestamp);
-        ESP_LOGV("daikin_ekhhe", "Updated timestamp (UTC): %s", timestamp);
+        uint32_t now_ms = millis();
+        bool refresh_due = (now_ms - last_published_timestamp_ms_) >= kTimestampRefreshMs;
+        if (last_published_timestamp_ != timestamp || refresh_due) {
+          last_published_timestamp_ = timestamp;
+          last_published_timestamp_ms_ = now_ms;
+          this->timestamp_sensor_->publish_state(timestamp);
+        }
     }
 }
 
@@ -452,29 +1335,61 @@ void DaikinEkhheComponent::dump_config() {
 }
 
 void DaikinEkhheComponent::on_shutdown() {
-    ESP_LOGI(TAG, "Shutdown was called");
 }
 
 void DaikinEkhheComponent::update() {
-    ESP_LOGI(TAG, "Update was called");
 }
 
 void DaikinEkhheComponent::set_update_interval(int interval_ms) {
     this->update_interval_ = interval_ms;
-    ESP_LOGI(TAG, "Update interval set to %d ms", interval_ms);
+}
+
+void DaikinEkhheComponent::set_debug_packet(const std::string &value) {
+  debug_packet_type_ = packet_type_from_string_(value);
+  if (debug_packet_select_ != nullptr) {
+    debug_packet_select_->publish_state(packet_type_to_string_(debug_packet_type_));
+  }
+}
+
+void DaikinEkhheComponent::set_debug_freeze(bool enabled) {
+  debug_freeze_ = enabled;
+  if (debug_freeze_) {
+    size_t index = 0;
+    size_t back = 0;
+    const RawFrameEntry *entry = select_raw_frame_(index, back);
+    debug_frozen_seq_ = entry != nullptr ? entry->seq : 0;
+  } else {
+    debug_frozen_seq_ = 0;
+  }
+  if (debug_freeze_switch_ != nullptr) {
+    debug_freeze_switch_->publish_state(debug_freeze_);
+  }
+}
+
+void DaikinEkhheDebugSelect::control(const std::string &value) {
+  if (this->parent_ == nullptr) {
+    return;
+  }
+  this->parent_->set_debug_packet(value);
+}
+
+void DaikinEkhheDebugSwitch::write_state(bool state) {
+  if (this->parent_ == nullptr) {
+    return;
+  }
+  this->parent_->set_debug_freeze(state);
 }
 
 
 void DaikinEkhheNumber::control(float value) {
 
     if (this->parent_ == nullptr) {
-        ESP_LOGW(TAG, "Parent component is null, cannot send Number command.");
+        DAIKIN_WARN(TAG, "Parent component is null, cannot send Number command.");
         return;
     }
 
     // Use get_name() to determine which UART command to send
     auto name = this->internal_id_;
-    ESP_LOGI(TAG, "Changing number value: %s -> %.2f", name.c_str(), value);
 
     // Get the CC array index from map, send UART command and update UI state
     auto it_u = U_NUMBER_PARAM_INDEX.find(name);
@@ -490,43 +1405,40 @@ void DaikinEkhheNumber::control(float value) {
         this->publish_state(value);
     }
     else {
-        ESP_LOGW(TAG, "No matching UART command for Number: %s", name.c_str());
+        DAIKIN_WARN(TAG, "No matching UART command for Number: %s", name.c_str());
     }
 }
 
 void DaikinEkhheSelect::control(const std::string &value) {
     if (this->parent_ == nullptr) {
-        ESP_LOGW(TAG, "Parent component is null, cannot send Select.");
+        DAIKIN_WARN(TAG, "Parent component is null, cannot send Select.");
         return;
     }
 
     // Use get_name() to determine which UART command to send
     auto name = this->internal_id_;
-    ESP_LOGI(TAG, "Changing Select value: %s -> %.2f", name.c_str(), value);
 
     // Find the correct value index from the mapping
     auto mappings = this->get_select_mappings();
     if (mappings.empty()) {
-        ESP_LOGW(TAG, "No select mappings found for %s!", name.c_str());
+        DAIKIN_WARN(TAG, "No select mappings found for %s!", name.c_str());
         return;
     }
 
     auto it = mappings.find(value);
     if (it == mappings.end()) {
-        ESP_LOGW(TAG, "Invalid select option %s for entity %s!", value.c_str(), name.c_str());
+        DAIKIN_WARN(TAG, "Invalid select option %s for entity %s!", value.c_str(), name.c_str());
         return;
     }
     uint8_t uart_value = static_cast<uint8_t>(it->second);
-    ESP_LOGI(TAG, "Mapped select value: %s -> UART Value: %d", value.c_str(), uart_value);
   
     // Look up the CC packet index for this select entity
     auto index_it = SELECT_PARAM_INDEX.find(name);
     uint8_t param_index = PARAM_INDEX_INVALID;
     if (index_it != SELECT_PARAM_INDEX.end()) {
       param_index = index_it->second;
-      ESP_LOGI(TAG, "Found Select %s in SELECT_PARAM_INDEX -> Index: %d", name.c_str(), param_index);
     } else {
-      ESP_LOGW(TAG, "Select %s NOT found in SELECT_PARAM_INDEX", name.c_str());
+      DAIKIN_WARN(TAG, "Select %s NOT found in SELECT_PARAM_INDEX", name.c_str());
     }
 
     // Look up if this select is part of a bitmask
@@ -535,9 +1447,8 @@ void DaikinEkhheSelect::control(const std::string &value) {
     if (bitmask_it != SELECT_BITMASKS.end()) {
         param_index = bitmask_it->second.first;  // Get the byte index
         bit_position = bitmask_it->second.second;  // Get the bit position
-        ESP_LOGI(TAG, "Found Select %s in SELECT_BITMASKS -> Byte Index: %d, Bit Position: %d", name.c_str(), param_index, bit_position);
     } else {
-            ESP_LOGW(TAG, "Select %s NOT found in SELECT_BITMASKS", name.c_str());
+            DAIKIN_WARN(TAG, "Select %s NOT found in SELECT_BITMASKS", name.c_str());
     }
 
     // Update value in ESPHome
@@ -549,7 +1460,7 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     // Check that a CC packet is stored
     // since we need the last one as a basis for the new packet
     if (last_cc_packet_.empty()) {
-        ESP_LOGW(TAG, "No CC packet received yet. Cannot send command.");
+        DAIKIN_WARN(TAG, "No CC packet received yet. Cannot send command.");
         return;
     }
 
@@ -594,7 +1505,6 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     // Send the updated packet over UART
     this->write_array(command);
     this->flush();
-    ESP_LOGI(TAG, "Sent modified CC packet via UART.");
 
     // Trigger a new read cycle w/ small t imeout
     set_timeout(10, [this]() {

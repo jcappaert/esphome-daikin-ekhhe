@@ -86,6 +86,7 @@ TYPES = [
     ECO_T_TEMPERATURE,
     BOOST_T_TEMPERATURE,
     ELECTRIC_T_TEMPERATURE,
+    VAC_DAYS,
 ]
 
 CONFIG_SCHEMA = (
@@ -429,6 +430,14 @@ CONFIG_SCHEMA = (
                 cv.Optional(CONF_STEP, default=1): cv.positive_float,
                 cv.Optional(CONF_DEVICE_CLASS, default=DEVICE_CLASS_TEMPERATURE): cv.string,
                 cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_CELSIUS): cv.string,
+            }),
+            cv.Optional(VAC_DAYS): number.number_schema(DaikinEkhheNumber).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
+                cv.Optional(CONF_MAX_VALUE, default=30): cv.float_,
+                cv.Optional(CONF_MIN_VALUE, default=1): cv.float_,
+                cv.Optional(CONF_STEP, default=1): cv.positive_float,
+                cv.Optional(CONF_DEVICE_CLASS, default=DEVICE_CLASS_DURATION): cv.string,
+                cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_EMPTY): cv.string,
             }),
         }
 
