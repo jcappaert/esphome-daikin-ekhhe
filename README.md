@@ -75,6 +75,11 @@ checksum, and transmits a CD packet. TX is gated by an RX-idle delay to reduce b
 restarts the RX cycle after TX. A confirmation check compares subsequent CC packets to the requested value and logs
 either a "TX applied" info or a "TX not applied" warning.
 
+While a TX is pending, CC updates for the targeted byte/bit are temporarily ignored so the UI stays on the requested
+value. If the request is applied, the pending state is cleared on the first matching CC packet. If it is not applied,
+the pending state is cleared after a small number of CC cycles and the UI is immediately rolled back to the current CC
+value in that same cycle.
+
 ## Debug / Reverse Engineering
 Debug mode enables a raw-frame ring buffer and optional Home Assistant entities for inspection. These entities are
 created only when `mode: debug` is set on the component and you enable them in YAML.
