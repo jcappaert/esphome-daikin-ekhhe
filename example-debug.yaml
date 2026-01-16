@@ -1,40 +1,23 @@
 esphome:
   name: daikin-altherma-200
   friendly_name: daikin-altherma-200
-  
+
 esp32:
   board: esp32-c3-devkitm-1
   framework:
     type: arduino
 
-# Enable logging
 logger:
   level: INFO
 
-# Enable Home Assistant API
 api:
 
 ota:
   - platform: esphome
 
 wifi:
-  networks:
-  - ssid: !secret wifi_ssid
-    password: !secret wifi_password
-  - ssid: !secret wifi2_ssid
-    password: !secret wifi_password
-  - ssid: !secret wifi3_ssid
-    password: !secret wifi_password
-
-  power_save_mode: none
-  output_power: 10
-
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
-  ap:
-    ssid: "Daikin-Altherma-200"
-    password: "XQq82CoHtaXD"
-
-captive_portal:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
 web_server:
   port: 80
@@ -42,14 +25,9 @@ web_server:
 
 external_components:
   - source:
-      type: git
-      url: https://github.com/jcappaert/esphome-daikin-ekhhe
-      ref: main
-    components: [ daikin_ekhhe ]
-
-button:
-  - platform: restart
-    name: "Daikin restart"
+      type: local
+      path: C:\Users\jeroe\git\esphome-daikin-ekhhe/components
+    components: [daikin_ekhhe]
 
 uart:
   rx_pin: GPIO20
@@ -59,11 +37,10 @@ uart:
   stop_bits: 1
   id: my_uart
 
-# Initialize the daikin UART receiver
 daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
-    mode: production
+    mode: debug
 
 sensor:
   - platform: daikin_ekhhe
@@ -82,9 +59,27 @@ sensor:
     compressor_discharge_gas_temp_probe:
       name: "G: Compressor Discharge Gas Temperature probe"
     solar_collector_temp_probe:
-      name: "H: Solar Collector Temperature probe"    
+      name: "H: Solar Collector Temperature probe"
     eev_opening_step:
       name: "I: EEV opening step"
+    frames_captured_total:
+      name: "Daikin Frames Captured"
+    frames_dropped_total:
+      name: "Daikin Frames Dropped"
+    frames_truncated_total:
+      name: "Daikin Frames Truncated"
+    crc_errors_total:
+      name: "Daikin CRC Errors"
+    framing_errors_total:
+      name: "Daikin Framing Errors"
+    bytes_captured_total:
+      name: "Daikin Bytes Captured"
+    cycle_parse_time_ms:
+      name: "Daikin Cycle Parse Time"
+    cycle_total_time_ms:
+      name: "Daikin Cycle Total Time"
+    cycle_over_budget_total:
+      name: "Daikin Cycle Over Budget"
 
 binary_sensor:
   - platform: daikin_ekhhe
@@ -99,7 +94,7 @@ number:
   - platform: daikin_ekhhe
     low_water_hp_hysteris:
       name: "P1: Lower water temp hysteresis"
-    elec_heater_switch_on_delay: 
+    elec_heater_switch_on_delay:
       name: "P2: Electric heater switch-on delay"
     antilegionella_setpoint_temp:
       name: "P3: Antilegionella setpoint temp"
@@ -216,14 +211,23 @@ select:
       name: "P33: EEV control"
     eev_control_mode:
       name: "P39: EEV control mode"
+    daikin_debug_packet:
+      name: "Daikin Debug Packet"
 
+switch:
+  - platform: daikin_ekhhe
+    daikin_debug_freeze:
+      name: "Daikin Debug Freeze"
 
 text_sensor:
   - platform: daikin_ekhhe
     current_time:
       name: "Current Time UTC"
-
-time:
-  - platform: homeassistant
-    id: homeassistant_time
-    timezone: "Europe/Berlin"
+    daikin_raw_frame_hex:
+      name: "Daikin Raw Frame Hex"
+    daikin_raw_frame_meta:
+      name: "Daikin Raw Frame Meta"
+    daikin_unknown_fields:
+      name: "Daikin Unknown Fields"
+    daikin_frame_diff:
+      name: "Daikin Frame Diff"

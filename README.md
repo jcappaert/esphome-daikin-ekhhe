@@ -45,55 +45,8 @@ Controls:
 * daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
 * daikin_debug_freeze (switch)
 
-### Example YAML (debug)
-```yaml
-daikin_ekhhe:
-  - id: daikin_component
-    update_interval: 10
-    mode: debug
-
-text_sensor:
-  - platform: daikin_ekhhe
-    daikin_raw_frame_hex:
-      name: "Daikin Raw Frame Hex"
-    daikin_raw_frame_meta:
-      name: "Daikin Raw Frame Meta"
-    daikin_unknown_fields:
-      name: "Daikin Unknown Fields"
-    daikin_frame_diff:
-      name: "Daikin Frame Diff"
-
-sensor:
-  - platform: daikin_ekhhe
-    frames_captured_total:
-      name: "Daikin Frames Captured"
-    frames_dropped_total:
-      name: "Daikin Frames Dropped"
-    frames_truncated_total:
-      name: "Daikin Frames Truncated"
-    crc_errors_total:
-      name: "Daikin CRC Errors"
-    framing_errors_total:
-      name: "Daikin Framing Errors"
-    bytes_captured_total:
-      name: "Daikin Bytes Captured"
-    cycle_parse_time_ms:
-      name: "Daikin Cycle Parse Time"
-    cycle_total_time_ms:
-      name: "Daikin Cycle Total Time"
-    cycle_over_budget_total:
-      name: "Daikin Cycle Over Budget"
-
-select:
-  - platform: daikin_ekhhe
-    daikin_debug_packet:
-      name: "Daikin Debug Packet"
-
-switch:
-  - platform: daikin_ekhhe
-    daikin_debug_freeze:
-      name: "Daikin Debug Freeze"
-```
+### Example YAML files
+See `example-production.yaml` and `example-debug.yaml` in the repository root.
 
 If all goes well, you should get something like this in the UI (there are a lot of paramters and variables ...):
 ![esphome UI example](https://github.com/jcappaert/esphome-daikin-ekhhe/blob/main/images/ekhhe_all.PNG)
