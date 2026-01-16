@@ -11,6 +11,7 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/switch/switch.h"
+#include "esphome/components/button/button.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/time/real_time_clock.h"
@@ -76,6 +77,22 @@ class DaikinEkhheDebugSwitch : public switch_::Switch {
   DaikinEkhheComponent *parent_;
 };
 
+class DaikinEkhheDebugButton : public button::Button {
+ public:
+  enum class Action : uint8_t {
+    SAVE_SNAPSHOT,
+    RESTORE_SNAPSHOT,
+  };
+
+  explicit DaikinEkhheDebugButton(Action action) : action_(action) {}
+  void press_action() override;
+  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
+
+ private:
+  DaikinEkhheComponent *parent_;
+  Action action_;
+};
+
 class DaikinEkhheComponent : public Component, public uart::UARTDevice {
  public:
 
@@ -106,6 +123,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
   void register_debug_select(DaikinEkhheDebugSelect *select);
   void register_debug_switch(DaikinEkhheDebugSwitch *sw);
+  void register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor);
 
   // Methods to update values dynamically (only for registered components)
   void set_sensor_value(const std::string &sensor_name, float value);
@@ -116,6 +134,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   // Allow UART command sending for Number/Select control
   void send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  void save_cc_snapshot();
+  void restore_cc_snapshot();
   void set_debug_packet(const std::string &value);
   void set_debug_freeze(bool enabled);
 
@@ -309,6 +329,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
   DaikinEkhheDebugSelect *debug_packet_select_ = nullptr;
   DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
+  text_sensor::TextSensor *cc_snapshot_sensor_ = nullptr;
   esphome::time::RealTimeClock *clock;
 
   // UART Processing
@@ -338,6 +359,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct RawFrameEntry;
   bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
   void publish_debug_outputs_();
+  void publish_cc_snapshot_(const char *override_text);
   const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
   const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
@@ -346,12 +368,15 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool is_frame_ok_(const RawFrameEntry &entry) const;
   std::string raw_frame_flags_to_string_(uint8_t flags) const;
   std::string format_raw_frame_hex_(const RawFrameEntry &entry) const;
+  std::string format_raw_frame_hex_data_(const uint8_t *data, size_t length) const;
   std::string format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back, uint32_t now_ms) const;
   std::string format_unknown_fields_(const RawFrameEntry &entry) const;
   std::string format_frame_diff_(const RawFrameEntry &entry, const RawFrameEntry *prev) const;
   bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;
   uint8_t packet_type_from_string_(const std::string &value) const;
   std::string packet_type_to_string_(uint8_t packet_type) const;
+  void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
+                            uint8_t index, uint8_t value, uint8_t bit_position);
 
   std::vector<uint8_t> last_d2_packet_;
   std::vector<uint8_t> last_dd_packet_;
@@ -385,6 +410,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint32_t debug_frozen_seq_ = 0;
   bool debug_freeze_ = false;
   uint8_t debug_packet_type_ = 0;
+  bool cc_snapshot_valid_ = false;
+  uint8_t cc_snapshot_len_ = 0;
+  uint8_t cc_snapshot_data_[kRawFrameMaxLen];
+  uint32_t cc_snapshot_ts_ms_ = 0;
 
   enum RawFrameFlags : uint8_t {
     RAW_FRAME_CRC_ERROR = 1 << 0,

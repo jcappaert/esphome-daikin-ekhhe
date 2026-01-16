@@ -3,8 +3,8 @@ import esphome.config_validation as cv
 from esphome.components import text_sensor
 from esphome.const import CONF_ID, DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
 
-from . import CONF_EKHHE_ID, DaikinEkhhe
-from .const import CURRENT_TIME, DAIKIN_RAW_FRAME_HEX, DAIKIN_RAW_FRAME_META, DAIKIN_UNKNOWN_FIELDS, DAIKIN_FRAME_DIFF
+from . import CONF_EKHHE_ID, DaikinEkhhe, DEBUG_COMPONENTS
+from .const import CURRENT_TIME, DAIKIN_RAW_FRAME_HEX, DAIKIN_RAW_FRAME_META, DAIKIN_UNKNOWN_FIELDS, DAIKIN_FRAME_DIFF, DAIKIN_CC_SNAPSHOT_HEX
 
 
 CONFIG_SCHEMA = cv.Schema(
@@ -25,6 +25,9 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(DAIKIN_FRAME_DIFF): text_sensor.text_sensor_schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
+        cv.Optional(DAIKIN_CC_SNAPSHOT_HEX): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
     }
 )
 
@@ -34,15 +37,18 @@ async def to_code(config):
     if CURRENT_TIME in config:
         sens = await text_sensor.new_text_sensor(config[CURRENT_TIME])
         cg.add(hub.register_timestamp_sensor(sens))
-    if DAIKIN_RAW_FRAME_HEX in config:
+    if DAIKIN_RAW_FRAME_HEX in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_RAW_FRAME_HEX])
         cg.add(hub.register_debug_text_sensor(DAIKIN_RAW_FRAME_HEX, sens))
-    if DAIKIN_RAW_FRAME_META in config:
+    if DAIKIN_RAW_FRAME_META in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_RAW_FRAME_META])
         cg.add(hub.register_debug_text_sensor(DAIKIN_RAW_FRAME_META, sens))
-    if DAIKIN_UNKNOWN_FIELDS in config:
+    if DAIKIN_UNKNOWN_FIELDS in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_UNKNOWN_FIELDS])
         cg.add(hub.register_debug_text_sensor(DAIKIN_UNKNOWN_FIELDS, sens))
-    if DAIKIN_FRAME_DIFF in config:
+    if DAIKIN_FRAME_DIFF in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_FRAME_DIFF])
         cg.add(hub.register_debug_text_sensor(DAIKIN_FRAME_DIFF, sens))
+    if DAIKIN_CC_SNAPSHOT_HEX in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_CC_SNAPSHOT_HEX])
+        cg.add(hub.register_cc_snapshot_sensor(sens))
