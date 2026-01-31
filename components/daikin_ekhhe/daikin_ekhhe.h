@@ -1,6 +1,10 @@
 
 #pragma once
 
+#ifndef DAIKIN_EKHHE_DEBUG
+#define DAIKIN_EKHHE_DEBUG 0
+#endif
+
 #include <string>
 #include <map>
 #include <type_traits>
@@ -10,17 +14,17 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
 #include "esphome/components/switch/switch.h"
+#endif
+#if DAIKIN_EKHHE_DEBUG && defined(USE_BUTTON)
 #include "esphome/components/button/button.h"
+#endif
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/time/real_time_clock.h"
 
 #include "daikin_ekhhe_const.h"
-
-#ifndef DAIKIN_EKHHE_DEBUG
-#define DAIKIN_EKHHE_DEBUG 0
-#endif
 
 namespace esphome {
 namespace daikin_ekkhe {
@@ -68,6 +72,7 @@ class DaikinEkhheDebugSelect : public select::Select, public Component {
   DaikinEkhheComponent *parent_;
 };
 
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
 class DaikinEkhheDebugSwitch : public switch_::Switch {
  public:
   void write_state(bool state) override;
@@ -76,7 +81,9 @@ class DaikinEkhheDebugSwitch : public switch_::Switch {
  private:
   DaikinEkhheComponent *parent_;
 };
+#endif
 
+#if DAIKIN_EKHHE_DEBUG && defined(USE_BUTTON)
 class DaikinEkhheDebugButton : public button::Button {
  public:
   enum class Action : uint8_t {
@@ -92,6 +99,7 @@ class DaikinEkhheDebugButton : public button::Button {
   DaikinEkhheComponent *parent_;
   Action action_;
 };
+#endif
 
 class DaikinEkhheComponent : public Component, public uart::UARTDevice {
  public:
@@ -122,7 +130,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
   void register_debug_select(DaikinEkhheDebugSelect *select);
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   void register_debug_switch(DaikinEkhheDebugSwitch *sw);
+#endif
   void register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor);
 
   // Methods to update values dynamically (only for registered components)
@@ -331,7 +341,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
   std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
   DaikinEkhheDebugSelect *debug_packet_select_ = nullptr;
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
+#endif
   text_sensor::TextSensor *cc_snapshot_sensor_ = nullptr;
   esphome::time::RealTimeClock *clock;
 
