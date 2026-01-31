@@ -88,7 +88,6 @@ DAIKIN_RAW_FRAME_META = "daikin_raw_frame_meta"
 DAIKIN_UNKNOWN_FIELDS = "daikin_unknown_fields"
 DAIKIN_FRAME_DIFF = "daikin_frame_diff"
 DAIKIN_CC_SNAPSHOT_HEX = "daikin_cc_snapshot_hex"
-DAIKIN_DD_B1_B5_TEXT = "dd_b1_b5_text_sensor"
 DAIKIN_DD_B1_TEXT = "dd_b1_text_sensor"
 DAIKIN_DD_B5_TEXT = "dd_b5_text_sensor"
 

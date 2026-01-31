@@ -892,7 +892,7 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
   }
   publish_debug_text("daikin_frame_diff", format_frame_diff_(*entry, prev));
 
-  if (dd_b1_b5_text_ != nullptr || dd_b1_text_ != nullptr || dd_b5_text_ != nullptr) {
+  if (dd_b1_text_ != nullptr || dd_b5_text_ != nullptr) {
     size_t dd_index = 0;
     const RawFrameEntry *dd_entry = find_latest_frame_by_type_(DD_PACKET_START_BYTE, dd_index, false);
     const bool has_dd = dd_entry != nullptr && dd_entry->length >= 6 &&
@@ -900,15 +900,6 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
     if (has_dd) {
       uint8_t b1 = dd_entry->data[1];
       uint8_t b5 = dd_entry->data[5];
-      if (dd_b1_b5_text_ != nullptr &&
-          (!last_dd_b1_b5_valid_ || b1 != last_dd_b1_ || b5 != last_dd_b5_) &&
-          (now_ms - last_dd_b1_b5_publish_ms_) >= kDebugTextPublishMinIntervalMs) {
-        char buffer[24];
-        snprintf(buffer, sizeof(buffer), "b1=0x%02X b5=0x%02X", b1, b5);
-        dd_b1_b5_text_->publish_state(buffer);
-        last_dd_b1_b5_publish_ms_ = now_ms;
-        last_dd_b1_b5_valid_ = true;
-      }
       if (dd_b1_text_ != nullptr &&
           (!last_dd_b1_valid_ || b1 != last_dd_b1_) &&
           (now_ms - last_dd_b1_publish_ms_) >= kDebugTextPublishMinIntervalMs) {
@@ -930,10 +921,6 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
       last_dd_b1_ = b1;
       last_dd_b5_ = b5;
     } else {
-      if (dd_b1_b5_text_ != nullptr && last_dd_b1_b5_valid_) {
-        dd_b1_b5_text_->publish_state("");
-        last_dd_b1_b5_valid_ = false;
-      }
       if (dd_b1_text_ != nullptr && last_dd_b1_valid_) {
         dd_b1_text_->publish_state("");
         last_dd_b1_valid_ = false;

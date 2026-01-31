@@ -124,7 +124,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_debug_select(DaikinEkhheDebugSelect *select);
   void register_debug_switch(DaikinEkhheDebugSwitch *sw);
   void register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor);
-  void set_dd_b1_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_b5_text_ = sensor; }
   void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
   void set_dd_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b5_text_ = sensor; }
 
@@ -337,7 +336,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   DaikinEkhheDebugSelect *debug_packet_select_ = nullptr;
   DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
   text_sensor::TextSensor *cc_snapshot_sensor_ = nullptr;
-  text_sensor::TextSensor *dd_b1_b5_text_ = nullptr;
   text_sensor::TextSensor *dd_b1_text_ = nullptr;
   text_sensor::TextSensor *dd_b5_text_ = nullptr;
   esphome::time::RealTimeClock *clock;
@@ -481,10 +479,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, uint32_t> debug_last_published_text_ms_;
   uint8_t last_dd_b1_ = 0xFF;
   uint8_t last_dd_b5_ = 0xFF;
-  uint32_t last_dd_b1_b5_publish_ms_ = 0;
   uint32_t last_dd_b1_publish_ms_ = 0;
   uint32_t last_dd_b5_publish_ms_ = 0;
-  bool last_dd_b1_b5_valid_ = false;
   bool last_dd_b1_valid_ = false;
   bool last_dd_b5_valid_ = false;
 
