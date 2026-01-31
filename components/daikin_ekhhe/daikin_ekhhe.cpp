@@ -482,9 +482,11 @@ const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::select_raw_fram
 
     debug_freeze_ = false;
     debug_frozen_seq_ = 0;
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
     if (debug_freeze_switch_ != nullptr) {
       debug_freeze_switch_->publish_state(false);
     }
+#endif
   }
 
   const RawFrameEntry *entry = find_latest_frame_by_type_(debug_packet_type_, index, true);
@@ -1224,12 +1226,14 @@ void DaikinEkhheComponent::register_debug_select(DaikinEkhheDebugSelect *select)
   }
 }
 
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
 void DaikinEkhheComponent::register_debug_switch(DaikinEkhheDebugSwitch *sw) {
   this->debug_freeze_switch_ = sw;
   if (this->debug_freeze_switch_ != nullptr) {
     this->debug_freeze_switch_->publish_state(debug_freeze_);
   }
 }
+#endif
 
 void DaikinEkhheComponent::register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor) {
   this->cc_snapshot_sensor_ = sensor;
@@ -1435,9 +1439,11 @@ void DaikinEkhheComponent::set_debug_freeze(bool enabled) {
   } else {
     debug_frozen_seq_ = 0;
   }
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   if (debug_freeze_switch_ != nullptr) {
     debug_freeze_switch_->publish_state(debug_freeze_);
   }
+#endif
 }
 
 void DaikinEkhheComponent::save_cc_snapshot() {
@@ -1482,13 +1488,16 @@ void DaikinEkhheDebugSelect::control(const std::string &value) {
   this->parent_->set_debug_packet(value);
 }
 
+#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
 void DaikinEkhheDebugSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
     return;
   }
   this->parent_->set_debug_freeze(state);
 }
+#endif
 
+#if DAIKIN_EKHHE_DEBUG && defined(USE_BUTTON)
 void DaikinEkhheDebugButton::press_action() {
   if (this->parent_ == nullptr) {
     return;
@@ -1499,6 +1508,7 @@ void DaikinEkhheDebugButton::press_action() {
     this->parent_->restore_cc_snapshot();
   }
 }
+#endif
 
 
 void DaikinEkhheNumber::control(float value) {
