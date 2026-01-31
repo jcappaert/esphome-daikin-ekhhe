@@ -4,7 +4,7 @@ from esphome.components import text_sensor
 from esphome.const import CONF_ID, DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
 
 from . import CONF_EKHHE_ID, DaikinEkhhe, DEBUG_COMPONENTS
-from .const import CURRENT_TIME, DAIKIN_RAW_FRAME_HEX, DAIKIN_RAW_FRAME_META, DAIKIN_UNKNOWN_FIELDS, DAIKIN_FRAME_DIFF, DAIKIN_CC_SNAPSHOT_HEX
+from .const import CURRENT_TIME, DAIKIN_RAW_FRAME_HEX, DAIKIN_RAW_FRAME_META, DAIKIN_UNKNOWN_FIELDS, DAIKIN_FRAME_DIFF, DAIKIN_CC_SNAPSHOT_HEX, DAIKIN_DD_B1_B5_TEXT, DAIKIN_DD_B1_TEXT, DAIKIN_DD_B5_TEXT
 
 
 CONFIG_SCHEMA = cv.Schema(
@@ -26,6 +26,15 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
         cv.Optional(DAIKIN_CC_SNAPSHOT_HEX): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(DAIKIN_DD_B1_B5_TEXT): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(DAIKIN_DD_B1_TEXT): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(DAIKIN_DD_B5_TEXT): text_sensor.text_sensor_schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
     }
@@ -52,3 +61,12 @@ async def to_code(config):
     if DAIKIN_CC_SNAPSHOT_HEX in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_CC_SNAPSHOT_HEX])
         cg.add(hub.register_cc_snapshot_sensor(sens))
+    if DAIKIN_DD_B1_B5_TEXT in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_DD_B1_B5_TEXT])
+        cg.add(hub.set_dd_b1_b5_text(sens))
+    if DAIKIN_DD_B1_TEXT in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_DD_B1_TEXT])
+        cg.add(hub.set_dd_b1_text(sens))
+    if DAIKIN_DD_B5_TEXT in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_DD_B5_TEXT])
+        cg.add(hub.set_dd_b5_text(sens))

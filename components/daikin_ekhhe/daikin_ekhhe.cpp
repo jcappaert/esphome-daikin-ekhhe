@@ -612,6 +612,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           D2_PACKET_P7_IDX,
           D2_PACKET_P10_IDX,
           D2_PACKET_P2_IDX,
+          D2_PACKET_VAC_DAYS,
           D2_PACKET_P29_IDX,
           D2_PACKET_P31_IDX,
           D2_PACKET_P8_IDX,
@@ -687,6 +688,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           CC_PACKET_P7_IDX,
           CC_PACKET_P10_IDX,
           CC_PACKET_P2_IDX,
+          CC_PACKET_VAC_DAYS,
           CC_PACKET_P29_IDX,
           CC_PACKET_P31_IDX,
           CC_PACKET_P8_IDX,
@@ -889,6 +891,61 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
     prev = find_previous_frame_by_type_(entry->packet_type, entry->seq, prev_index, false);
   }
   publish_debug_text("daikin_frame_diff", format_frame_diff_(*entry, prev));
+
+  if (dd_b1_b5_text_ != nullptr || dd_b1_text_ != nullptr || dd_b5_text_ != nullptr) {
+    size_t dd_index = 0;
+    const RawFrameEntry *dd_entry = find_latest_frame_by_type_(DD_PACKET_START_BYTE, dd_index, false);
+    const bool has_dd = dd_entry != nullptr && dd_entry->length >= 6 &&
+                        (dd_entry->flags & RAW_FRAME_TRUNCATED) == 0;
+    if (has_dd) {
+      uint8_t b1 = dd_entry->data[1];
+      uint8_t b5 = dd_entry->data[5];
+      if (dd_b1_b5_text_ != nullptr &&
+          (!last_dd_b1_b5_valid_ || b1 != last_dd_b1_ || b5 != last_dd_b5_) &&
+          (now_ms - last_dd_b1_b5_publish_ms_) >= kDebugTextPublishMinIntervalMs) {
+        char buffer[24];
+        snprintf(buffer, sizeof(buffer), "b1=0x%02X b5=0x%02X", b1, b5);
+        dd_b1_b5_text_->publish_state(buffer);
+        last_dd_b1_b5_publish_ms_ = now_ms;
+        last_dd_b1_b5_valid_ = true;
+      }
+      if (dd_b1_text_ != nullptr &&
+          (!last_dd_b1_valid_ || b1 != last_dd_b1_) &&
+          (now_ms - last_dd_b1_publish_ms_) >= kDebugTextPublishMinIntervalMs) {
+        char buffer[8];
+        snprintf(buffer, sizeof(buffer), "0x%02X", b1);
+        dd_b1_text_->publish_state(buffer);
+        last_dd_b1_publish_ms_ = now_ms;
+        last_dd_b1_valid_ = true;
+      }
+      if (dd_b5_text_ != nullptr &&
+          (!last_dd_b5_valid_ || b5 != last_dd_b5_) &&
+          (now_ms - last_dd_b5_publish_ms_) >= kDebugTextPublishMinIntervalMs) {
+        char buffer[8];
+        snprintf(buffer, sizeof(buffer), "0x%02X", b5);
+        dd_b5_text_->publish_state(buffer);
+        last_dd_b5_publish_ms_ = now_ms;
+        last_dd_b5_valid_ = true;
+      }
+      last_dd_b1_ = b1;
+      last_dd_b5_ = b5;
+    } else {
+      if (dd_b1_b5_text_ != nullptr && last_dd_b1_b5_valid_) {
+        dd_b1_b5_text_->publish_state("");
+        last_dd_b1_b5_valid_ = false;
+      }
+      if (dd_b1_text_ != nullptr && last_dd_b1_valid_) {
+        dd_b1_text_->publish_state("");
+        last_dd_b1_valid_ = false;
+      }
+      if (dd_b5_text_ != nullptr && last_dd_b5_valid_) {
+        dd_b5_text_->publish_state("");
+        last_dd_b5_valid_ = false;
+      }
+      last_dd_b1_ = 0xFF;
+      last_dd_b5_ = 0xFF;
+    }
+  }
 }
 
 void DaikinEkhheComponent::publish_cc_snapshot_(const char *override_text) {
@@ -1026,6 +1083,7 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
   std::map<std::string, float> number_values = {
       {P1_LOW_WAT_PROBE_HYST,     buffer[D2_PACKET_P1_IDX]},
       {P2_HEAT_ON_DELAY,          buffer[D2_PACKET_P2_IDX]},
+      {VAC_DAYS,                  buffer[D2_PACKET_VAC_DAYS]},
       {P3_ANTL_SET_T,             buffer[D2_PACKET_P3_IDX]},
       {P4_ANTL_DURATION,          buffer[D2_PACKET_P4_IDX]},
       {P7_DEFROST_CYCLE_DELAY,    buffer[D2_PACKET_P7_IDX]},
