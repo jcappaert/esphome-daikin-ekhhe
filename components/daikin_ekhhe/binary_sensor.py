@@ -5,7 +5,8 @@ from esphome.const import ENTITY_CATEGORY_DIAGNOSTIC
 
 from . import (
     CONF_EKHHE_ID,
-    DaikinEkhhe
+    DaikinEkhhe,
+    DEBUG_COMPONENTS,
 )
 
 from .const import *
@@ -33,6 +34,15 @@ CONFIG_SCHEMA = (
                 #device_class=DEVICE_CLASS_NONE,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
             ),
+            cv.Optional(DD_HEATING_DEMAND): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(DD_HEATING_STAGE1): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(DD_HEATING_STAGE2): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
         }
     )
 )
@@ -49,3 +59,16 @@ async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
     for key in TYPES:
         await setup_conf(config, key, hub)
+    if str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
+        if DD_HEATING_DEMAND in config:
+            sens = await binary_sensor.new_binary_sensor(config[DD_HEATING_DEMAND])
+            cg.add(hub.register_binary_sensor(DD_HEATING_DEMAND, sens))
+            cg.add(hub.set_dd_heating_demand(sens))
+        if DD_HEATING_STAGE1 in config:
+            sens = await binary_sensor.new_binary_sensor(config[DD_HEATING_STAGE1])
+            cg.add(hub.register_binary_sensor(DD_HEATING_STAGE1, sens))
+            cg.add(hub.set_dd_heating_stage1(sens))
+        if DD_HEATING_STAGE2 in config:
+            sens = await binary_sensor.new_binary_sensor(config[DD_HEATING_STAGE2])
+            cg.add(hub.register_binary_sensor(DD_HEATING_STAGE2, sens))
+            cg.add(hub.set_dd_heating_stage2(sens))

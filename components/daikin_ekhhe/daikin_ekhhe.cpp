@@ -433,6 +433,28 @@ const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_latest_fra
   return nullptr;
 }
 
+const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_latest_dd_frame_(size_t &index) const {
+  if (raw_frame_count_ == 0) {
+    return nullptr;
+  }
+  for (size_t i = 0; i < raw_frame_count_; ++i) {
+    size_t idx = (raw_frame_head_ + raw_frame_count_ - 1 - i) % kRawFrameBufferSize;
+    const RawFrameEntry &entry = raw_frames_[idx];
+    if (entry.packet_type != DD_PACKET_START_BYTE) {
+      continue;
+    }
+    if (entry.length < 2) {
+      continue;
+    }
+    if ((entry.flags & RAW_FRAME_TRUNCATED) != 0) {
+      continue;
+    }
+    index = idx;
+    return &entry;
+  }
+  return nullptr;
+}
+
 const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_previous_frame_by_type_(
     uint8_t packet_type, uint32_t seq, size_t &index, bool require_ok) const {
   if (raw_frame_count_ == 0 || packet_type == 0) {
@@ -935,6 +957,45 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
   }
 }
 
+void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
+  if (!debug_mode_) {
+    return;
+  }
+  if (dd_heating_demand_ == nullptr && dd_heating_stage1_ == nullptr && dd_heating_stage2_ == nullptr) {
+    return;
+  }
+  size_t dd_index = 0;
+  const RawFrameEntry *dd_entry = find_latest_dd_frame_(dd_index);
+  if (dd_entry == nullptr) {
+    return;
+  }
+  uint8_t b1 = dd_entry->data[1];
+  bool demand = (b1 & 0x40) != 0;
+  bool stage1 = (b1 & 0x01) != 0;
+  bool stage2 = (b1 & 0x02) != 0;
+
+  if (!have_last_dd_bits_ || demand != last_dd_demand_) {
+    if (dd_heating_demand_ != nullptr) {
+      dd_heating_demand_->publish_state(demand);
+    }
+  }
+  if (!have_last_dd_bits_ || stage1 != last_dd_stage1_) {
+    if (dd_heating_stage1_ != nullptr) {
+      dd_heating_stage1_->publish_state(stage1);
+    }
+  }
+  if (!have_last_dd_bits_ || stage2 != last_dd_stage2_) {
+    if (dd_heating_stage2_ != nullptr) {
+      dd_heating_stage2_->publish_state(stage2);
+    }
+  }
+
+  last_dd_demand_ = demand;
+  last_dd_stage1_ = stage1;
+  last_dd_stage2_ = stage2;
+  have_last_dd_bits_ = true;
+}
+
 void DaikinEkhheComponent::publish_cc_snapshot_(const char *override_text) {
   if (cc_snapshot_sensor_ == nullptr || !debug_mode_) {
     return;
@@ -1025,6 +1086,7 @@ void DaikinEkhheComponent::process_packet_set() {
   }
 
   publish_debug_outputs_();
+  update_dd_b1_bit_sensors_();
 
   // Reset UART cycle
   processing_updates_ = false;

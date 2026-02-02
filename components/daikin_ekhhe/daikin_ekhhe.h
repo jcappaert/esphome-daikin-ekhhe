@@ -126,6 +126,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor);
   void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
   void set_dd_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b5_text_ = sensor; }
+  void set_dd_heating_demand(binary_sensor::BinarySensor *sensor) { this->dd_heating_demand_ = sensor; }
+  void set_dd_heating_stage1(binary_sensor::BinarySensor *sensor) { this->dd_heating_stage1_ = sensor; }
+  void set_dd_heating_stage2(binary_sensor::BinarySensor *sensor) { this->dd_heating_stage2_ = sensor; }
 
   // Methods to update values dynamically (only for registered components)
   void set_sensor_value(const std::string &sensor_name, float value);
@@ -338,6 +341,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *cc_snapshot_sensor_ = nullptr;
   text_sensor::TextSensor *dd_b1_text_ = nullptr;
   text_sensor::TextSensor *dd_b5_text_ = nullptr;
+  binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
+  binary_sensor::BinarySensor *dd_heating_stage1_ = nullptr;
+  binary_sensor::BinarySensor *dd_heating_stage2_ = nullptr;
   esphome::time::RealTimeClock *clock;
 
   // UART Processing
@@ -369,9 +375,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
   void publish_debug_outputs_();
   void publish_cc_snapshot_(const char *override_text);
+  void update_dd_b1_bit_sensors_();
   const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
   const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
+  const RawFrameEntry *find_latest_dd_frame_(size_t &index) const;
   const RawFrameEntry *find_previous_frame_by_type_(uint8_t packet_type, uint32_t seq, size_t &index,
                                                     bool require_ok) const;
   bool is_frame_ok_(const RawFrameEntry &entry) const;
@@ -483,6 +491,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint32_t last_dd_b5_publish_ms_ = 0;
   bool last_dd_b1_valid_ = false;
   bool last_dd_b5_valid_ = false;
+  bool last_dd_demand_ = false;
+  bool last_dd_stage1_ = false;
+  bool last_dd_stage2_ = false;
+  bool have_last_dd_bits_ = false;
 
   // Cycle management
   unsigned long last_process_time_ = 0;
