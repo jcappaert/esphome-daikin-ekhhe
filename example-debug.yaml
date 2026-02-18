@@ -93,19 +93,19 @@ binary_sensor:
 number:
   - platform: daikin_ekhhe
     low_water_hp_hysteris:
-      name: "P1: Lower water temp hysteresis"
+      name: "P01: Lower water temp hysteresis"
     elec_heater_switch_on_delay:
-      name: "P2: Electric heater switch-on delay"
+      name: "P02: Electric heater switch-on delay"
     antilegionella_setpoint_temp:
-      name: "P3: Antilegionella setpoint temp"
+      name: "P03: Antilegionella setpoint temp"
     antilegionella_duration:
-      name: "P4: Antilegionella duration"
+      name: "P04: Antilegionella duration"
     defrosting_cycle_delay:
-      name: "P7: Defrosting cycle delay"
+      name: "P07: Defrosting cycle delay"
     defrosting_start_temp_threshold:
-      name: "P8: Defrosting start temperature threshold"
+      name: "P08: Defrosting start temperature threshold"
     defrosting_stop_temp_threshold:
-      name: "P9: Defrosting stop temperature threshold"
+      name: "P09: Defrosting stop temperature threshold"
     max_defrosting_duration:
       name: "P10: Max defrosting duration"
     dig1_hp_start_delay:
@@ -188,9 +188,9 @@ select:
     operational_mode:
       name: "Operational mode"
     defrosting_mode:
-      name: "P5: Defrosting mode"
+      name: "P05: Defrosting mode"
     elec_heater_during_defrosting:
-      name: "P6: Electric heater during defrosting"
+      name: "P06: Electric heater during defrosting"
     display_water_probe_temp:
       name: "P11: Display water probe"
     external_pump_mode:
