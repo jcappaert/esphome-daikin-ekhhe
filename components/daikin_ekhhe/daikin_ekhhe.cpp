@@ -130,6 +130,12 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     return;
   }
 
+  // Check TX confirmation as soon as a valid CC frame arrives instead of waiting
+  // for the full DD/D2/D4/C1/CC cycle to complete.
+  if (byte == CC_PACKET_START_BYTE && pending_tx_.active) {
+    check_pending_tx_(packet);
+  }
+
   if (!cycle_synced_) {
     cycle_synced_ = true;
     latest_packets_.clear();
