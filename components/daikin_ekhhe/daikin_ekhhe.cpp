@@ -958,10 +958,7 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
 }
 
 void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
-  if (!debug_mode_) {
-    return;
-  }
-  if (dd_heating_demand_ == nullptr && dd_heating_stage1_ == nullptr && dd_heating_stage2_ == nullptr) {
+  if (dd_heating_demand_ == nullptr && hp_active_ == nullptr && eh_active_ == nullptr) {
     return;
   }
   size_t dd_index = 0;
@@ -971,28 +968,28 @@ void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
   }
   uint8_t b1 = dd_entry->data[1];
   bool demand = (b1 & 0x40) != 0;
-  bool stage1 = (b1 & 0x01) != 0;
-  bool stage2 = (b1 & 0x02) != 0;
+  bool hp_active = (b1 & 0x01) != 0;
+  bool eh_active = (b1 & 0x02) != 0;
 
   if (!have_last_dd_bits_ || demand != last_dd_demand_) {
     if (dd_heating_demand_ != nullptr) {
       dd_heating_demand_->publish_state(demand);
     }
   }
-  if (!have_last_dd_bits_ || stage1 != last_dd_stage1_) {
-    if (dd_heating_stage1_ != nullptr) {
-      dd_heating_stage1_->publish_state(stage1);
+  if (!have_last_dd_bits_ || hp_active != last_hp_active_) {
+    if (hp_active_ != nullptr) {
+      hp_active_->publish_state(hp_active);
     }
   }
-  if (!have_last_dd_bits_ || stage2 != last_dd_stage2_) {
-    if (dd_heating_stage2_ != nullptr) {
-      dd_heating_stage2_->publish_state(stage2);
+  if (!have_last_dd_bits_ || eh_active != last_eh_active_) {
+    if (eh_active_ != nullptr) {
+      eh_active_->publish_state(eh_active);
     }
   }
 
   last_dd_demand_ = demand;
-  last_dd_stage1_ = stage1;
-  last_dd_stage2_ = stage2;
+  last_hp_active_ = hp_active;
+  last_eh_active_ = eh_active;
   have_last_dd_bits_ = true;
 }
 

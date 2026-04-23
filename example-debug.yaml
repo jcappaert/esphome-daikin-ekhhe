@@ -89,6 +89,10 @@ binary_sensor:
       name: "DIG2 setting"
     dig3_config:
       name: "DIG3 setting"
+    hp_active:
+      name: "HP active (DD b1 0x01)"
+    eh_active:
+      name: "EH active (DD b1 0x02)"
 
 number:
   - platform: daikin_ekhhe

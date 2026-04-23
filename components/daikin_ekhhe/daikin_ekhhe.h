@@ -127,8 +127,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
   void set_dd_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b5_text_ = sensor; }
   void set_dd_heating_demand(binary_sensor::BinarySensor *sensor) { this->dd_heating_demand_ = sensor; }
-  void set_dd_heating_stage1(binary_sensor::BinarySensor *sensor) { this->dd_heating_stage1_ = sensor; }
-  void set_dd_heating_stage2(binary_sensor::BinarySensor *sensor) { this->dd_heating_stage2_ = sensor; }
+  void set_hp_active(binary_sensor::BinarySensor *sensor) { this->hp_active_ = sensor; }
+  void set_eh_active(binary_sensor::BinarySensor *sensor) { this->eh_active_ = sensor; }
 
   // Methods to update values dynamically (only for registered components)
   void set_sensor_value(const std::string &sensor_name, float value);
@@ -342,8 +342,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *dd_b1_text_ = nullptr;
   text_sensor::TextSensor *dd_b5_text_ = nullptr;
   binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
-  binary_sensor::BinarySensor *dd_heating_stage1_ = nullptr;
-  binary_sensor::BinarySensor *dd_heating_stage2_ = nullptr;
+  binary_sensor::BinarySensor *hp_active_ = nullptr;
+  binary_sensor::BinarySensor *eh_active_ = nullptr;
   esphome::time::RealTimeClock *clock;
 
   // UART Processing
@@ -492,8 +492,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool last_dd_b1_valid_ = false;
   bool last_dd_b5_valid_ = false;
   bool last_dd_demand_ = false;
-  bool last_dd_stage1_ = false;
-  bool last_dd_stage2_ = false;
+  bool last_hp_active_ = false;
+  bool last_eh_active_ = false;
   bool have_last_dd_bits_ = false;
 
   // Cycle management
