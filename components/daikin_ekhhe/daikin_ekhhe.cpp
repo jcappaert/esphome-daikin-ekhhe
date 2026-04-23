@@ -1103,7 +1103,7 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
       {D_SUPPLY_AIR_T_PROBE,   (int8_t)buffer[DD_PACKET_D_IDX]},
       {E_EVA_INLET_T_PROBE,    (int8_t)buffer[DD_PACKET_E_IDX]},
       {F_EVA_OUTLET_T_PROBE,   (int8_t)buffer[DD_PACKET_F_IDX]},
-      {G_COMP_GAS_T_PROBE,     buffer[DD_PACKET_H_IDX]},
+      {G_COMP_GAS_T_PROBE,     buffer[DD_PACKET_G_IDX]},
       {H_SOLAR_T_PROBE,        buffer[DD_PACKET_H_IDX]},
       {I_EEV_STEP,             buffer[DD_PACKET_I_IDX]},
   };
