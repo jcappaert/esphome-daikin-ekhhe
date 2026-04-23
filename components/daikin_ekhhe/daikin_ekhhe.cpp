@@ -66,7 +66,7 @@ void DaikinEkhheComponent::loop() {
     }
 
     now = millis();
-    if (uart_active_ && !packet_set_complete()) {
+    if (uart_active_ && cycle_synced_ && !packet_set_complete()) {
       if (last_rx_time_ > 0 && (now - last_rx_time_) > kCycleTimeoutMs && !cycle_timeout_logged_) {
         cycle_timeouts_++;
         cycle_timeout_logged_ = true;
@@ -134,6 +134,51 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   // for the full DD/D2/D4/C1/CC cycle to complete.
   if (byte == CC_PACKET_START_BYTE && pending_tx_.active) {
     check_pending_tx_(packet);
+  }
+
+  const uint32_t now_ms = millis();
+  if (debug_mode_) {
+    const uint32_t dt_prev = last_frame_profile_ms_ == 0 ? 0 : (now_ms - last_frame_profile_ms_);
+    const uint32_t dt_prev_cc = last_cc_profile_ms_ == 0 ? 0 : (now_ms - last_cc_profile_ms_);
+    const std::string prev_type =
+        last_frame_profile_ms_ == 0 ? "none" : packet_type_to_string_(last_frame_profile_type_);
+    const std::string type = packet_type_to_string_(byte);
+
+    DAIKIN_DBG(TAG,
+               "RX timing: seq=%u type=%s len=%u dt_prev=%u prev=%s dt_prev_cc=%u cycle_ms=%u pending=%u tx_active=%u",
+               raw_frame_seq_, type.c_str(), expected_length, dt_prev, prev_type.c_str(), dt_prev_cc,
+               now_ms - cycle_start_ms_, pending_tx_.active, uart_tx_active_);
+
+    if (byte == CD_PACKET_START_BYTE) {
+      DAIKIN_DBG(TAG, "RX observed CD on bus: seq=%u dt_prev=%u dt_prev_cc=%u", raw_frame_seq_, dt_prev, dt_prev_cc);
+      const uint32_t cd_seq = raw_frame_seq_;
+      set_timeout(kCdContextLogDelayMs, [this, cd_seq]() {
+        log_frame_context_(cd_seq, kCdContextFramesBefore, kCdContextFramesAfter);
+      });
+    }
+
+    if (pending_tx_.active && tx_waiting_for_first_rx_) {
+      DAIKIN_DBG(TAG, "TX timing: first_rx_after_tx type=%s dt=%u", type.c_str(), now_ms - tx_sent_ms_);
+      tx_waiting_for_first_rx_ = false;
+    }
+
+    if (pending_tx_.active && tx_waiting_for_first_cc_ && byte == CC_PACKET_START_BYTE) {
+      DAIKIN_DBG(TAG, "TX timing: first_cc_after_tx dt=%u", now_ms - tx_sent_ms_);
+      tx_waiting_for_first_cc_ = false;
+    }
+  }
+
+  last_frame_profile_ms_ = now_ms;
+  last_frame_profile_type_ = byte;
+  if (byte == CC_PACKET_START_BYTE) {
+    last_cc_profile_ms_ = now_ms;
+  }
+  if (byte == D2_PACKET_START_BYTE && queued_tx_.active && !queued_tx_.scheduled) {
+    size_t d2_index = 0;
+    const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
+    if (d2_entry != nullptr) {
+      schedule_queued_tx_from_d2_(*d2_entry);
+    }
   }
 
   if (!cycle_synced_) {
@@ -383,6 +428,8 @@ std::string DaikinEkhheComponent::packet_type_to_string_(uint8_t packet_type) co
       return "C1";
     case CC_PACKET_START_BYTE:
       return "CC";
+    case CD_PACKET_START_BYTE:
+      return "CD";
     default:
       return "latest";
   }
@@ -492,6 +539,49 @@ bool DaikinEkhheComponent::is_frame_ok_(const RawFrameEntry &entry) const {
   return entry.flags == 0;
 }
 
+void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry) {
+  if (!queued_tx_.active || queued_tx_.scheduled) {
+    return;
+  }
+
+  const uint32_t now_ms = millis();
+  const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
+  const uint32_t delay_ms = d2_age_ms >= kTxDelayAfterD2Ms ? 0 : (kTxDelayAfterD2Ms - d2_age_ms);
+  const uint32_t generation = queued_tx_.generation;
+
+  queued_tx_.scheduled = true;
+  queued_tx_.anchor_ms = d2_entry.timestamp_ms;
+  queued_tx_.anchor_seq = d2_entry.seq;
+
+  DAIKIN_DBG(TAG, "TX scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
+             d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_tx_.request_ms);
+
+  set_timeout(delay_ms, [this, generation]() {
+    if (!queued_tx_.active || queued_tx_.generation != generation) {
+      return;
+    }
+
+    uint8_t index = queued_tx_.index;
+    uint8_t value = queued_tx_.value;
+    uint8_t bit_position = queued_tx_.bit_position;
+    uint32_t anchor_seq = queued_tx_.anchor_seq;
+    uint32_t anchor_ms = queued_tx_.anchor_ms;
+
+    queued_tx_.active = false;
+    queued_tx_.scheduled = false;
+
+    std::vector<uint8_t> base_packet = last_cc_packet_;
+    auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
+    if (latest_cc != latest_packets_.end()) {
+      base_packet = latest_cc->second;
+    }
+
+    DAIKIN_DBG(TAG, "TX scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u using_current_cycle_cc=%u",
+               anchor_seq, millis() - anchor_ms, latest_cc != latest_packets_.end());
+    send_uart_cc_packet_(base_packet, true, index, value, bit_position);
+  });
+}
+
 const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::select_raw_frame_(size_t &index, size_t &back) {
   if (raw_frame_count_ == 0) {
     return nullptr;
@@ -596,6 +686,46 @@ std::string DaikinEkhheComponent::format_raw_frame_meta_(const RawFrameEntry &en
            entry.packet_type, entry.length, flags.c_str(), entry.timestamp_ms, static_cast<unsigned>(index),
            static_cast<unsigned>(back), age_ms, entry.seq);
   return std::string(buffer);
+}
+
+void DaikinEkhheComponent::log_frame_context_(uint32_t center_seq, uint8_t before, uint8_t after) const {
+  size_t center_index = 0;
+  const RawFrameEntry *center = find_raw_frame_by_seq_(center_seq, center_index);
+  if (center == nullptr) {
+    DAIKIN_DBG(TAG, "CD context: seq=%u not found count=%u dropped=%u", center_seq,
+               static_cast<unsigned>(raw_frame_count_), raw_frames_dropped_);
+    return;
+  }
+
+  size_t center_pos = (center_index + kRawFrameBufferSize - raw_frame_head_) % kRawFrameBufferSize;
+  if (center_pos >= raw_frame_count_) {
+    DAIKIN_DBG(TAG, "CD context: seq=%u index=%u outside active buffer count=%u", center_seq,
+               static_cast<unsigned>(center_index), static_cast<unsigned>(raw_frame_count_));
+    return;
+  }
+
+  size_t start_pos = center_pos > before ? center_pos - before : 0;
+  size_t end_pos = center_pos + static_cast<size_t>(after);
+  if (end_pos >= raw_frame_count_) {
+    end_pos = raw_frame_count_ - 1;
+  }
+
+  DAIKIN_DBG(TAG, "CD context: center_seq=%u center_pos=%u window=%u..%u count=%u dropped=%u",
+             center_seq, static_cast<unsigned>(center_pos), static_cast<unsigned>(start_pos),
+             static_cast<unsigned>(end_pos), static_cast<unsigned>(raw_frame_count_), raw_frames_dropped_);
+
+  uint32_t prev_ts = 0;
+  for (size_t pos = start_pos; pos <= end_pos; ++pos) {
+    size_t idx = (raw_frame_head_ + pos) % kRawFrameBufferSize;
+    const RawFrameEntry &entry = raw_frames_[idx];
+    uint32_t dt_prev = prev_ts == 0 ? 0 : (entry.timestamp_ms - prev_ts);
+    int rel = static_cast<int>(pos) - static_cast<int>(center_pos);
+    std::string type = packet_type_to_string_(entry.packet_type);
+    std::string flags = raw_frame_flags_to_string_(entry.flags);
+    DAIKIN_DBG(TAG, "CD ctx rel=%d seq=%u type=%s flags=%s ts_ms=%u dt_prev=%u len=%u",
+               rel, entry.seq, type.c_str(), flags.c_str(), entry.timestamp_ms, dt_prev, entry.length);
+    prev_ts = entry.timestamp_ms;
+  }
 }
 
 bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const {
@@ -1093,8 +1223,12 @@ void DaikinEkhheComponent::process_packet_set() {
 
   // Reset UART cycle
   processing_updates_ = false;
-  uart_active_ = false;
   last_process_time_ = millis();
+  if (debug_mode_ && kDebugContinuousRx) {
+    start_uart_cycle();
+  } else {
+    uart_active_ = false;
+  }
 }
 
 void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
@@ -1700,11 +1834,13 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
         return;
     }
 
-    // Wait for RX to be idle before TX to reduce bus contention.
+    // In production we still keep a small idle guard to reduce bus contention.
+    // In debug we disable it so timing experiments can hit the intended slot.
     unsigned long now = millis();
     unsigned long time_since_last_rx = now - last_rx_time_;
-    if (time_since_last_rx < 50) {
-        set_timeout(50 - time_since_last_rx, [this, base_packet, apply_change, index, value, bit_position]() {
+    if (time_since_last_rx < kTxMinIdleBeforeSendMs) {
+        set_timeout(kTxMinIdleBeforeSendMs - time_since_last_rx,
+                    [this, base_packet, apply_change, index, value, bit_position]() {
             send_uart_cc_packet_(base_packet, apply_change, index, value, bit_position);
         });
         return;
@@ -1741,15 +1877,44 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
 
     command.back() = ekhhe_checksum(command);
 
+    size_t cc_index = 0;
+    const RawFrameEntry *base_cc_entry = find_latest_frame_by_type_(CC_PACKET_START_BYTE, cc_index, true);
+    uint32_t base_cc_age_ms = base_cc_entry != nullptr ? (millis() - base_cc_entry->timestamp_ms) : 0;
+    uint32_t tx_start_ms = millis();
+
+    size_t dd_index = 0;
+    size_t c1_index = 0;
+    size_t d2_index = 0;
+    const RawFrameEntry *latest_dd_entry = find_latest_frame_by_type_(DD_PACKET_START_BYTE, dd_index, true);
+    const RawFrameEntry *latest_c1_entry = find_latest_frame_by_type_(C1_PACKET_START_BYTE, c1_index, true);
+    const RawFrameEntry *latest_d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
+
+    if (debug_mode_ && apply_change) {
+      auto age_or_zero = [tx_start_ms](const RawFrameEntry *entry) -> uint32_t {
+        return entry != nullptr ? (tx_start_ms - entry->timestamp_ms) : 0;
+      };
+
+      DAIKIN_DBG(TAG, "TX start: since_dd=%u since_c1=%u since_d2=%u since_cc=%u base_cc_age=%u len=%u",
+                 age_or_zero(latest_dd_entry), age_or_zero(latest_c1_entry), age_or_zero(latest_d2_entry),
+                 age_or_zero(base_cc_entry), base_cc_age_ms, static_cast<unsigned>(command.size()));
+    }
+
     // Send the updated packet over UART
     this->write_array(command);
     this->flush();
+    tx_sent_ms_ = millis();
+    tx_waiting_for_first_rx_ = apply_change;
+    tx_waiting_for_first_cc_ = apply_change;
 
     if (apply_change) {
       ESP_LOGI(TAG, "TX CD sent: index=%u value=0x%02X bit=%u len=%u",
                index, value, bit_position, static_cast<unsigned>(command.size()));
+      DAIKIN_DBG(TAG, "TX timing: request_to_send=%u since_last_rx=%u base_cc_age=%u",
+                 tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_cc_age_ms);
     } else {
       ESP_LOGI(TAG, "TX CD sent: snapshot len=%u", static_cast<unsigned>(command.size()));
+      DAIKIN_DBG(TAG, "TX timing: snapshot_send since_last_rx=%u base_cc_age=%u", time_since_last_rx,
+                 base_cc_age_ms);
     }
 
     // Trigger a new read cycle w/ small timeout
@@ -1785,6 +1950,9 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
       ESP_LOGI(TAG, "TX applied: index=%u bit=%u value=%u",
                pending_tx_.index, pending_tx_.bit_position, bit);
     }
+    DAIKIN_DBG(TAG, "TX timing: applied_after=%u", millis() - tx_sent_ms_);
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
     pending_tx_.active = false;
     return;
   }
@@ -1802,6 +1970,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
                   pending_tx_.index, pending_tx_.bit_position,
                   pending_tx_.value & 0x01, bit);
     }
+    DAIKIN_DBG(TAG, "TX timing: failed_after=%u", millis() - tx_sent_ms_);
     uint8_t index = pending_tx_.index;
     if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
       for (const auto &entry : U_NUMBER_PARAM_INDEX) {
@@ -1827,6 +1996,8 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
         }
       }
     }
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
     pending_tx_.active = false;
   }
 }
@@ -1839,21 +2010,44 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
         return;
     }
 
-    /*
-    // Wait for RX to be idle before sending TX and if not, retry
-    unsigned long now = millis();
-    unsigned long time_since_last_rx = now - last_rx_time_;
-
-    if (time_since_last_rx < 50) {  // If RX is active, wait 50ms until it's idle
-        ESP_LOGI(TAG, "RX is still active, deferring TX...");
-        set_timeout(50 - time_since_last_rx, [this, index, value, bit_position]() {
-            send_uart_cc_command(index, value, bit_position);  // Retry after a short delay
-        });
-        return;
+    tx_request_ms_ = millis();
+    if (debug_mode_) {
+      const uint32_t now_ms = tx_request_ms_;
+      const uint32_t since_last_frame = last_frame_profile_ms_ == 0 ? 0 : (now_ms - last_frame_profile_ms_);
+      const uint32_t since_last_cc = last_cc_profile_ms_ == 0 ? 0 : (now_ms - last_cc_profile_ms_);
+      const std::string last_type =
+          last_frame_profile_ms_ == 0 ? "none" : packet_type_to_string_(last_frame_profile_type_);
+      size_t d2_phase_index = 0;
+      const RawFrameEntry *d2_phase_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_phase_index, true);
+      const uint32_t since_last_d2 = d2_phase_entry != nullptr ? (now_ms - d2_phase_entry->timestamp_ms) : 0;
+      std::string cycle_types = packet_mask_to_string_(cycle_packet_types_seen_);
+      DAIKIN_DBG(TAG,
+                 "TX request phase: index=%u value=0x%02X bit=%u last=%s since_last=%u since_d2=%u since_cc=%u cycle_ms=%u cycle_types=%s uart_active=%u",
+                 index, value, bit_position, last_type.c_str(), since_last_frame, since_last_d2, since_last_cc,
+                 now_ms - cycle_start_ms_, cycle_types.c_str(), uart_active_);
     }
-    */
+    queued_tx_.active = true;
+    queued_tx_.scheduled = false;
+    queued_tx_.index = index;
+    queued_tx_.value = value;
+    queued_tx_.bit_position = bit_position;
+    queued_tx_.generation++;
+    queued_tx_.request_ms = tx_request_ms_;
+    queued_tx_.anchor_ms = 0;
+    queued_tx_.anchor_seq = 0;
 
-    send_uart_cc_packet_(last_cc_packet_, true, index, value, bit_position);
+    size_t d2_index = 0;
+    const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
+    if (d2_entry != nullptr) {
+      uint32_t d2_age_ms = millis() - d2_entry->timestamp_ms;
+      if (d2_age_ms <= kTxDelayAfterD2Ms) {
+        schedule_queued_tx_from_d2_(*d2_entry);
+        return;
+      }
+    }
+
+    DAIKIN_DBG(TAG, "TX scheduling: waiting_for_next_d2 index=%u value=0x%02X bit=%u",
+               index, value, bit_position);
 }
 
 

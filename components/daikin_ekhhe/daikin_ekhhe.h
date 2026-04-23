@@ -317,8 +317,15 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kDebugCounterPublishIntervalMs = 30000;
   static constexpr uint32_t kDebugTimingPublishMinIntervalMs = 1000;
   static constexpr size_t kRawFrameMaxLen = 71;
-  static constexpr size_t kRawFrameBufferSize = 16;
+  static constexpr size_t kRawFrameBufferSize = DAIKIN_EKHHE_DEBUG ? 64 : 16;
   static constexpr uint8_t kBitPositionNoBitmask = 255;
+  static constexpr bool kDebugContinuousRx = true;
+  static constexpr uint32_t kCdContextLogDelayMs = 4000;
+  static constexpr uint8_t kCdContextFramesBefore = 6;
+  static constexpr uint8_t kCdContextFramesAfter = 8;
+  static constexpr uint32_t kTxMinIdleBeforeSendMs = DAIKIN_EKHHE_DEBUG ? 0 : 50;
+  static constexpr uint32_t kTxDelayAfterD2Ms = 95;
+  static constexpr uint32_t kTxUseRecentDdMaxAgeMs = 2000;
 
   static constexpr uint8_t kPacketMaskDD = 1 << 0;
   static constexpr uint8_t kPacketMaskD2 = 1 << 1;
@@ -387,6 +394,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::string format_raw_frame_hex_(const RawFrameEntry &entry) const;
   std::string format_raw_frame_hex_data_(const uint8_t *data, size_t length) const;
   std::string format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back, uint32_t now_ms) const;
+  void log_frame_context_(uint32_t center_seq, uint8_t before, uint8_t after) const;
 
   std::string format_unknown_fields_(const RawFrameEntry &entry) const;
   std::string format_frame_diff_(const RawFrameEntry &entry, const RawFrameEntry *prev) const;
@@ -396,6 +404,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
+  void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
 
   std::vector<uint8_t> last_d2_packet_;
   std::vector<uint8_t> last_dd_packet_;
@@ -442,6 +451,22 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t cycles_left = 0;
   };
   PendingTx pending_tx_;
+  struct QueuedTx {
+    bool active = false;
+    bool scheduled = false;
+    uint8_t index = 0;
+    uint8_t value = 0;
+    uint8_t bit_position = kBitPositionNoBitmask;
+    uint32_t generation = 0;
+    uint32_t request_ms = 0;
+    uint32_t anchor_ms = 0;
+    uint32_t anchor_seq = 0;
+  };
+  QueuedTx queued_tx_;
+  uint32_t tx_request_ms_ = 0;
+  uint32_t tx_sent_ms_ = 0;
+  bool tx_waiting_for_first_rx_ = false;
+  bool tx_waiting_for_first_cc_ = false;
 
   enum RawFrameFlags : uint8_t {
     RAW_FRAME_CRC_ERROR = 1 << 0,
@@ -470,6 +495,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint32_t raw_bytes_captured_ = 0;
   uint32_t raw_crc_errors_total_ = 0;
   uint32_t raw_framing_errors_total_ = 0;
+  uint32_t last_frame_profile_ms_ = 0;
+  uint8_t last_frame_profile_type_ = 0;
+  uint32_t last_cc_profile_ms_ = 0;
 
   std::map<std::string, float> last_published_sensor_values_;
   std::map<std::string, uint32_t> last_published_sensor_ms_;
