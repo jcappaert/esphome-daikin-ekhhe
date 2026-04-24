@@ -1,5 +1,5 @@
 # Daikin EKHHE esphome external component
-This is an esphome external component for the Daikin EKHHE series of hot water domestic heatpumps, also known as the Altherma M HW. 
+This is an esphome external component for the Daikin EKHHE series of domestic hot water heat pumps, also known as the Altherma M HW. 
 
 The component exposes all of the known sensors and settings to the user. 
 
@@ -7,10 +7,10 @@ So far, it's been tested only with an EKHHE260PCV37 model.
 
 This component has some basic functionality now but still needs to be further developed to be fully functional. 
 
-**!! WARNING !!**: Use at your own risk, has the potential to change the properies of your device and might even damage it if inappropriate settings are applied. 
+**!! WARNING !!**: Use at your own risk, has the potential to change the properties of your device and might even damage it if inappropriate settings are applied. 
 
 ## YAML setup
-In the YAML you can enter which sensors/numbers/selects etc. you want to use. In the example yaml, all available entitiesare listed, you can remove what you don't need. 
+In the YAML you can enter which sensors/numbers/selects etc. you want to use. In the example yaml, all available entities are listed, you can remove what you don't need. 
 
 
 Other than this, the only customization available for the module is:
@@ -93,34 +93,6 @@ While a write is pending, and for a short UI-sync phase immediately after D2 con
 alive even when `continuous_rx` is disabled. During that UI-sync phase, stale CC updates for the target field are
 suppressed until CC also reflects the applied value, so Home Assistant does not briefly jump back to the old value. If
 CC does not catch up after a few cycles, the UI-sync phase times out and normal polling resumes.
-
-## Debug / Reverse Engineering
-Debug mode enables a raw-frame ring buffer and optional Home Assistant entities for inspection. These entities are
-created only when `mode: debug` is set on the component and you enable them in YAML.
-
-Text sensors:
-* daikin_raw_frame_hex
-* daikin_raw_frame_meta
-* daikin_unknown_fields
-* daikin_frame_diff
-* daikin_cc_snapshot_hex
-
-Sensors:
-* frames_captured_total
-* frames_dropped_total
-* frames_truncated_total
-* crc_errors_total
-* framing_errors_total
-* bytes_captured_total
-* cycle_parse_time_ms
-* cycle_total_time_ms
-* cycle_over_budget_total
-
-Controls:
-* daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
-* daikin_debug_freeze (switch)
-* daikin_save_cc_snapshot (button)
-* daikin_restore_cc_snapshot (button)
 
 ## CC snapshot / restore (RAM only)
 In debug mode you can store the latest valid CC frame in RAM and later re-send it as a CD packet. The snapshot is
