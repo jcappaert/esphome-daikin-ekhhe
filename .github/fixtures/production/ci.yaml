@@ -1,0 +1,67 @@
+esphome:
+  name: daikin-ekhhe-ci-production
+  friendly_name: Daikin EKHHE CI Production
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "ci-placeholder"
+  password: "ci-placeholder"
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [daikin_ekhhe]
+
+uart:
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+  id: my_uart
+
+daikin_ekhhe:
+  - id: daikin_component
+    update_interval: 10
+    mode: production
+
+sensor:
+  - platform: daikin_ekhhe
+    low_water_temp_probe:
+      name: "CI Low Water Temperature probe"
+
+binary_sensor:
+  - platform: daikin_ekhhe
+    dig1_config:
+      name: "CI DIG1 setting"
+
+number:
+  - platform: daikin_ekhhe
+    low_water_hp_hysteris:
+      name: "CI Lower water temp hysteresis"
+
+select:
+  - platform: daikin_ekhhe
+    operational_mode:
+      name: "CI Operational mode"
+
+text_sensor:
+  - platform: daikin_ekhhe
+    daikin_raw_frame_meta:
+      name: "CI Raw Frame Meta"
