@@ -130,12 +130,6 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     return;
   }
 
-  // Check TX confirmation as soon as a valid CC frame arrives instead of waiting
-  // for the full DD/D2/D4/C1/CC cycle to complete.
-  if (byte == CC_PACKET_START_BYTE && pending_tx_.active) {
-    check_pending_tx_(packet);
-  }
-
   const uint32_t now_ms = millis();
   if (debug_mode_) {
     const uint32_t dt_prev = last_frame_profile_ms_ == 0 ? 0 : (now_ms - last_frame_profile_ms_);
@@ -173,7 +167,10 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   if (byte == CC_PACKET_START_BYTE) {
     last_cc_profile_ms_ = now_ms;
   }
-  if (byte == D2_PACKET_START_BYTE && queued_tx_.active && !queued_tx_.scheduled) {
+  if (byte == D2_PACKET_START_BYTE && pending_tx_.active) {
+    check_pending_tx_(packet);
+  }
+  if (byte == D2_PACKET_START_BYTE && pending_tx_.active) {
     size_t d2_index = 0;
     const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
     if (d2_entry != nullptr) {
@@ -540,7 +537,7 @@ bool DaikinEkhheComponent::is_frame_ok_(const RawFrameEntry &entry) const {
 }
 
 void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry) {
-  if (!queued_tx_.active || queued_tx_.scheduled) {
+  if (!pending_tx_.active || queued_tx_.scheduled) {
     return;
   }
 
@@ -549,7 +546,11 @@ void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_e
   const uint32_t delay_ms = d2_age_ms >= kTxDelayAfterD2Ms ? 0 : (kTxDelayAfterD2Ms - d2_age_ms);
   const uint32_t generation = queued_tx_.generation;
 
+  queued_tx_.active = true;
   queued_tx_.scheduled = true;
+  queued_tx_.index = pending_tx_.index;
+  queued_tx_.value = pending_tx_.value;
+  queued_tx_.bit_position = pending_tx_.bit_position;
   queued_tx_.anchor_ms = d2_entry.timestamp_ms;
   queued_tx_.anchor_seq = d2_entry.seq;
 
@@ -576,8 +577,12 @@ void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_e
       base_packet = latest_cc->second;
     }
 
-    DAIKIN_DBG(TAG, "TX scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u using_current_cycle_cc=%u",
-               anchor_seq, millis() - anchor_ms, latest_cc != latest_packets_.end());
+    pending_tx_.attempts_sent++;
+    pending_tx_.last_attempt_d2_seq = anchor_seq;
+
+    DAIKIN_DBG(TAG, "TX scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
+               anchor_seq, millis() - anchor_ms, pending_tx_.attempts_sent, kTxMaxRepeats,
+               latest_cc != latest_packets_.end());
     send_uart_cc_packet_(base_packet, true, index, value, bit_position);
   });
 }
@@ -1413,8 +1418,6 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
 
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
 
-  check_pending_tx_(buffer);
-
   return;
 }
 
@@ -1867,12 +1870,6 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
         // If it's a normal parameter, just assign the value
       command[index] = value;
     }
-
-    pending_tx_.active = true;
-    pending_tx_.index = index;
-    pending_tx_.value = value;
-    pending_tx_.bit_position = bit_position;
-    pending_tx_.cycles_left = 2;
     }
 
     command.back() = ekhhe_checksum(command);
@@ -1930,6 +1927,10 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   }
   if (pending_tx_.index >= buffer.size()) {
     pending_tx_.active = false;
+    pending_tx_.attempts_sent = 0;
+    pending_tx_.last_attempt_d2_seq = 0;
+    queued_tx_.active = false;
+    queued_tx_.scheduled = false;
     return;
   }
 
@@ -1942,64 +1943,82 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   }
 
   if (matched) {
-    if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-      ESP_LOGI(TAG, "TX applied: index=%u value=0x%02X",
-               pending_tx_.index, pending_tx_.value);
+    if (pending_tx_.attempts_sent == 0) {
+      DAIKIN_DBG(TAG, "TX already current: index=%u value=0x%02X bit=%u",
+                 pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
     } else {
-      uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
-      ESP_LOGI(TAG, "TX applied: index=%u bit=%u value=%u",
-               pending_tx_.index, pending_tx_.bit_position, bit);
+      if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+        ESP_LOGI(TAG, "TX applied: index=%u value=0x%02X",
+                 pending_tx_.index, pending_tx_.value);
+      } else {
+        uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+        ESP_LOGI(TAG, "TX applied: index=%u bit=%u value=%u",
+                 pending_tx_.index, pending_tx_.bit_position, bit);
+      }
+      DAIKIN_DBG(TAG, "TX timing: applied_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
     }
-    DAIKIN_DBG(TAG, "TX timing: applied_after=%u", millis() - tx_sent_ms_);
     tx_waiting_for_first_rx_ = false;
     tx_waiting_for_first_cc_ = false;
     pending_tx_.active = false;
+    pending_tx_.attempts_sent = 0;
+    pending_tx_.last_attempt_d2_seq = 0;
+    queued_tx_.active = false;
+    queued_tx_.scheduled = false;
     return;
   }
 
-  if (pending_tx_.cycles_left > 0) {
-    pending_tx_.cycles_left--;
+  if (pending_tx_.attempts_sent == 0) {
+    return;
   }
-  if (pending_tx_.cycles_left == 0) {
-    if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-      DAIKIN_WARN(TAG, "TX not applied: index=%u expected=0x%02X current=0x%02X",
-                  pending_tx_.index, pending_tx_.value, buffer[pending_tx_.index]);
-    } else {
-      uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
-      DAIKIN_WARN(TAG, "TX not applied: index=%u bit=%u expected=%u current=%u",
-                  pending_tx_.index, pending_tx_.bit_position,
-                  pending_tx_.value & 0x01, bit);
-    }
-    DAIKIN_DBG(TAG, "TX timing: failed_after=%u", millis() - tx_sent_ms_);
-    uint8_t index = pending_tx_.index;
-    if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-      for (const auto &entry : U_NUMBER_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_number_value(entry.first, buffer[index]);
-        }
-      }
-      for (const auto &entry : I_NUMBER_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_number_value(entry.first, static_cast<int8_t>(buffer[index]));
-        }
-      }
-      for (const auto &entry : SELECT_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_select_value(entry.first, buffer[index]);
-        }
-      }
-    } else {
-      uint8_t bit = (buffer[index] >> pending_tx_.bit_position) & 0x01;
-      for (const auto &entry : SELECT_BITMASKS) {
-        if (entry.second.first == index && entry.second.second == pending_tx_.bit_position) {
-          set_select_value(entry.first, bit);
-        }
+
+  if (pending_tx_.attempts_sent < kTxMaxRepeats) {
+    DAIKIN_DBG(TAG, "TX retry pending: index=%u attempt=%u/%u",
+               pending_tx_.index, pending_tx_.attempts_sent, kTxMaxRepeats);
+    return;
+  }
+
+  if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+    DAIKIN_WARN(TAG, "TX not applied: index=%u expected=0x%02X current=0x%02X",
+                pending_tx_.index, pending_tx_.value, buffer[pending_tx_.index]);
+  } else {
+    uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+    DAIKIN_WARN(TAG, "TX not applied: index=%u bit=%u expected=%u current=%u",
+                pending_tx_.index, pending_tx_.bit_position,
+                pending_tx_.value & 0x01, bit);
+  }
+  DAIKIN_DBG(TAG, "TX timing: failed_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
+  uint8_t index = pending_tx_.index;
+  if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+    for (const auto &entry : U_NUMBER_PARAM_INDEX) {
+      if (entry.second == index) {
+        set_number_value(entry.first, buffer[index]);
       }
     }
-    tx_waiting_for_first_rx_ = false;
-    tx_waiting_for_first_cc_ = false;
-    pending_tx_.active = false;
+    for (const auto &entry : I_NUMBER_PARAM_INDEX) {
+      if (entry.second == index) {
+        set_number_value(entry.first, static_cast<int8_t>(buffer[index]));
+      }
+    }
+    for (const auto &entry : SELECT_PARAM_INDEX) {
+      if (entry.second == index) {
+        set_select_value(entry.first, buffer[index]);
+      }
+    }
+  } else {
+    uint8_t bit = (buffer[index] >> pending_tx_.bit_position) & 0x01;
+    for (const auto &entry : SELECT_BITMASKS) {
+      if (entry.second.first == index && entry.second.second == pending_tx_.bit_position) {
+        set_select_value(entry.first, bit);
+      }
+    }
   }
+  tx_waiting_for_first_rx_ = false;
+  tx_waiting_for_first_cc_ = false;
+  pending_tx_.active = false;
+  pending_tx_.attempts_sent = 0;
+  pending_tx_.last_attempt_d2_seq = 0;
+  queued_tx_.active = false;
+  queued_tx_.scheduled = false;
 }
 
 void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
@@ -2026,6 +2045,13 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
                  index, value, bit_position, last_type.c_str(), since_last_frame, since_last_d2, since_last_cc,
                  now_ms - cycle_start_ms_, cycle_types.c_str(), uart_active_);
     }
+    pending_tx_.active = true;
+    pending_tx_.index = index;
+    pending_tx_.value = value;
+    pending_tx_.bit_position = bit_position;
+    pending_tx_.attempts_sent = 0;
+    pending_tx_.last_attempt_d2_seq = 0;
+
     queued_tx_.active = true;
     queued_tx_.scheduled = false;
     queued_tx_.index = index;
@@ -2035,6 +2061,12 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     queued_tx_.request_ms = tx_request_ms_;
     queued_tx_.anchor_ms = 0;
     queued_tx_.anchor_seq = 0;
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
+
+    if (!uart_active_ && !uart_tx_active_) {
+      start_uart_cycle();
+    }
 
     size_t d2_index = 0;
     const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);

@@ -324,8 +324,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint8_t kCdContextFramesBefore = 6;
   static constexpr uint8_t kCdContextFramesAfter = 8;
   static constexpr uint32_t kTxMinIdleBeforeSendMs = DAIKIN_EKHHE_DEBUG ? 0 : 50;
-  static constexpr uint32_t kTxDelayAfterD2Ms = 95;
-  static constexpr uint32_t kTxUseRecentDdMaxAgeMs = 2000;
+  static constexpr uint32_t kTxDelayAfterD2Ms = 75;
+  static constexpr uint8_t kTxMaxRepeats = 5;
 
   static constexpr uint8_t kPacketMaskDD = 1 << 0;
   static constexpr uint8_t kPacketMaskD2 = 1 << 1;
@@ -448,7 +448,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
-    uint8_t cycles_left = 0;
+    uint8_t attempts_sent = 0;
+    uint32_t last_attempt_d2_seq = 0;
   };
   PendingTx pending_tx_;
   struct QueuedTx {
