@@ -112,6 +112,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void dump_config() override;
   void on_shutdown();
   void set_update_interval(int interval_ms);
+  void set_continuous_rx(bool enabled);
 
   // Methods to register sensors, binary sensors, and numbers
   void register_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
@@ -319,11 +320,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr size_t kRawFrameMaxLen = 71;
   static constexpr size_t kRawFrameBufferSize = DAIKIN_EKHHE_DEBUG ? 64 : 16;
   static constexpr uint8_t kBitPositionNoBitmask = 255;
-  static constexpr bool kDebugContinuousRx = true;
   static constexpr uint32_t kCdContextLogDelayMs = 4000;
   static constexpr uint8_t kCdContextFramesBefore = 6;
   static constexpr uint8_t kCdContextFramesAfter = 8;
-  static constexpr uint32_t kTxMinIdleBeforeSendMs = DAIKIN_EKHHE_DEBUG ? 0 : 50;
   static constexpr uint32_t kTxDelayAfterD2Ms = 75;
   static constexpr uint8_t kTxMaxRepeats = 5;
 
@@ -405,6 +404,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
+  bool field_matches_target_(const std::vector<uint8_t> &buffer, uint8_t index, uint8_t value,
+                             uint8_t bit_position) const;
 
   std::vector<uint8_t> last_d2_packet_;
   std::vector<uint8_t> last_dd_packet_;
@@ -416,6 +417,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool uart_active_ = false;
   bool processing_updates_ = false;
   bool uart_tx_active_ = false; // used for SW "flow control" to avoid RS485 bus contention
+  bool continuous_rx_ = false;
   unsigned long last_rx_time_ = 0;
   static constexpr bool debug_mode_ = DAIKIN_EKHHE_DEBUG;
 
@@ -452,6 +454,14 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t last_attempt_d2_seq = 0;
   };
   PendingTx pending_tx_;
+  struct TxUiSync {
+    bool active = false;
+    uint8_t index = 0;
+    uint8_t value = 0;
+    uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t cycles_waited = 0;
+  };
+  TxUiSync tx_ui_sync_;
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;
@@ -468,6 +478,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint32_t tx_sent_ms_ = 0;
   bool tx_waiting_for_first_rx_ = false;
   bool tx_waiting_for_first_cc_ = false;
+  static constexpr uint8_t kTxUiSyncMaxCycles = 3;
 
   enum RawFrameFlags : uint8_t {
     RAW_FRAME_CRC_ERROR = 1 << 0,

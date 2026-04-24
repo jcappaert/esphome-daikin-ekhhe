@@ -10,7 +10,7 @@ It is meant as a working protocol reference, not a final spec.
 Some observations below are very strong, others are still hypotheses:
 
 * Strong:
-  * The steady-state bus has a repeating multi-packet cycle, not a simple 10 second poll.
+  * The steady-state bus has a repeating multi-packet cycle.
   * `D2` and `CC` are closely related state packets.
   * A UI-driven change causes `CD` to appear in the normal `D2 -> Cx` response slot.
   * UI-driven `CD` packets repeat across multiple cycles, not back-to-back within one cycle.
@@ -40,21 +40,6 @@ So the practical idle loop is:
 
 The full loop is roughly `1.49-1.50 s`.
 
-Important note:
-
-* Earlier "10 second cycle" conclusions were mostly an artifact of non-continuous polling.
-* Once RX was kept active continuously, the real repeating cycle became visible.
-
-## Packet ownership model
-
-Current best model:
-
-* `D2` is a control-board state/update packet.
-* `CC` is the normal UI-side response in the `D2 -> Cx` slot.
-* `CD` is the UI-side "edited state" response in that same slot when a setting change is pending.
-
-This is strongest for the `D2 / CC / CD` family. It is not yet proven as a universal rule for every `C*` and `D*`
-packet type.
 
 ## Why `CC` and `CD` matter
 
@@ -121,41 +106,7 @@ That means a write strategy should be thought of as:
 3. check a later `D2` for readback
 4. repeat on later cycles until readback matches or a max-attempt rule is reached
 
-## Important caveat about timing experiments
 
-Several timing experiments were run in the component:
-
-* `DD`-anchored scheduling
-* `D2`-anchored scheduling
-* various nominal offsets after `D2`
-
-One important bug was found along the way:
-
-* the code originally checked current-cycle `CC` presence using `latest_packets_`
-* but `latest_packets_` was cleared on cycle reset
-* that allowed "late" sends to happen even after `CC` had already arrived
-
-That bug explained why some earlier timings appeared to work even though they were actually transmitting after the
-intended slot.
-
-## CRC / framing observation
-
-A recurring checksum error that appeared in earlier non-continuous captures largely disappeared once continuous RX was
-enabled.
-
-Current interpretation:
-
-* that earlier checksum issue was more likely a synchronization / partial-cycle capture artifact
-* it does not currently look like a stable, always-present bad frame in the steady-state protocol
-
-## Open questions
-
-Still worth investigating:
-
-* whether repeated `CD` packets in one UI burst are byte-identical
-* whether some `operational_mode` values are controller-state dependent even when timing is correct
-* whether ESPHome should imitate the UI more closely by sending one `CD` per cycle until readback matches
-* whether the UI also changes any non-`CD` traffic during a write burst
 
 ## Practical current summary
 
@@ -167,4 +118,4 @@ Best current protocol model:
 * UI repeats one `CD` per cycle until the requested value comes back in readback state
 * bus then falls back to normal `CC`
 
-That model has held up better than any "single magic transmit timestamp" theory so far.
+
