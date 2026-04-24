@@ -16,8 +16,15 @@ In the YAML you can enter which sensors/numbers/selects etc. you want to use. In
 Other than this, the only customization available for the module is:
 * update_interval
 * mode (production or debug)
+* continuous_rx (debug only)
 
-Which sets the interval at which all entities update in seconds. 
+`update_interval` sets the normal polling interval in seconds when the component is idle.
+
+`mode: debug` enables extra raw-frame logging and optional debug entities.
+
+`continuous_rx: true` is an additional debug-only option that keeps RX running continuously after each parsed cycle for
+reverse engineering. By default it is `false`, so even in debug mode `update_interval` is respected unless a write is
+in flight.
 
 ## Debug / Reverse Engineering
 There is a debug mode that enables internal raw UART capture and optional Home Assistant entities for inspection. These
@@ -67,18 +74,25 @@ The component listens on the UART/RS485 bus and processes a repeating read cycle
 types (DD, D2, D4, C1, CC). Frames are assembled by detecting a start byte and then reading the expected length from
 the packet size table. Packets that require a checksum are validated before they are accepted into the cycle set.
 
-When all required packets are present, parsing runs and sensors are updated. The CC packet is always stored because it
-is also the base for any writes.
+When all required packets are present, parsing runs and sensors are updated. The latest valid CC packet is always
+stored because it is also the base for writes.
+
+When idle, RX follows `update_interval`. A write request bypasses that idle wait: it immediately starts an RX cycle if
+needed and then waits for the next observed D2 packet.
 
 For TX, the component reuses the last received CC packet, changes a single byte/bit (or sends a snapshot), rewrites the
-checksum, and transmits a CD packet. TX is gated by an RX-idle delay to reduce bus contention, and a short timeout
-restarts the RX cycle after TX. A confirmation check compares subsequent CC packets to the requested value and logs
-either a "TX applied" info or a "TX not applied" warning.
+checksum, and transmits a CD packet. The write is scheduled relative to the observed D2 packet rather than being sent
+immediately.
 
-While a TX is pending, CC updates for the targeted byte/bit are temporarily ignored so the UI stays on the requested
-value. If the request is applied, the pending state is cleared on the first matching CC packet. If it is not applied,
-the pending state is cleared after a small number of CC cycles and the UI is immediately rolled back to the current CC
-value in that same cycle.
+Writes are confirmed from subsequent D2 readback, not from the transmit itself. If the requested value is not yet
+present in D2, the component retries on later cycles, up to a small fixed maximum. If the value still does not apply,
+it logs a warning (`TX not applied`). If it eventually applies after retries, it also logs a warning so that
+non-first-try writes are visible in the logs.
+
+While a write is pending, and for a short UI-sync phase immediately after D2 confirms success, the component keeps RX
+alive even when `continuous_rx` is disabled. During that UI-sync phase, stale CC updates for the target field are
+suppressed until CC also reflects the applied value, so Home Assistant does not briefly jump back to the old value. If
+CC does not catch up after a few cycles, the UI-sync phase times out and normal polling resumes.
 
 ## Debug / Reverse Engineering
 Debug mode enables a raw-frame ring buffer and optional Home Assistant entities for inspection. These entities are
