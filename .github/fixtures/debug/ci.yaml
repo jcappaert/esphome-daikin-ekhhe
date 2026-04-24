@@ -1,0 +1,88 @@
+esphome:
+  name: daikin-ekhhe-ci-debug
+  friendly_name: Daikin EKHHE CI Debug
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "ci-placeholder"
+  password: "ci-placeholder"
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [daikin_ekhhe]
+
+uart:
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+  id: my_uart
+
+daikin_ekhhe:
+  - id: daikin_component
+    update_interval: 10
+    mode: debug
+
+sensor:
+  - platform: daikin_ekhhe
+    low_water_temp_probe:
+      name: "CI Debug Low Water Temperature probe"
+    frames_captured_total:
+      name: "CI Frames Captured"
+
+binary_sensor:
+  - platform: daikin_ekhhe
+    dig1_config:
+      name: "CI Debug DIG1 setting"
+
+number:
+  - platform: daikin_ekhhe
+    low_water_hp_hysteris:
+      name: "CI Debug Lower water temp hysteresis"
+
+select:
+  - platform: daikin_ekhhe
+    operational_mode:
+      name: "CI Debug Operational mode"
+  - platform: daikin_ekhhe
+    daikin_debug_packet:
+      name: "CI Debug Packet"
+
+text_sensor:
+  - platform: daikin_ekhhe
+    current_time:
+      name: "CI Current Time UTC"
+    daikin_raw_frame_meta:
+      name: "CI Debug Raw Frame Meta"
+    daikin_cc_snapshot_hex:
+      name: "CI CC Snapshot Hex"
+
+switch:
+  - platform: daikin_ekhhe
+    daikin_debug_freeze:
+      name: "CI Debug Freeze"
+
+button:
+  - platform: daikin_ekhhe
+    daikin_save_cc_snapshot:
+      name: "CI Save CC Snapshot"
+    daikin_restore_cc_snapshot:
+      name: "CI Restore CC Snapshot"

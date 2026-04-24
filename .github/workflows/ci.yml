@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  esphome-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: .github/requirements-ci.txt
+
+      - name: Install ESPHome
+        run: pip install -r .github/requirements-ci.txt
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('.github/requirements-ci.txt', '.github/fixtures/**/*.yaml') }}
+
+      - name: Validate production config
+        run: esphome config .github/fixtures/production/ci.yaml
+
+      - name: Compile production firmware
+        run: esphome compile .github/fixtures/production/ci.yaml
+
+      - name: Validate debug config
+        run: esphome config .github/fixtures/debug/ci.yaml
+
+      - name: Compile debug firmware
+        run: esphome compile .github/fixtures/debug/ci.yaml
