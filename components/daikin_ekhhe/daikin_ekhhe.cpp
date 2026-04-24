@@ -1947,13 +1947,24 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
       DAIKIN_DBG(TAG, "TX already current: index=%u value=0x%02X bit=%u",
                  pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
     } else {
+      bool retried = pending_tx_.attempts_sent > 1;
       if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-        ESP_LOGI(TAG, "TX applied: index=%u value=0x%02X",
-                 pending_tx_.index, pending_tx_.value);
+        if (retried) {
+          DAIKIN_WARN(TAG, "TX applied after retries: index=%u value=0x%02X attempts=%u",
+                      pending_tx_.index, pending_tx_.value, pending_tx_.attempts_sent);
+        } else {
+          ESP_LOGI(TAG, "TX applied: index=%u value=0x%02X",
+                   pending_tx_.index, pending_tx_.value);
+        }
       } else {
         uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
-        ESP_LOGI(TAG, "TX applied: index=%u bit=%u value=%u",
-                 pending_tx_.index, pending_tx_.bit_position, bit);
+        if (retried) {
+          DAIKIN_WARN(TAG, "TX applied after retries: index=%u bit=%u value=%u attempts=%u",
+                      pending_tx_.index, pending_tx_.bit_position, bit, pending_tx_.attempts_sent);
+        } else {
+          ESP_LOGI(TAG, "TX applied: index=%u bit=%u value=%u",
+                   pending_tx_.index, pending_tx_.bit_position, bit);
+        }
       }
       DAIKIN_DBG(TAG, "TX timing: applied_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
     }
