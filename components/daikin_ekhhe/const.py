@@ -106,6 +106,7 @@ CYCLE_OVER_BUDGET_TOTAL = "cycle_over_budget_total"
 
 DAIKIN_DEBUG_PACKET = "daikin_debug_packet"
 DAIKIN_DEBUG_FREEZE = "daikin_debug_freeze"
+DAIKIN_RESTORE_DEFAULT_SETTINGS = "daikin_restore_default_settings"
 DAIKIN_SAVE_CC_SNAPSHOT = "daikin_save_cc_snapshot"
 DAIKIN_RESTORE_CC_SNAPSHOT = "daikin_restore_cc_snapshot"
 

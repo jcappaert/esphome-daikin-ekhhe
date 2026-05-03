@@ -61,6 +61,11 @@ select:
     operational_mode:
       name: "CI Operational mode"
 
+button:
+  - platform: daikin_ekhhe
+    daikin_restore_default_settings:
+      name: "CI Restore Default Settings"
+
 text_sensor:
   - platform: daikin_ekhhe
     daikin_raw_frame_meta:

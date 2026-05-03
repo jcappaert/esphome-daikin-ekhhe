@@ -17,7 +17,7 @@
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
 #include "esphome/components/switch/switch.h"
 #endif
-#if DAIKIN_EKHHE_DEBUG && defined(USE_BUTTON)
+#if defined(USE_BUTTON)
 #include "esphome/components/button/button.h"
 #endif
 #include "esphome/components/text_sensor/text_sensor.h"
@@ -83,15 +83,16 @@ class DaikinEkhheDebugSwitch : public switch_::Switch {
 };
 #endif
 
-#if DAIKIN_EKHHE_DEBUG && defined(USE_BUTTON)
-class DaikinEkhheDebugButton : public button::Button {
+#if defined(USE_BUTTON)
+class DaikinEkhheActionButton : public button::Button {
  public:
   enum class Action : uint8_t {
+    RESTORE_DEFAULT_SETTINGS,
     SAVE_SNAPSHOT,
     RESTORE_SNAPSHOT,
   };
 
-  explicit DaikinEkhheDebugButton(Action action) : action_(action) {}
+  explicit DaikinEkhheActionButton(Action action) : action_(action) {}
   void press_action() override;
   void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
 
@@ -150,6 +151,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   // Allow UART command sending for Number/Select control
   void send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  void restore_default_settings();
   void save_cc_snapshot();
   void restore_cc_snapshot();
   void set_debug_packet(const std::string &value);
@@ -412,10 +414,24 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;
   uint8_t packet_type_from_string_(const std::string &value) const;
   std::string packet_type_to_string_(uint8_t packet_type) const;
+  enum class TxPacketKind : uint8_t {
+    SINGLE_FIELD,
+    SNAPSHOT,
+    RESTORE_DEFAULTS,
+  };
+  void send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
+                                uint8_t index, uint8_t value, uint8_t bit_position,
+                                uint8_t attempts_sent);
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
+  void send_restore_defaults_packet_(const std::vector<uint8_t> &packet);
+  void check_pending_restore_(const std::vector<uint8_t> &buffer);
+  void schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry);
+  bool tx_operation_active_() const;
+  void reset_pending_restore_();
+  void reset_queued_restore_();
   bool field_matches_target_(const std::vector<uint8_t> &buffer, uint8_t index, uint8_t value,
                              uint8_t bit_position) const;
 
@@ -466,6 +482,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t last_attempt_d2_seq = 0;
   };
   PendingTx pending_tx_;
+  struct PendingRestore {
+    bool active = false;
+    uint8_t attempts_sent = 0;
+    uint32_t last_attempt_d2_seq = 0;
+  };
+  PendingRestore pending_restore_;
   struct TxUiSync {
     bool active = false;
     uint8_t index = 0;
@@ -474,6 +496,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t cycles_waited = 0;
   };
   TxUiSync tx_ui_sync_;
+  struct RestoreUiSync {
+    bool active = false;
+    uint8_t cycles_waited = 0;
+  };
+  RestoreUiSync restore_ui_sync_;
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;
@@ -486,11 +513,21 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t anchor_seq = 0;
   };
   QueuedTx queued_tx_;
+  struct QueuedRestore {
+    bool active = false;
+    bool scheduled = false;
+    uint32_t generation = 0;
+    uint32_t request_ms = 0;
+    uint32_t anchor_ms = 0;
+    uint32_t anchor_seq = 0;
+  };
+  QueuedRestore queued_restore_;
   uint32_t tx_request_ms_ = 0;
   uint32_t tx_sent_ms_ = 0;
   bool tx_waiting_for_first_rx_ = false;
   bool tx_waiting_for_first_cc_ = false;
   static constexpr uint8_t kTxUiSyncMaxCycles = 3;
+  static constexpr uint8_t kRestoreUiSyncMaxCycles = 3;
 
   enum RawFrameFlags : uint8_t {
     RAW_FRAME_CRC_ERROR = 1 << 0,

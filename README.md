@@ -54,6 +54,9 @@ Controls:
 * daikin_save_cc_snapshot (button)
 * daikin_restore_cc_snapshot (button)
 
+Normal maintenance button:
+* daikin_restore_default_settings (button)
+
 Snapshot text sensor:
 * daikin_cc_snapshot_hex
 
@@ -62,6 +65,21 @@ See `example-production.yaml` and `example-debug.yaml` in the repository root.
 
 If all goes well, you should get something like this in the UI (there are a lot of paramters and variables ...):
 ![esphome UI example](https://github.com/jcappaert/esphome-daikin-ekhhe/blob/main/images/ekhhe_all.PNG)
+
+## Restore Default Settings
+The component exposes a normal button entity named `daikin_restore_default_settings`. Pressing it builds a single `CD`
+packet from the latest valid `CC` frame and overwrites the following settings with documented default values from the
+manual:
+
+* `P1-P52`
+* target temperatures for `ECO`, `AUTO`, `BOOST`, and `ELECTRIC`
+
+This restore is sent and confirmed as one batch operation, not as a loop of individual writes. Runtime fields outside
+that scope, such as the current operating mode, power state, clock values, and vacation days, are preserved from the
+latest `CC` base packet.
+
+**!! WARNING !!**: this button rewrites many installer parameters at once. Use it only when you really intend to
+restore those settings to their documented defaults.
 
 ## Hardware 
 You will need the esp32 UART hooked up to a UART/RS485 converter, connected to A/B/GND in CN23. This will need to be spliced in somehow as the display needs to remain connected. You can tap 5V for an esp32 board from CN21 or CN22. Some information also [here](https://github.com/lorbetzki/Daikin-EKHHE) by lorbetzki. 
@@ -80,13 +98,14 @@ stored because it is also the base for writes.
 When idle, RX follows `update_interval`. A write request bypasses that idle wait: it immediately starts an RX cycle if
 needed and then waits for the next observed D2 packet.
 
-For TX, the component reuses the last received CC packet, changes a single byte/bit (or sends a snapshot), rewrites the
-checksum, and transmits a CD packet. The write is scheduled relative to the observed D2 packet rather than being sent
-immediately.
+For TX, the component reuses the last received CC packet, changes a single byte/bit (or prepares a full restore
+packet), rewrites the checksum, and transmits a CD packet. The write is scheduled relative to the observed D2 packet
+rather than being sent immediately.
 
-Writes are confirmed from subsequent D2 readback, not from the transmit itself. If the requested value is not yet
-present in D2, the component retries on later cycles, up to a small fixed maximum. If the value still does not apply,
-it logs a warning (`TX not applied`). If it eventually applies after retries, it also logs a warning so that
+Writes are confirmed from subsequent D2 readback, not from the transmit itself. For normal writes, the component checks
+the requested field. For restore-defaults, it checks the whole batch of restore-scope fields together. If the request
+is not yet present in D2, the component retries on later cycles, up to a small fixed maximum. If the value or restore
+batch still does not apply, it logs a warning. If it eventually applies after retries, it also logs a warning so that
 non-first-try writes are visible in the logs.
 
 While a write is pending, and for a short UI-sync phase immediately after D2 confirms success, the component keeps RX
