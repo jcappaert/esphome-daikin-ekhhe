@@ -23,6 +23,7 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/time/real_time_clock.h"
+#include "esphome/core/preferences.h"
 
 #include "daikin_ekhhe_const.h"
 
@@ -88,6 +89,9 @@ class DaikinEkhheActionButton : public button::Button {
  public:
   enum class Action : uint8_t {
     RESTORE_DEFAULT_SETTINGS,
+    SAVE_KNOWN_GOOD_PROFILE,
+    RESTORE_KNOWN_GOOD_PROFILE,
+    RESTORE_AUTO_SNAPSHOT,
     SAVE_SNAPSHOT,
     RESTORE_SNAPSHOT,
   };
@@ -136,6 +140,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_debug_switch(DaikinEkhheDebugSwitch *sw);
 #endif
   void register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor);
+  void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
+  void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
   void set_dd_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b5_text_ = sensor; }
   void set_dd_heating_demand(binary_sensor::BinarySensor *sensor) { this->dd_heating_demand_ = sensor; }
@@ -152,6 +158,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   // Allow UART command sending for Number/Select control
   void send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
   void restore_default_settings();
+  void save_known_good_profile();
+  void restore_known_good_profile();
+  void restore_auto_snapshot();
   void save_cc_snapshot();
   void restore_cc_snapshot();
   void set_debug_packet(const std::string &value);
@@ -359,12 +368,14 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
 #endif
   text_sensor::TextSensor *cc_snapshot_sensor_ = nullptr;
+  text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
+  text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
   text_sensor::TextSensor *dd_b1_text_ = nullptr;
   text_sensor::TextSensor *dd_b5_text_ = nullptr;
   binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
   binary_sensor::BinarySensor *hp_active_ = nullptr;
   binary_sensor::BinarySensor *eh_active_ = nullptr;
-  esphome::time::RealTimeClock *clock;
+  esphome::time::RealTimeClock *clock = nullptr;
 
   // UART Processing
   uint8_t ekhhe_checksum(const std::vector<uint8_t>& data_bytes);
@@ -395,6 +406,15 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
   void publish_debug_outputs_();
   void publish_cc_snapshot_(const char *override_text);
+  void publish_profile_statuses_();
+  void publish_profile_status_(bool known_good);
+  std::string format_profile_status_(bool known_good) const;
+  void load_persistent_profiles_();
+  bool capture_current_cc_packet_(std::vector<uint8_t> &packet) const;
+  bool save_profile_(bool known_good, const std::vector<uint8_t> &packet);
+  void clear_profile_(bool known_good);
+  bool auto_save_snapshot_if_needed_();
+  void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
   const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
   const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
@@ -417,6 +437,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   enum class TxPacketKind : uint8_t {
     SINGLE_FIELD,
     SNAPSHOT,
+    PROFILE_RESTORE,
     RESTORE_DEFAULTS,
   };
   void send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
@@ -432,11 +453,17 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
   void send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
                                      const std::vector<uint8_t> &packet);
+  void send_profile_restore_packet_(const std::vector<uint8_t> &base_packet,
+                                    const std::vector<uint8_t> &packet, bool known_good);
   void check_pending_restore_(const std::vector<uint8_t> &buffer);
   void schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry);
+  void check_pending_profile_restore_(const std::vector<uint8_t> &buffer);
+  void schedule_queued_profile_restore_from_d2_(const RawFrameEntry &d2_entry);
   bool tx_operation_active_() const;
   void reset_pending_restore_();
   void reset_queued_restore_();
+  void reset_pending_profile_restore_();
+  void reset_queued_profile_restore_();
   bool field_matches_target_(const std::vector<uint8_t> &buffer, uint8_t index, uint8_t value,
                              uint8_t bit_position) const;
 
@@ -453,6 +480,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool continuous_rx_ = false;
   unsigned long last_rx_time_ = 0;
   static constexpr bool debug_mode_ = DAIKIN_EKHHE_DEBUG;
+  static constexpr uint32_t kAutoSnapshotCooldownMs = 15UL * 60UL * 1000UL;
 
   uint32_t cycle_start_ms_ = 0;
   uint32_t cycle_bytes_read_ = 0;
@@ -473,10 +501,27 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint32_t debug_frozen_seq_ = 0;
   bool debug_freeze_ = false;
   uint8_t debug_packet_type_ = 0;
-  bool cc_snapshot_valid_ = false;
-  uint8_t cc_snapshot_len_ = 0;
-  uint8_t cc_snapshot_data_[kRawFrameMaxLen];
-  uint32_t cc_snapshot_ts_ms_ = 0;
+  struct StoredProfileBlob {
+    uint32_t magic = 0;
+    uint8_t version = 0;
+    uint8_t length = 0;
+    uint16_t reserved = 0;
+    uint32_t saved_at_epoch = 0;
+    uint32_t data_hash = 0;
+    uint8_t data[kRawFrameMaxLen] = {};
+  };
+  struct ProfileState {
+    bool valid = false;
+    uint8_t length = 0;
+    uint32_t saved_at_epoch = 0;
+    uint32_t data_hash = 0;
+    uint8_t data[kRawFrameMaxLen] = {};
+  };
+  ESPPreferenceObject known_good_profile_pref_;
+  ESPPreferenceObject auto_snapshot_pref_;
+  ProfileState known_good_profile_;
+  ProfileState auto_snapshot_;
+  uint32_t auto_snapshot_last_write_ms_ = 0;
 
   struct PendingTx {
     bool active = false;
@@ -493,6 +538,13 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t last_attempt_d2_seq = 0;
   };
   PendingRestore pending_restore_;
+  struct PendingProfileRestore {
+    bool active = false;
+    bool known_good = false;
+    uint8_t attempts_sent = 0;
+    uint32_t last_attempt_d2_seq = 0;
+  };
+  PendingProfileRestore pending_profile_restore_;
   struct TxUiSync {
     bool active = false;
     uint8_t index = 0;
@@ -506,6 +558,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t cycles_waited = 0;
   };
   RestoreUiSync restore_ui_sync_;
+  struct ProfileUiSync {
+    bool active = false;
+    bool known_good = false;
+    uint8_t cycles_waited = 0;
+  };
+  ProfileUiSync profile_ui_sync_;
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;
@@ -527,12 +585,23 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t anchor_seq = 0;
   };
   QueuedRestore queued_restore_;
+  struct QueuedProfileRestore {
+    bool active = false;
+    bool scheduled = false;
+    bool known_good = false;
+    uint32_t generation = 0;
+    uint32_t request_ms = 0;
+    uint32_t anchor_ms = 0;
+    uint32_t anchor_seq = 0;
+  };
+  QueuedProfileRestore queued_profile_restore_;
   uint32_t tx_request_ms_ = 0;
   uint32_t tx_sent_ms_ = 0;
   bool tx_waiting_for_first_rx_ = false;
   bool tx_waiting_for_first_cc_ = false;
   static constexpr uint8_t kTxUiSyncMaxCycles = 3;
   static constexpr uint8_t kRestoreUiSyncMaxCycles = 3;
+  static constexpr uint8_t kProfileUiSyncMaxCycles = 3;
 
   enum RawFrameFlags : uint8_t {
     RAW_FRAME_CRC_ERROR = 1 << 0,

@@ -65,8 +65,18 @@ button:
   - platform: daikin_ekhhe
     daikin_restore_default_settings:
       name: "CI Restore Default Settings"
+    daikin_save_known_good_profile:
+      name: "CI Save Known Good Profile"
+    daikin_restore_known_good_profile:
+      name: "CI Restore Known Good Profile"
+    daikin_restore_auto_snapshot:
+      name: "CI Restore Auto Snapshot"
 
 text_sensor:
   - platform: daikin_ekhhe
     daikin_raw_frame_meta:
       name: "CI Raw Frame Meta"
+    daikin_known_good_profile_status:
+      name: "CI Known Good Profile Status"
+    daikin_auto_snapshot_status:
+      name: "CI Auto Snapshot Status"

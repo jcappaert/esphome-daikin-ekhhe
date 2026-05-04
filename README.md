@@ -51,13 +51,18 @@ Sensors:
 Controls:
 * daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
 * daikin_debug_freeze (switch)
-* daikin_save_cc_snapshot (button)
-* daikin_restore_cc_snapshot (button)
+* daikin_save_cc_snapshot (button, compatibility alias for known-good profile save)
+* daikin_restore_cc_snapshot (button, compatibility alias for known-good profile restore)
 
 Normal maintenance button:
 * daikin_restore_default_settings (button)
+* daikin_save_known_good_profile (button)
+* daikin_restore_known_good_profile (button)
+* daikin_restore_auto_snapshot (button)
 
-Snapshot text sensor:
+Diagnostic text sensors:
+* daikin_known_good_profile_status
+* daikin_auto_snapshot_status
 * daikin_cc_snapshot_hex
 
 ### Example YAML files
@@ -98,25 +103,40 @@ stored because it is also the base for writes.
 When idle, RX follows `update_interval`. A write request bypasses that idle wait: it immediately starts an RX cycle if
 needed and then waits for the next observed D2 packet.
 
-For TX, the component reuses the last received CC packet, changes a single byte/bit (or prepares a full restore
-packet), rewrites the checksum, and transmits a CD packet. The write is scheduled relative to the observed D2 packet
+For TX, the component reuses the last received CC packet, changes a single byte/bit (or prepares a managed full-packet
+restore), rewrites the checksum, and transmits a CD packet. The write is scheduled relative to the observed D2 packet
 rather than being sent immediately.
 
 Writes are confirmed from subsequent D2 readback, not from the transmit itself. For normal writes, the component checks
-the requested field. For restore-defaults, it checks the whole batch of restore-scope fields together. If the request
-is not yet present in D2, the component retries on later cycles, up to a small fixed maximum. If the value or restore
-batch still does not apply, it logs a warning. If it eventually applies after retries, it also logs a warning so that
-non-first-try writes are visible in the logs.
+the requested field. For restore-defaults and profile restores, it checks the whole managed field batch together. If
+the request is not yet present in D2, the component retries on later cycles, up to a small fixed maximum. If the value
+or restore batch still does not apply, it logs a warning. If it eventually applies after retries, it also logs a
+warning so that non-first-try writes are visible in the logs.
+
+Before normal single-field writes, the component can also store an automatic recovery snapshot in non-volatile storage.
+That auto-save is rate-limited and only occurs when the current managed fields differ from the stored auto snapshot.
 
 While a write is pending, and for a short UI-sync phase immediately after D2 confirms success, the component keeps RX
 alive even when `continuous_rx` is disabled. During that UI-sync phase, stale CC updates for the target field are
 suppressed until CC also reflects the applied value, so Home Assistant does not briefly jump back to the old value. If
 CC does not catch up after a few cycles, the UI-sync phase times out and normal polling resumes.
 
-## CC snapshot / restore (RAM only)
-In debug mode you can store the latest valid CC frame in RAM and later re-send it as a CD packet. The snapshot is
-volatile (not persisted to flash) and displayed as hex via `daikin_cc_snapshot_hex`. If no valid CC frame is available,
-the snapshot is marked as EMPTY and restore does nothing.
+## Persistent Profiles
+The component now supports two persistent profile slots stored in flash:
+
+* `known_good_profile`
+  - saved only when `daikin_save_known_good_profile` is pressed
+  - intended as the trusted recovery point
+* `auto_snapshot`
+  - saved automatically before normal writes, subject to a cooldown and diff check
+  - intended as an undo/recovery point
+
+Both profile restore buttons send one managed `CD` packet built from the current `CC` base packet plus the stored
+managed fields, rather than replaying stale runtime bytes such as the old clock value.
+
+The diagnostic sensors `daikin_known_good_profile_status` and `daikin_auto_snapshot_status` report whether each slot is
+empty or valid. In debug mode, `daikin_cc_snapshot_hex` is kept as a compatibility sensor and now reflects the stored
+known-good profile packet rather than a RAM-only snapshot.
 
 ## TODO
 Some main TODOs to get to full functionality are:

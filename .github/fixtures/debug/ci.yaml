@@ -74,6 +74,10 @@ text_sensor:
       name: "CI Debug Raw Frame Meta"
     daikin_cc_snapshot_hex:
       name: "CI CC Snapshot Hex"
+    daikin_known_good_profile_status:
+      name: "CI Known Good Profile Status"
+    daikin_auto_snapshot_status:
+      name: "CI Auto Snapshot Status"
 
 switch:
   - platform: daikin_ekhhe
@@ -82,6 +86,12 @@ switch:
 
 button:
   - platform: daikin_ekhhe
+    daikin_save_known_good_profile:
+      name: "CI Save Known Good Profile"
+    daikin_restore_known_good_profile:
+      name: "CI Restore Known Good Profile"
+    daikin_restore_auto_snapshot:
+      name: "CI Restore Auto Snapshot"
     daikin_save_cc_snapshot:
       name: "CI Save CC Snapshot"
     daikin_restore_cc_snapshot:
