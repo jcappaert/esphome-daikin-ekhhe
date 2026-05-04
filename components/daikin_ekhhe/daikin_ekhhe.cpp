@@ -1760,26 +1760,9 @@ void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
   have_last_dd_bits_ = true;
 }
 
-void DaikinEkhheComponent::publish_cc_snapshot_(const char *override_text) {
-  if (cc_snapshot_sensor_ == nullptr || !debug_mode_) {
-    return;
-  }
-  if (override_text != nullptr) {
-    cc_snapshot_sensor_->publish_state(override_text);
-    return;
-  }
-  if (!known_good_profile_.valid || known_good_profile_.length == 0) {
-    cc_snapshot_sensor_->publish_state("EMPTY");
-    return;
-  }
-  std::string formatted = format_raw_frame_hex_data_(known_good_profile_.data, known_good_profile_.length);
-  cc_snapshot_sensor_->publish_state(formatted);
-}
-
 void DaikinEkhheComponent::publish_profile_statuses_() {
   publish_profile_status_(true);
   publish_profile_status_(false);
-  publish_cc_snapshot_(nullptr);
 }
 
 void DaikinEkhheComponent::publish_profile_status_(bool known_good) {
@@ -1812,15 +1795,6 @@ std::string DaikinEkhheComponent::format_profile_status_(bool known_good) const 
   char msg[64];
   snprintf(msg, sizeof(msg), "VALID len=%u", static_cast<unsigned>(profile.length));
   return msg;
-}
-
-void DaikinEkhheComponent::clear_profile_(bool known_good) {
-  ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
-  profile = ProfileState{};
-  publish_profile_status_(known_good);
-  if (known_good) {
-    publish_cc_snapshot_(nullptr);
-  }
 }
 
 void DaikinEkhheComponent::load_persistent_profiles_() {
@@ -2470,13 +2444,6 @@ void DaikinEkhheComponent::register_debug_switch(DaikinEkhheDebugSwitch *sw) {
 }
 #endif
 
-void DaikinEkhheComponent::register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor) {
-  this->cc_snapshot_sensor_ = sensor;
-  if (this->cc_snapshot_sensor_ != nullptr) {
-    publish_cc_snapshot_(nullptr);
-  }
-}
-
 void DaikinEkhheComponent::register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor) {
   this->known_good_profile_status_sensor_ = sensor;
   publish_profile_status_(true);
@@ -2698,19 +2665,10 @@ void DaikinEkhheComponent::set_debug_freeze(bool enabled) {
 #endif
 }
 
-void DaikinEkhheComponent::save_cc_snapshot() {
-  save_known_good_profile();
-}
-
-void DaikinEkhheComponent::restore_cc_snapshot() {
-  restore_known_good_profile();
-}
-
 void DaikinEkhheComponent::save_known_good_profile() {
   std::vector<uint8_t> packet;
   if (!capture_current_cc_packet_(packet)) {
     DAIKIN_WARN(TAG, "Known-good profile save requested before any valid CC packet was captured.");
-    publish_cc_snapshot_("EMPTY");
     return;
   }
   save_profile_(true, packet);
@@ -2806,10 +2764,6 @@ void DaikinEkhheActionButton::press_action() {
     this->parent_->restore_known_good_profile();
   } else if (this->action_ == Action::RESTORE_AUTO_SNAPSHOT) {
     this->parent_->restore_auto_snapshot();
-  } else if (this->action_ == Action::SAVE_SNAPSHOT) {
-    this->parent_->save_cc_snapshot();
-  } else if (this->action_ == Action::RESTORE_SNAPSHOT) {
-    this->parent_->restore_cc_snapshot();
   }
 }
 #endif

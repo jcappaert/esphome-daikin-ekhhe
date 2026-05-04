@@ -51,8 +51,6 @@ Sensors:
 Controls:
 * daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
 * daikin_debug_freeze (switch)
-* daikin_save_cc_snapshot (button, compatibility alias for known-good profile save)
-* daikin_restore_cc_snapshot (button, compatibility alias for known-good profile restore)
 
 Normal maintenance button:
 * daikin_restore_default_settings (button)
@@ -63,7 +61,6 @@ Normal maintenance button:
 Diagnostic text sensors:
 * daikin_known_good_profile_status
 * daikin_auto_snapshot_status
-* daikin_cc_snapshot_hex
 
 ### Example YAML files
 See `example-production.yaml` and `example-debug.yaml` in the repository root.
@@ -135,8 +132,7 @@ Both profile restore buttons send one managed `CD` packet built from the current
 managed fields, rather than replaying stale runtime bytes such as the old clock value.
 
 The diagnostic sensors `daikin_known_good_profile_status` and `daikin_auto_snapshot_status` report whether each slot is
-empty or valid. In debug mode, `daikin_cc_snapshot_hex` is kept as a compatibility sensor and now reflects the stored
-known-good profile packet rather than a RAM-only snapshot.
+empty or valid.
 
 ## TODO
 Some main TODOs to get to full functionality are:

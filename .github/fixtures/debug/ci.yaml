@@ -72,8 +72,6 @@ text_sensor:
       name: "CI Current Time UTC"
     daikin_raw_frame_meta:
       name: "CI Debug Raw Frame Meta"
-    daikin_cc_snapshot_hex:
-      name: "CI CC Snapshot Hex"
     daikin_known_good_profile_status:
       name: "CI Known Good Profile Status"
     daikin_auto_snapshot_status:
@@ -92,7 +90,3 @@ button:
       name: "CI Restore Known Good Profile"
     daikin_restore_auto_snapshot:
       name: "CI Restore Auto Snapshot"
-    daikin_save_cc_snapshot:
-      name: "CI Save CC Snapshot"
-    daikin_restore_cc_snapshot:
-      name: "CI Restore CC Snapshot"

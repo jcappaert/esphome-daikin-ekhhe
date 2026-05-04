@@ -92,8 +92,6 @@ class DaikinEkhheActionButton : public button::Button {
     SAVE_KNOWN_GOOD_PROFILE,
     RESTORE_KNOWN_GOOD_PROFILE,
     RESTORE_AUTO_SNAPSHOT,
-    SAVE_SNAPSHOT,
-    RESTORE_SNAPSHOT,
   };
 
   explicit DaikinEkhheActionButton(Action action) : action_(action) {}
@@ -139,7 +137,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   void register_debug_switch(DaikinEkhheDebugSwitch *sw);
 #endif
-  void register_cc_snapshot_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
@@ -161,8 +158,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void save_known_good_profile();
   void restore_known_good_profile();
   void restore_auto_snapshot();
-  void save_cc_snapshot();
-  void restore_cc_snapshot();
   void set_debug_packet(const std::string &value);
   void set_debug_freeze(bool enabled);
   void update_number_cache(const std::string &number_name, float value);
@@ -367,7 +362,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
 #endif
-  text_sensor::TextSensor *cc_snapshot_sensor_ = nullptr;
   text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
   text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
   text_sensor::TextSensor *dd_b1_text_ = nullptr;
@@ -405,14 +399,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
   void publish_debug_outputs_();
-  void publish_cc_snapshot_(const char *override_text);
   void publish_profile_statuses_();
   void publish_profile_status_(bool known_good);
   std::string format_profile_status_(bool known_good) const;
   void load_persistent_profiles_();
   bool capture_current_cc_packet_(std::vector<uint8_t> &packet) const;
   bool save_profile_(bool known_good, const std::vector<uint8_t> &packet);
-  void clear_profile_(bool known_good);
   bool auto_save_snapshot_if_needed_();
   void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
