@@ -860,12 +860,13 @@ void DaikinEkhheComponent::schedule_queued_restore_from_d2_(const RawFrameEntry 
     queued_restore_.active = false;
     queued_restore_.scheduled = false;
 
-    std::vector<uint8_t> packet = last_cc_packet_;
+    std::vector<uint8_t> base_packet = last_cc_packet_;
     auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
     if (latest_cc != latest_packets_.end()) {
-      packet = latest_cc->second;
+      base_packet = latest_cc->second;
     }
 
+    std::vector<uint8_t> packet = base_packet;
     apply_restore_defaults_to_packet(packet);
     pending_restore_.attempts_sent++;
     pending_restore_.last_attempt_d2_seq = anchor_seq;
@@ -874,7 +875,7 @@ void DaikinEkhheComponent::schedule_queued_restore_from_d2_(const RawFrameEntry 
                "Restore defaults scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
                anchor_seq, millis() - anchor_ms, pending_restore_.attempts_sent, kTxMaxRepeats,
                latest_cc != latest_packets_.end());
-    send_restore_defaults_packet_(packet);
+    send_restore_defaults_packet_(base_packet, packet);
   });
 }
 
@@ -2335,6 +2336,91 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(const std::vector<uint8_t> &
   });
 }
 
+bool DaikinEkhheComponent::validate_outbound_cd_packet_(const std::vector<uint8_t> &base_packet,
+                                                        const std::vector<uint8_t> &command,
+                                                        TxPacketKind kind, uint8_t index,
+                                                        uint8_t value, uint8_t bit_position,
+                                                        std::string &reason) {
+  if (command.empty() || base_packet.empty()) {
+    reason = "base or command packet empty";
+    return false;
+  }
+  if (command.size() != base_packet.size()) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "size mismatch base=%u command=%u",
+             static_cast<unsigned>(base_packet.size()), static_cast<unsigned>(command.size()));
+    reason = msg;
+    return false;
+  }
+  if (command[0] != CD_PACKET_START_BYTE) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "command start byte 0x%02X is not CD", command[0]);
+    reason = msg;
+    return false;
+  }
+
+  const uint8_t expected_checksum = ekhhe_checksum(command);
+  if (command.back() != expected_checksum) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "checksum mismatch expected=0x%02X actual=0x%02X",
+             expected_checksum, command.back());
+    reason = msg;
+    return false;
+  }
+
+  if (kind == TxPacketKind::SNAPSHOT) {
+    return true;
+  }
+
+  std::vector<uint8_t> expected = base_packet;
+  expected[0] = CD_PACKET_START_BYTE;
+
+  if (kind == TxPacketKind::SINGLE_FIELD) {
+    if (index >= expected.size()) {
+      char msg[64];
+      snprintf(msg, sizeof(msg), "target index %u out of range", index);
+      reason = msg;
+      return false;
+    }
+    if (bit_position != BIT_POSITION_NO_BITMASK) {
+      uint8_t current_value = expected[index];
+      current_value &= ~(1 << bit_position);
+      current_value |= (value << bit_position);
+      expected[index] = current_value;
+    } else {
+      expected[index] = value;
+    }
+  } else if (kind == TxPacketKind::RESTORE_DEFAULTS) {
+    apply_restore_defaults_to_packet(expected);
+  }
+
+  expected.back() = ekhhe_checksum(expected);
+
+  if (expected == command) {
+    return true;
+  }
+
+  size_t diff_count = 0;
+  size_t first_diff = 0;
+  for (size_t i = 0; i < expected.size(); ++i) {
+    if (expected[i] == command[i]) {
+      continue;
+    }
+    if (diff_count == 0) {
+      first_diff = i;
+    }
+    diff_count++;
+  }
+
+  char msg[192];
+  snprintf(msg, sizeof(msg),
+           "unexpected packet diff count=%u first_byte=%u expected=0x%02X actual=0x%02X",
+           static_cast<unsigned>(diff_count), static_cast<unsigned>(first_diff),
+           expected[first_diff], command[first_diff]);
+  reason = msg;
+  return false;
+}
+
 void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                                                 uint8_t index, uint8_t value, uint8_t bit_position) {
   if (base_packet.empty()) {
@@ -2361,16 +2447,58 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
   }
 
   command.back() = ekhhe_checksum(command);
+
+  std::string validation_error;
+  if (!validate_outbound_cd_packet_(base_packet, command,
+                                    apply_change ? TxPacketKind::SINGLE_FIELD : TxPacketKind::SNAPSHOT,
+                                    index, value, bit_position, validation_error)) {
+    DAIKIN_WARN(TAG, "TX blocked by packet diff guard: %s", validation_error.c_str());
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
+    if (apply_change) {
+      pending_tx_.active = false;
+      pending_tx_.attempts_sent = 0;
+      pending_tx_.last_attempt_d2_seq = 0;
+      queued_tx_.active = false;
+      queued_tx_.scheduled = false;
+      tx_ui_sync_.active = false;
+      tx_ui_sync_.cycles_waited = 0;
+      if (!uart_active_ && !uart_tx_active_) {
+        start_uart_cycle();
+      }
+    }
+    return;
+  }
+
   send_prebuilt_cd_packet_(command, apply_change ? TxPacketKind::SINGLE_FIELD : TxPacketKind::SNAPSHOT,
                            index, value, bit_position, pending_tx_.attempts_sent);
 }
 
-void DaikinEkhheComponent::send_restore_defaults_packet_(const std::vector<uint8_t> &packet) {
+void DaikinEkhheComponent::send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
+                                                         const std::vector<uint8_t> &packet) {
   std::vector<uint8_t> command = packet;
   if (!command.empty()) {
     command[0] = CD_PACKET_START_BYTE;
     command.back() = ekhhe_checksum(command);
   }
+
+  std::string validation_error;
+  if (!validate_outbound_cd_packet_(base_packet, command, TxPacketKind::RESTORE_DEFAULTS,
+                                    0, 0, BIT_POSITION_NO_BITMASK, validation_error)) {
+    DAIKIN_WARN(TAG, "Restore defaults TX blocked by packet diff guard: %s",
+                validation_error.c_str());
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
+    reset_pending_restore_();
+    reset_queued_restore_();
+    restore_ui_sync_.active = false;
+    restore_ui_sync_.cycles_waited = 0;
+    if (!uart_active_ && !uart_tx_active_) {
+      start_uart_cycle();
+    }
+    return;
+  }
+
   send_prebuilt_cd_packet_(command, TxPacketKind::RESTORE_DEFAULTS, 0, 0, BIT_POSITION_NO_BITMASK,
                            pending_restore_.attempts_sent);
 }

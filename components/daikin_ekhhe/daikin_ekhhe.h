@@ -422,11 +422,16 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
                                 uint8_t index, uint8_t value, uint8_t bit_position,
                                 uint8_t attempts_sent);
+  bool validate_outbound_cd_packet_(const std::vector<uint8_t> &base_packet,
+                                    const std::vector<uint8_t> &command, TxPacketKind kind,
+                                    uint8_t index, uint8_t value, uint8_t bit_position,
+                                    std::string &reason);
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
-  void send_restore_defaults_packet_(const std::vector<uint8_t> &packet);
+  void send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
+                                     const std::vector<uint8_t> &packet);
   void check_pending_restore_(const std::vector<uint8_t> &buffer);
   void schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry);
   bool tx_operation_active_() const;
