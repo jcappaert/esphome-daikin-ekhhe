@@ -225,10 +225,12 @@ switch:
 
 button:
   - platform: daikin_ekhhe
-    daikin_save_cc_snapshot:
-      name: "Save CC snapshot"
-    daikin_restore_cc_snapshot:
-      name: "Restore CC snapshot"
+    daikin_save_known_good_profile:
+      name: "Save Known Good Profile"
+    daikin_restore_known_good_profile:
+      name: "Restore Known Good Profile"
+    daikin_restore_auto_snapshot:
+      name: "Restore Auto Snapshot"
 
 text_sensor:
   - platform: daikin_ekhhe
@@ -242,5 +244,7 @@ text_sensor:
       name: "Daikin Unknown Fields"
     daikin_frame_diff:
       name: "Daikin Frame Diff"
-    daikin_cc_snapshot_hex:
-      name: "CC snapshot hex"
+    daikin_known_good_profile_status:
+      name: "Known Good Profile Status"
+    daikin_auto_snapshot_status:
+      name: "Auto Snapshot Status"
