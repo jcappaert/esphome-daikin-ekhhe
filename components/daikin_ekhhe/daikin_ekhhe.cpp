@@ -1065,10 +1065,12 @@ void DaikinEkhheComponent::reset_pending_tx_() {
   queued_tx_.scheduled = false;
 }
 
-bool DaikinEkhheComponent::defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position) {
+bool DaikinEkhheComponent::defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position,
+                                                  bool save_auto_snapshot) {
   for (auto &deferred : deferred_user_txs_) {
     if (deferred.index == index && deferred.bit_position == bit_position) {
       deferred.value = value;
+      deferred.save_auto_snapshot = deferred.save_auto_snapshot || save_auto_snapshot;
       ESP_LOGI(TAG, "TX deferred write updated: index=%u value=0x%02X bit=%u queued=%u",
                index, value, bit_position, static_cast<unsigned>(deferred_user_txs_.size()));
       return true;
@@ -1085,6 +1087,7 @@ bool DaikinEkhheComponent::defer_single_field_tx_(uint8_t index, uint8_t value, 
   deferred.index = index;
   deferred.value = value;
   deferred.bit_position = bit_position;
+  deferred.save_auto_snapshot = save_auto_snapshot;
   deferred_user_txs_.push_back(deferred);
 
   ESP_LOGI(TAG, "TX deferred write queued: index=%u value=0x%02X bit=%u queued=%u",
@@ -1124,7 +1127,8 @@ void DaikinEkhheComponent::flush_deferred_user_tx_() {
            deferred.index, deferred.value, deferred.bit_position,
            static_cast<unsigned>(deferred_user_txs_.size()));
 
-  send_uart_cc_command(deferred.index, deferred.value, deferred.bit_position);
+  begin_single_field_tx_(deferred.index, deferred.value, deferred.bit_position,
+                         TxOrigin::USER, deferred.save_auto_snapshot);
 }
 
 void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry) {
@@ -3800,11 +3804,12 @@ void DaikinEkhheComponent::handle_tx_result_(const TxResult &result) {
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
   reset_pending_tx_();
-  flush_deferred_user_tx_();
 
   if (result.origin == TxOrigin::CALIBRATION) {
     handle_tx_calibration_result_(result);
   }
+
+  flush_deferred_user_tx_();
 
   if (result.status == TxResultStatus::BLOCKED && !tx_operation_active_() && !uart_active_ && !uart_tx_active_) {
     start_uart_cycle();
@@ -4074,7 +4079,7 @@ bool DaikinEkhheComponent::begin_single_field_tx_(uint8_t index, uint8_t value, 
     }
     if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active) {
         if (origin == TxOrigin::USER) {
-            return defer_single_field_tx_(index, value, bit_position);
+            return defer_single_field_tx_(index, value, bit_position, save_auto_snapshot);
         }
         DAIKIN_WARN(TAG, "Single-parameter write already in progress, ignoring new write.");
         return false;

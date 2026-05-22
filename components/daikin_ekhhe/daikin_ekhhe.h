@@ -507,7 +507,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
   void handle_tx_result_(const TxResult &result);
   void reset_pending_tx_();
-  bool defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position);
+  bool defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position, bool save_auto_snapshot);
   bool has_deferred_user_tx_(uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
@@ -684,6 +684,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
+    bool save_auto_snapshot = true;
   };
   std::vector<DeferredTx> deferred_user_txs_;
   struct QueuedRestore {
