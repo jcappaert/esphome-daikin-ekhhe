@@ -1054,6 +1054,67 @@ void DaikinEkhheComponent::reset_queued_profile_restore_() {
   queued_profile_restore_.anchor_seq = 0;
 }
 
+bool DaikinEkhheComponent::defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position) {
+  for (auto &deferred : deferred_user_txs_) {
+    if (deferred.index == index && deferred.bit_position == bit_position) {
+      deferred.value = value;
+      ESP_LOGI(TAG, "TX deferred write updated: index=%u value=0x%02X bit=%u queued=%u",
+               index, value, bit_position, static_cast<unsigned>(deferred_user_txs_.size()));
+      return true;
+    }
+  }
+
+  if (deferred_user_txs_.size() >= kDeferredTxMax) {
+    DAIKIN_WARN(TAG, "TX deferred write queue full, dropping write: index=%u value=0x%02X bit=%u",
+                index, value, bit_position);
+    return false;
+  }
+
+  DeferredTx deferred;
+  deferred.index = index;
+  deferred.value = value;
+  deferred.bit_position = bit_position;
+  deferred_user_txs_.push_back(deferred);
+
+  ESP_LOGI(TAG, "TX deferred write queued: index=%u value=0x%02X bit=%u queued=%u",
+           index, value, bit_position, static_cast<unsigned>(deferred_user_txs_.size()));
+
+  if (!uart_active_ && !uart_tx_active_) {
+    start_uart_cycle();
+  }
+
+  return true;
+}
+
+bool DaikinEkhheComponent::has_deferred_user_tx_(uint8_t index, uint8_t bit_position) const {
+  for (const auto &deferred : deferred_user_txs_) {
+    if (deferred.index == index && deferred.bit_position == bit_position) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void DaikinEkhheComponent::flush_deferred_user_tx_() {
+  if (deferred_user_txs_.empty()) {
+    return;
+  }
+  if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active ||
+      pending_restore_.active || restore_ui_sync_.active ||
+      pending_profile_restore_.active || profile_ui_sync_.active) {
+    return;
+  }
+
+  DeferredTx deferred = deferred_user_txs_.front();
+  deferred_user_txs_.erase(deferred_user_txs_.begin());
+
+  ESP_LOGI(TAG, "TX deferred write starting: index=%u value=0x%02X bit=%u remaining=%u",
+           deferred.index, deferred.value, deferred.bit_position,
+           static_cast<unsigned>(deferred_user_txs_.size()));
+
+  send_uart_cc_command(deferred.index, deferred.value, deferred.bit_position);
+}
+
 void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry) {
   if (!pending_tx_.active || queued_tx_.scheduled) {
     return;
@@ -2054,6 +2115,7 @@ void DaikinEkhheComponent::process_packet_set() {
 
   publish_debug_outputs_();
   update_dd_b1_bit_sensors_();
+  flush_deferred_user_tx_();
 
   // Reset UART cycle
   processing_updates_ = false;
@@ -2214,8 +2276,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : U_NUMBER_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
-    if (pending_tx_.active && pending_tx_.index == param_index &&
-        pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+    if ((pending_tx_.active && pending_tx_.index == param_index &&
+         pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
+        has_deferred_user_tx_(param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -2237,8 +2300,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : I_NUMBER_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
-    if (pending_tx_.active && pending_tx_.index == param_index &&
-        pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+    if ((pending_tx_.active && pending_tx_.index == param_index &&
+         pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
+        has_deferred_user_tx_(param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -2261,8 +2325,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : SELECT_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
-    if (pending_tx_.active && pending_tx_.index == param_index &&
-        pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+    if ((pending_tx_.active && pending_tx_.index == param_index &&
+         pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
+        has_deferred_user_tx_(param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -2286,8 +2351,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second.first;  // The byte index
     uint8_t bit_position = entry.second.second;  // The specific bit to extract
-    if (pending_tx_.active && pending_tx_.index == param_index &&
-        pending_tx_.bit_position == bit_position) {
+    if ((pending_tx_.active && pending_tx_.index == param_index &&
+         pending_tx_.bit_position == bit_position) ||
+        has_deferred_user_tx_(param_index, bit_position)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -3147,6 +3213,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
     pending_tx_.last_attempt_d2_seq = 0;
     queued_tx_.active = false;
     queued_tx_.scheduled = false;
+    flush_deferred_user_tx_();
     return;
   }
 
@@ -3190,6 +3257,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
     pending_tx_.last_attempt_d2_seq = 0;
     queued_tx_.active = false;
     queued_tx_.scheduled = false;
+    flush_deferred_user_tx_();
     return;
   }
 
@@ -3247,6 +3315,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   tx_ui_sync_.cycles_waited = 0;
   queued_tx_.active = false;
   queued_tx_.scheduled = false;
+  flush_deferred_user_tx_();
 }
 
 void DaikinEkhheComponent::check_pending_restore_(const std::vector<uint8_t> &buffer) {
@@ -3399,6 +3468,10 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     }
     if (pending_profile_restore_.active || profile_ui_sync_.active) {
         DAIKIN_WARN(TAG, "Profile restore in progress, ignoring single-parameter write.");
+        return;
+    }
+    if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active) {
+        defer_single_field_tx_(index, value, bit_position);
         return;
     }
 
