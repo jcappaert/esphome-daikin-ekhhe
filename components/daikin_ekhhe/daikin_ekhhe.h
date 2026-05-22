@@ -8,6 +8,7 @@
 #include <string>
 #include <map>
 #include <type_traits>
+#include <vector>
 
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
@@ -153,7 +154,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void update_timestamp(uint8_t hour, uint8_t minute);
 
   // Allow UART command sending for Number/Select control
-  void send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  bool send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
   void restore_default_settings();
   void save_known_good_profile();
   void restore_known_good_profile();
@@ -341,6 +342,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint8_t kCdContextFramesAfter = 8;
   static constexpr uint32_t kTxDelayAfterD2Ms = 75;
   static constexpr uint8_t kTxMaxRepeats = 5;
+  static constexpr uint8_t kDeferredTxMax = 8;
 
   static constexpr uint8_t kPacketMaskDD = 1 << 0;
   static constexpr uint8_t kPacketMaskD2 = 1 << 1;
@@ -442,6 +444,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
+  bool defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position);
+  bool has_deferred_user_tx_(uint8_t index, uint8_t bit_position) const;
+  void flush_deferred_user_tx_();
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
   void send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
                                      const std::vector<uint8_t> &packet);
@@ -568,6 +573,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t anchor_seq = 0;
   };
   QueuedTx queued_tx_;
+  struct DeferredTx {
+    uint8_t index = 0;
+    uint8_t value = 0;
+    uint8_t bit_position = kBitPositionNoBitmask;
+  };
+  std::vector<DeferredTx> deferred_user_txs_;
   struct QueuedRestore {
     bool active = false;
     bool scheduled = false;
