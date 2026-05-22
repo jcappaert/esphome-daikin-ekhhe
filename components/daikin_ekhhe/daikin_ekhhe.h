@@ -410,6 +410,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 	                            std::map<std::string, std::string> &last_values,
 	                            std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
 	  struct RawFrameEntry;
+	  enum class TxOrigin : uint8_t;
+	  struct TxResult;
 	  enum class TxCalibrationPhase : uint8_t;
 	  struct TxCalibrationScore;
 
@@ -427,6 +429,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 	                                    const TxCalibrationScore &current) const;
 	  const char *tx_calibration_phase_to_string_(TxCalibrationPhase phase) const;
 	  std::string format_tx_calibration_status_() const;
+	  bool send_tx_calibration_write_(uint8_t vacation_days);
+	  void handle_tx_calibration_result_(const TxResult &result);
+	  void record_tx_calibration_score_(const TxResult &result);
+	  void complete_tx_calibration_(const std::string &status);
+	  void fail_tx_calibration_(const std::string &reason);
 	  void load_persistent_profiles_();
   bool capture_current_cc_packet_(std::vector<uint8_t> &packet) const;
   bool save_profile_(bool known_good, const std::vector<uint8_t> &packet);
@@ -488,6 +495,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                                     std::string &reason);
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
+  bool begin_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position,
+                              TxOrigin origin, bool save_auto_snapshot);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
   void handle_tx_result_(const TxResult &result);
   void reset_pending_tx_();

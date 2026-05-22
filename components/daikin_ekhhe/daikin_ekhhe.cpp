@@ -1024,7 +1024,8 @@ bool DaikinEkhheComponent::field_matches_target_(const std::vector<uint8_t> &buf
 }
 
 bool DaikinEkhheComponent::tx_operation_active_() const {
-  return pending_tx_.active || pending_restore_.active || pending_profile_restore_.active;
+  return pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
+         tx_calibration_.active;
 }
 
 void DaikinEkhheComponent::reset_pending_restore_() {
@@ -1111,7 +1112,8 @@ void DaikinEkhheComponent::flush_deferred_user_tx_() {
   }
   if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active ||
       pending_restore_.active || restore_ui_sync_.active ||
-      pending_profile_restore_.active || profile_ui_sync_.active) {
+      pending_profile_restore_.active || profile_ui_sync_.active ||
+      tx_calibration_.active) {
     return;
   }
 
@@ -1992,6 +1994,114 @@ std::string DaikinEkhheComponent::format_tx_calibration_status_() const {
   return msg;
 }
 
+void DaikinEkhheComponent::record_tx_calibration_score_(const TxResult &result) {
+  if (result.status == TxResultStatus::APPLIED || result.status == TxResultStatus::ALREADY_CURRENT) {
+    tx_calibration_.current_score.successful_writes++;
+    if (result.attempts_sent > 1) {
+      tx_calibration_.current_score.retry_writes++;
+    }
+  } else {
+    tx_calibration_.current_score.failed_writes++;
+  }
+  tx_calibration_.current_score.total_attempts += result.attempts_sent;
+}
+
+void DaikinEkhheComponent::complete_tx_calibration_(const std::string &status) {
+  set_tx_delay_after_d2_ms(tx_calibration_.original_delay_ms);
+  publish_tx_calibration_status_(status);
+  reset_tx_calibration_();
+}
+
+void DaikinEkhheComponent::fail_tx_calibration_(const std::string &reason) {
+  tx_calibration_.last_error = reason;
+  tx_calibration_.phase = TxCalibrationPhase::FAILED;
+  set_tx_delay_after_d2_ms(tx_calibration_.original_delay_ms);
+  DAIKIN_WARN(TAG, "TX calibration failed: %s", reason.c_str());
+  publish_tx_calibration_status_("failed reason=" + reason);
+  reset_tx_calibration_();
+}
+
+bool DaikinEkhheComponent::send_tx_calibration_write_(uint8_t vacation_days) {
+  auto index_it = U_NUMBER_PARAM_INDEX.find(VAC_DAYS);
+  if (index_it == U_NUMBER_PARAM_INDEX.end()) {
+    DAIKIN_WARN(TAG, "TX calibration blocked: vacation_days write index missing.");
+    return false;
+  }
+  return begin_single_field_tx_(index_it->second, vacation_days, BIT_POSITION_NO_BITMASK,
+                                TxOrigin::CALIBRATION, false);
+}
+
+void DaikinEkhheComponent::handle_tx_calibration_result_(const TxResult &result) {
+  if (!tx_calibration_.active) {
+    return;
+  }
+
+  const bool success =
+      result.status == TxResultStatus::APPLIED || result.status == TxResultStatus::ALREADY_CURRENT;
+  record_tx_calibration_score_(result);
+
+  if (tx_calibration_.phase == TxCalibrationPhase::CANDIDATE_TOGGLE) {
+    if (success) {
+      tx_calibration_.phase = TxCalibrationPhase::CANDIDATE_RESTORE;
+      publish_tx_calibration_status_(format_tx_calibration_status_());
+      if (!send_tx_calibration_write_(tx_calibration_.original_vacation_days)) {
+        fail_tx_calibration_("restore_send_failed");
+      }
+      return;
+    }
+
+    if (result.has_current_value && result.current_value != tx_calibration_.original_vacation_days) {
+      tx_calibration_.phase = TxCalibrationPhase::FAIL_RESTORE;
+      tx_delay_after_d2_ms_ = tx_calibration_.original_delay_ms;
+      publish_tx_calibration_status_(format_tx_calibration_status_());
+      if (!send_tx_calibration_write_(tx_calibration_.original_vacation_days)) {
+        fail_tx_calibration_("failed_toggle_restore_send_failed");
+      }
+      return;
+    }
+
+    fail_tx_calibration_("candidate_toggle_failed");
+    return;
+  }
+
+  if (tx_calibration_.phase == TxCalibrationPhase::CANDIDATE_RESTORE) {
+    if (success) {
+      tx_calibration_.current_score.valid = true;
+      tx_calibration_.current_score.delay_ms = tx_calibration_.candidate_delay_ms;
+      tx_calibration_.best_score = tx_calibration_.current_score;
+      tx_calibration_.best_delay_ms = tx_calibration_.candidate_delay_ms;
+
+      char msg[144];
+      snprintf(msg, sizeof(msg), "probe_complete delay=%u restored=%u writes=%u retries=%u",
+               static_cast<unsigned>(tx_calibration_.candidate_delay_ms),
+               static_cast<unsigned>(tx_calibration_.original_vacation_days),
+               static_cast<unsigned>(tx_calibration_.current_score.successful_writes),
+               static_cast<unsigned>(tx_calibration_.current_score.retry_writes));
+      complete_tx_calibration_(msg);
+      return;
+    }
+
+    tx_calibration_.phase = TxCalibrationPhase::FAIL_RESTORE;
+    tx_delay_after_d2_ms_ = tx_calibration_.original_delay_ms;
+    publish_tx_calibration_status_(format_tx_calibration_status_());
+    if (!send_tx_calibration_write_(tx_calibration_.original_vacation_days)) {
+      fail_tx_calibration_("restore_retry_send_failed");
+    }
+    return;
+  }
+
+  if (tx_calibration_.phase == TxCalibrationPhase::FAIL_RESTORE) {
+    if (success) {
+      complete_tx_calibration_("failed reason=probe_failed_original_restored");
+    } else {
+      fail_tx_calibration_("restore_original_failed");
+    }
+    return;
+  }
+
+  fail_tx_calibration_("unexpected_result_phase");
+}
+
 std::string DaikinEkhheComponent::format_profile_status_(bool known_good) const {
   const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
   if (!profile.valid || profile.length == 0) {
@@ -2135,6 +2245,11 @@ bool DaikinEkhheComponent::auto_save_snapshot_if_needed_() {
 
 void DaikinEkhheComponent::restore_profile_(bool known_good) {
   const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
+  if (tx_calibration_.active) {
+    DAIKIN_WARN(TAG, "%s restore blocked: TX calibration is active.",
+                known_good ? "Known-good profile" : "Auto snapshot");
+    return;
+  }
   if (!profile.valid || profile.length == 0) {
     DAIKIN_WARN(TAG, "%s restore requested but no profile is stored.",
                 known_good ? "Known-good profile" : "Auto snapshot");
@@ -2279,7 +2394,7 @@ void DaikinEkhheComponent::process_packet_set() {
   last_process_time_ = millis();
   if (pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
       tx_ui_sync_.active || restore_ui_sync_.active || profile_ui_sync_.active ||
-      (debug_mode_ && continuous_rx_)) {
+      tx_calibration_.active || (debug_mode_ && continuous_rx_)) {
     start_uart_cycle();
   } else {
     uart_active_ = false;
@@ -2906,6 +3021,10 @@ void DaikinEkhheComponent::set_debug_freeze(bool enabled) {
 }
 
 void DaikinEkhheComponent::save_known_good_profile() {
+  if (tx_calibration_.active) {
+    DAIKIN_WARN(TAG, "Known-good profile save blocked: TX calibration is active.");
+    return;
+  }
   std::vector<uint8_t> packet;
   if (!capture_current_cc_packet_(packet)) {
     DAIKIN_WARN(TAG, "Known-good profile save requested before any valid CC packet was captured.");
@@ -2923,11 +3042,80 @@ void DaikinEkhheComponent::restore_auto_snapshot() {
 }
 
 void DaikinEkhheComponent::calibrate_tx_send_timing() {
-  DAIKIN_WARN(TAG, "TX send timing calibration requested but is not implemented yet.");
-  publish_tx_calibration_status_("not_implemented");
+  if (tx_calibration_.active) {
+    DAIKIN_WARN(TAG, "TX calibration already running.");
+    publish_tx_calibration_status_(format_tx_calibration_status_());
+    return;
+  }
+  if (pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
+      tx_ui_sync_.active || restore_ui_sync_.active || profile_ui_sync_.active) {
+    DAIKIN_WARN(TAG, "TX calibration blocked: another write is currently active.");
+    publish_tx_calibration_status_("blocked reason=write_active");
+    return;
+  }
+  if (last_cc_packet_.empty()) {
+    DAIKIN_WARN(TAG, "TX calibration requested before any CC packet was captured.");
+    publish_tx_calibration_status_("blocked reason=no_cc_packet");
+    if (!uart_active_ && !uart_tx_active_) {
+      start_uart_cycle();
+    }
+    return;
+  }
+
+  size_t d2_index = 0;
+  const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
+  if (d2_entry == nullptr || d2_entry->length <= D2_PACKET_VAC_DAYS) {
+    DAIKIN_WARN(TAG, "TX calibration requested before any valid D2 packet was captured.");
+    publish_tx_calibration_status_("blocked reason=no_d2_packet");
+    if (!uart_active_ && !uart_tx_active_) {
+      start_uart_cycle();
+    }
+    return;
+  }
+
+  const uint8_t mode = d2_entry->data[D2_PACKET_MODE_IDX];
+  const uint8_t original_days = d2_entry->data[D2_PACKET_VAC_DAYS];
+  if (mode == 5) {
+    DAIKIN_WARN(TAG, "TX calibration blocked: device is in Vacation mode.");
+    publish_tx_calibration_status_("blocked reason=vacation_mode");
+    return;
+  }
+  if (original_days < 1 || original_days > 30) {
+    DAIKIN_WARN(TAG, "TX calibration blocked: vacation days value %u is outside 1..30.",
+                static_cast<unsigned>(original_days));
+    publish_tx_calibration_status_("blocked reason=vacation_days_out_of_range");
+    return;
+  }
+
+  reset_tx_calibration_();
+  tx_calibration_.active = true;
+  tx_calibration_.phase = TxCalibrationPhase::CANDIDATE_TOGGLE;
+  tx_calibration_.started_ms = millis();
+  tx_calibration_.original_delay_ms = tx_delay_after_d2_ms_;
+  tx_calibration_.original_vacation_days = original_days;
+  tx_calibration_.target_vacation_days = original_days < 30 ? original_days + 1 : original_days - 1;
+  build_tx_calibration_candidates_(tx_calibration_.original_delay_ms);
+  tx_calibration_.candidate_delay_ms = tx_calibration_.candidates[0];
+  tx_calibration_.current_score = TxCalibrationScore();
+  tx_calibration_.current_score.delay_ms = tx_calibration_.candidate_delay_ms;
+  tx_delay_after_d2_ms_ = tx_calibration_.candidate_delay_ms;
+
+  DAIKIN_WARN(TAG, "TX calibration probe started: delay=%u vacation_days=%u->%u",
+              static_cast<unsigned>(tx_calibration_.candidate_delay_ms),
+              static_cast<unsigned>(tx_calibration_.original_vacation_days),
+              static_cast<unsigned>(tx_calibration_.target_vacation_days));
+  publish_tx_calibration_status_(format_tx_calibration_status_());
+
+  if (!send_tx_calibration_write_(tx_calibration_.target_vacation_days)) {
+    fail_tx_calibration_("toggle_send_failed");
+  }
 }
 
 void DaikinEkhheComponent::restore_default_settings() {
+  if (tx_calibration_.active) {
+    DAIKIN_WARN(TAG, "Restore defaults blocked: TX calibration is active.");
+    return;
+  }
   if (last_cc_packet_.empty()) {
     DAIKIN_WARN(TAG, "Restore defaults requested before any CC packet was captured.");
     return;
@@ -3441,7 +3629,11 @@ void DaikinEkhheComponent::handle_tx_result_(const TxResult &result) {
   reset_pending_tx_();
   flush_deferred_user_tx_();
 
-  if (result.status == TxResultStatus::BLOCKED && !uart_active_ && !uart_tx_active_) {
+  if (result.origin == TxOrigin::CALIBRATION) {
+    handle_tx_calibration_result_(result);
+  }
+
+  if (result.status == TxResultStatus::BLOCKED && !tx_operation_active_() && !uart_active_ && !uart_tx_active_) {
     start_uart_cycle();
   }
 }
@@ -3688,11 +3880,15 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
   reset_queued_profile_restore_();
 }
 
-bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
-    // Check that a CC packet is stored
-    // since we need the last one as a basis for the new packet
+bool DaikinEkhheComponent::begin_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position,
+                                                  TxOrigin origin, bool save_auto_snapshot) {
+    // Check that a CC packet is stored since we need the last one as a basis for the new packet.
     if (last_cc_packet_.empty()) {
         DAIKIN_WARN(TAG, "No CC packet received yet. Cannot send command.");
+        return false;
+    }
+    if (origin == TxOrigin::USER && tx_calibration_.active) {
+        DAIKIN_WARN(TAG, "TX calibration in progress, ignoring single-parameter write.");
         return false;
     }
     if (pending_restore_.active || restore_ui_sync_.active) {
@@ -3704,10 +3900,16 @@ bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
         return false;
     }
     if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active) {
-        return defer_single_field_tx_(index, value, bit_position);
+        if (origin == TxOrigin::USER) {
+            return defer_single_field_tx_(index, value, bit_position);
+        }
+        DAIKIN_WARN(TAG, "Single-parameter write already in progress, ignoring new write.");
+        return false;
     }
 
-    auto_save_snapshot_if_needed_();
+    if (save_auto_snapshot) {
+      auto_save_snapshot_if_needed_();
+    }
 
     tx_request_ms_ = millis();
     if (debug_mode_) {
@@ -3721,12 +3923,12 @@ bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
       const uint32_t since_last_d2 = d2_phase_entry != nullptr ? (now_ms - d2_phase_entry->timestamp_ms) : 0;
       std::string cycle_types = packet_mask_to_string_(cycle_packet_types_seen_);
       DAIKIN_DBG(TAG,
-                 "TX request phase: index=%u value=0x%02X bit=%u last=%s since_last=%u since_d2=%u since_cc=%u cycle_ms=%u cycle_types=%s uart_active=%u",
-                 index, value, bit_position, last_type.c_str(), since_last_frame, since_last_d2, since_last_cc,
-                 now_ms - cycle_start_ms_, cycle_types.c_str(), uart_active_);
+                 "TX request phase: origin=%u index=%u value=0x%02X bit=%u last=%s since_last=%u since_d2=%u since_cc=%u cycle_ms=%u cycle_types=%s uart_active=%u",
+                 static_cast<unsigned>(origin), index, value, bit_position, last_type.c_str(), since_last_frame,
+                 since_last_d2, since_last_cc, now_ms - cycle_start_ms_, cycle_types.c_str(), uart_active_);
     }
     pending_tx_.active = true;
-    pending_tx_.origin = TxOrigin::USER;
+    pending_tx_.origin = origin;
     pending_tx_.index = index;
     pending_tx_.value = value;
     pending_tx_.bit_position = bit_position;
@@ -3764,6 +3966,10 @@ bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     DAIKIN_DBG(TAG, "TX scheduling: waiting_for_next_d2 index=%u value=0x%02X bit=%u",
                index, value, bit_position);
     return true;
+}
+
+bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
+    return begin_single_field_tx_(index, value, bit_position, TxOrigin::USER, true);
 }
 
 
