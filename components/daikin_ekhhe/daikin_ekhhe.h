@@ -349,6 +349,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kMaxTxDelayAfterD2Ms = 250;
   static constexpr uint8_t kTxMaxRepeats = 5;
   static constexpr uint8_t kDeferredTxMax = 8;
+  static constexpr uint8_t kTxCalibrationMaxCandidates = 17;
+  static constexpr uint32_t kTxCalibrationCoarseStepMs = 15;
+  static constexpr uint32_t kTxCalibrationFineStepMs = 5;
+  static constexpr uint32_t kTxCalibrationTimeoutMs = 120000;
+  static constexpr uint8_t kTxCalibrationVerifyPairs = 1;
 
   static constexpr uint8_t kPacketMaskDD = 1 << 0;
   static constexpr uint8_t kPacketMaskD2 = 1 << 1;
@@ -401,17 +406,27 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                              float epsilon, uint32_t refresh_ms);
   bool should_publish_bool_(const std::string &key, bool value, std::map<std::string, bool> &last_values,
                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
- bool should_publish_text_(const std::string &key, const std::string &value,
-                            std::map<std::string, std::string> &last_values,
-                            std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
-  struct RawFrameEntry;
+	  bool should_publish_text_(const std::string &key, const std::string &value,
+	                            std::map<std::string, std::string> &last_values,
+	                            std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
+	  struct RawFrameEntry;
+	  enum class TxCalibrationPhase : uint8_t;
+	  struct TxCalibrationScore;
 
-  bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
-  void publish_debug_outputs_();
+	  bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
+	  void publish_debug_outputs_();
 	  void publish_profile_statuses_();
 	  void publish_profile_status_(bool known_good);
 	  std::string format_profile_status_(bool known_good) const;
 	  void publish_tx_calibration_status_(const std::string &status);
+	  void reset_tx_calibration_();
+	  bool add_tx_calibration_candidate_(uint32_t delay_ms);
+	  void build_tx_calibration_candidates_(uint32_t center_ms);
+	  void append_tx_calibration_fine_candidates_(uint32_t center_ms);
+	  bool tx_calibration_score_better_(const TxCalibrationScore &candidate,
+	                                    const TxCalibrationScore &current) const;
+	  const char *tx_calibration_phase_to_string_(TxCalibrationPhase phase) const;
+	  std::string format_tx_calibration_status_() const;
 	  void load_persistent_profiles_();
   bool capture_current_cc_packet_(std::vector<uint8_t> &packet) const;
   bool save_profile_(bool known_good, const std::vector<uint8_t> &packet);
@@ -583,6 +598,45 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t cycles_waited = 0;
   };
   TxUiSync tx_ui_sync_;
+  enum class TxCalibrationPhase : uint8_t {
+    IDLE,
+    PREPARE,
+    CANDIDATE_TOGGLE,
+    CANDIDATE_RESTORE,
+    CANDIDATE_SCORE,
+    VERIFY_TOGGLE,
+    VERIFY_RESTORE,
+    COMPLETE,
+    FAIL_RESTORE,
+    FAILED,
+  };
+  struct TxCalibrationScore {
+    bool valid = false;
+    bool verified = false;
+    uint32_t delay_ms = 0;
+    uint8_t successful_writes = 0;
+    uint8_t retry_writes = 0;
+    uint8_t failed_writes = 0;
+    uint8_t total_attempts = 0;
+  };
+  struct TxCalibrationState {
+    bool active = false;
+    TxCalibrationPhase phase = TxCalibrationPhase::IDLE;
+    uint32_t started_ms = 0;
+    uint32_t original_delay_ms = kDefaultTxDelayAfterD2Ms;
+    uint32_t candidate_delay_ms = kDefaultTxDelayAfterD2Ms;
+    uint8_t original_vacation_days = 0;
+    uint8_t target_vacation_days = 0;
+    uint16_t candidates[kTxCalibrationMaxCandidates] = {};
+    uint8_t candidate_count = 0;
+    uint8_t candidate_index = 0;
+    uint8_t verify_count = 0;
+    TxCalibrationScore current_score;
+    TxCalibrationScore best_score;
+    uint32_t best_delay_ms = kDefaultTxDelayAfterD2Ms;
+    std::string last_error;
+  };
+  TxCalibrationState tx_calibration_;
   struct RestoreUiSync {
     bool active = false;
     uint8_t cycles_waited = 0;
