@@ -350,6 +350,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint8_t kTxMaxRepeats = 5;
   static constexpr uint8_t kDeferredTxMax = 8;
   static constexpr uint8_t kTxCalibrationMaxCandidates = 17;
+  static constexpr uint8_t kTxCalibrationFineCandidateSlots = 4;
   static constexpr uint32_t kTxCalibrationCoarseStepMs = 15;
   static constexpr uint32_t kTxCalibrationFineStepMs = 5;
   static constexpr uint32_t kTxCalibrationTimeoutMs = 120000;
@@ -432,6 +433,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 	  bool send_tx_calibration_write_(uint8_t vacation_days);
 	  void handle_tx_calibration_result_(const TxResult &result);
 	  void record_tx_calibration_score_(const TxResult &result);
+	  bool tx_calibration_score_is_first_attempt_(const TxCalibrationScore &score) const;
+	  void start_tx_calibration_candidate_();
+	  void advance_tx_calibration_candidate_();
+	  void complete_tx_calibration_success_(uint32_t delay_ms);
 	  void complete_tx_calibration_(const std::string &status);
 	  void fail_tx_calibration_(const std::string &reason);
 	  void load_persistent_profiles_();
@@ -640,6 +645,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t candidate_count = 0;
     uint8_t candidate_index = 0;
     uint8_t verify_count = 0;
+    bool fine_candidates_added = false;
     TxCalibrationScore current_score;
     TxCalibrationScore best_score;
     uint32_t best_delay_ms = kDefaultTxDelayAfterD2Ms;
