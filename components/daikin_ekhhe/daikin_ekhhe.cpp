@@ -1055,6 +1055,15 @@ void DaikinEkhheComponent::reset_queued_profile_restore_() {
   queued_profile_restore_.anchor_seq = 0;
 }
 
+void DaikinEkhheComponent::reset_pending_tx_() {
+  pending_tx_.active = false;
+  pending_tx_.origin = TxOrigin::USER;
+  pending_tx_.attempts_sent = 0;
+  pending_tx_.last_attempt_d2_seq = 0;
+  queued_tx_.active = false;
+  queued_tx_.scheduled = false;
+}
+
 bool DaikinEkhheComponent::defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position) {
   for (auto &deferred : deferred_user_txs_) {
     if (deferred.index == index && deferred.bit_position == bit_position) {
@@ -3131,19 +3140,20 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
                                     apply_change ? TxPacketKind::SINGLE_FIELD : TxPacketKind::SNAPSHOT,
                                     index, value, bit_position, validation_error)) {
     DAIKIN_WARN(TAG, "TX blocked by packet diff guard: %s", validation_error.c_str());
-    tx_waiting_for_first_rx_ = false;
-    tx_waiting_for_first_cc_ = false;
     if (apply_change) {
-      pending_tx_.active = false;
-      pending_tx_.attempts_sent = 0;
-      pending_tx_.last_attempt_d2_seq = 0;
-      queued_tx_.active = false;
-      queued_tx_.scheduled = false;
-      tx_ui_sync_.active = false;
-      tx_ui_sync_.cycles_waited = 0;
-      if (!uart_active_ && !uart_tx_active_) {
-        start_uart_cycle();
-      }
+      TxResult result;
+      result.origin = pending_tx_.origin;
+      result.status = TxResultStatus::BLOCKED;
+      result.index = index;
+      result.value = value;
+      result.bit_position = bit_position;
+      result.attempts_sent = pending_tx_.attempts_sent;
+      result.delay_ms = tx_delay_after_d2_ms_;
+      result.elapsed_ms = millis() - tx_request_ms_;
+      handle_tx_result_(result);
+    } else {
+      tx_waiting_for_first_rx_ = false;
+      tx_waiting_for_first_cc_ = false;
     }
     return;
   }
@@ -3230,29 +3240,94 @@ void DaikinEkhheComponent::send_profile_restore_packet_(const std::vector<uint8_
                            pending_profile_restore_.attempts_sent);
 }
 
+void DaikinEkhheComponent::handle_tx_result_(const TxResult &result) {
+  if (result.origin == TxOrigin::USER) {
+    if (result.status == TxResultStatus::APPLIED) {
+      tx_ui_sync_.active = true;
+      tx_ui_sync_.index = result.index;
+      tx_ui_sync_.value = result.value;
+      tx_ui_sync_.bit_position = result.bit_position;
+      tx_ui_sync_.cycles_waited = 0;
+    } else if (result.status == TxResultStatus::FAILED && result.has_current_value) {
+      if (result.bit_position == BIT_POSITION_NO_BITMASK) {
+        for (const auto &entry : U_NUMBER_PARAM_INDEX) {
+          if (entry.second == result.index) {
+            set_number_value(entry.first, result.current_value);
+          }
+        }
+        for (const auto &entry : I_NUMBER_PARAM_INDEX) {
+          if (entry.second == result.index) {
+            set_number_value(entry.first, static_cast<int8_t>(result.current_value));
+          }
+        }
+        for (const auto &entry : SELECT_PARAM_INDEX) {
+          if (entry.second == result.index) {
+            set_select_value(entry.first, result.current_value);
+          }
+        }
+      } else {
+        for (const auto &entry : SELECT_BITMASKS) {
+          if (entry.second.first == result.index && entry.second.second == result.bit_position) {
+            set_select_value(entry.first, result.current_value & 0x01);
+          }
+        }
+      }
+      tx_ui_sync_.active = false;
+      tx_ui_sync_.cycles_waited = 0;
+    } else if (result.status == TxResultStatus::BLOCKED) {
+      tx_ui_sync_.active = false;
+      tx_ui_sync_.cycles_waited = 0;
+    }
+  }
+
+  tx_waiting_for_first_rx_ = false;
+  tx_waiting_for_first_cc_ = false;
+  reset_pending_tx_();
+  flush_deferred_user_tx_();
+
+  if (result.status == TxResultStatus::BLOCKED && !uart_active_ && !uart_tx_active_) {
+    start_uart_cycle();
+  }
+}
+
 void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer) {
   if (!pending_tx_.active) {
     return;
   }
   if (pending_tx_.index >= buffer.size()) {
-    pending_tx_.active = false;
-    pending_tx_.attempts_sent = 0;
-    pending_tx_.last_attempt_d2_seq = 0;
-    queued_tx_.active = false;
-    queued_tx_.scheduled = false;
-    flush_deferred_user_tx_();
+    TxResult result;
+    result.origin = pending_tx_.origin;
+    result.status = TxResultStatus::BLOCKED;
+    result.index = pending_tx_.index;
+    result.value = pending_tx_.value;
+    result.bit_position = pending_tx_.bit_position;
+    result.attempts_sent = pending_tx_.attempts_sent;
+    result.delay_ms = tx_delay_after_d2_ms_;
+    result.elapsed_ms = tx_sent_ms_ == 0 ? millis() - tx_request_ms_ : millis() - tx_sent_ms_;
+    handle_tx_result_(result);
     return;
   }
 
   bool matched = field_matches_target_(buffer, pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
 
   if (matched) {
+    TxResult result;
+    result.origin = pending_tx_.origin;
+    result.status = pending_tx_.attempts_sent == 0 ? TxResultStatus::ALREADY_CURRENT : TxResultStatus::APPLIED;
+    result.index = pending_tx_.index;
+    result.value = pending_tx_.value;
+    result.bit_position = pending_tx_.bit_position;
+    result.attempts_sent = pending_tx_.attempts_sent;
+    result.delay_ms = tx_delay_after_d2_ms_;
+    result.elapsed_ms = pending_tx_.attempts_sent == 0 ? millis() - tx_request_ms_ : millis() - tx_sent_ms_;
+    result.has_current_value = true;
     if (pending_tx_.attempts_sent == 0) {
       DAIKIN_DBG(TAG, "TX already current: index=%u value=0x%02X bit=%u",
                  pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
     } else {
       bool retried = pending_tx_.attempts_sent > 1;
       if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+        result.current_value = buffer[pending_tx_.index];
         if (retried) {
           DAIKIN_WARN(TAG, "TX applied after retries: index=%u value=0x%02X attempts=%u",
                       pending_tx_.index, pending_tx_.value, pending_tx_.attempts_sent);
@@ -3262,6 +3337,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
         }
       } else {
         uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+        result.current_value = bit;
         if (retried) {
           DAIKIN_WARN(TAG, "TX applied after retries: index=%u bit=%u value=%u attempts=%u",
                       pending_tx_.index, pending_tx_.bit_position, bit, pending_tx_.attempts_sent);
@@ -3271,20 +3347,13 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
         }
       }
       DAIKIN_DBG(TAG, "TX timing: applied_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
-      tx_ui_sync_.active = true;
-      tx_ui_sync_.index = pending_tx_.index;
-      tx_ui_sync_.value = pending_tx_.value;
-      tx_ui_sync_.bit_position = pending_tx_.bit_position;
-      tx_ui_sync_.cycles_waited = 0;
     }
-    tx_waiting_for_first_rx_ = false;
-    tx_waiting_for_first_cc_ = false;
-    pending_tx_.active = false;
-    pending_tx_.attempts_sent = 0;
-    pending_tx_.last_attempt_d2_seq = 0;
-    queued_tx_.active = false;
-    queued_tx_.scheduled = false;
-    flush_deferred_user_tx_();
+    if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
+      result.current_value = buffer[pending_tx_.index];
+    } else {
+      result.current_value = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+    }
+    handle_tx_result_(result);
     return;
   }
 
@@ -3308,41 +3377,22 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
                 pending_tx_.value & 0x01, bit);
   }
   DAIKIN_DBG(TAG, "TX timing: failed_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
-  uint8_t index = pending_tx_.index;
+  TxResult result;
+  result.origin = pending_tx_.origin;
+  result.status = TxResultStatus::FAILED;
+  result.index = pending_tx_.index;
+  result.value = pending_tx_.value;
+  result.bit_position = pending_tx_.bit_position;
+  result.attempts_sent = pending_tx_.attempts_sent;
+  result.delay_ms = tx_delay_after_d2_ms_;
+  result.elapsed_ms = millis() - tx_sent_ms_;
+  result.has_current_value = true;
   if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-    for (const auto &entry : U_NUMBER_PARAM_INDEX) {
-      if (entry.second == index) {
-        set_number_value(entry.first, buffer[index]);
-      }
-    }
-    for (const auto &entry : I_NUMBER_PARAM_INDEX) {
-      if (entry.second == index) {
-        set_number_value(entry.first, static_cast<int8_t>(buffer[index]));
-      }
-    }
-    for (const auto &entry : SELECT_PARAM_INDEX) {
-      if (entry.second == index) {
-        set_select_value(entry.first, buffer[index]);
-      }
-    }
+    result.current_value = buffer[pending_tx_.index];
   } else {
-    uint8_t bit = (buffer[index] >> pending_tx_.bit_position) & 0x01;
-    for (const auto &entry : SELECT_BITMASKS) {
-      if (entry.second.first == index && entry.second.second == pending_tx_.bit_position) {
-        set_select_value(entry.first, bit);
-      }
-    }
+    result.current_value = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
   }
-  tx_waiting_for_first_rx_ = false;
-  tx_waiting_for_first_cc_ = false;
-  pending_tx_.active = false;
-  pending_tx_.attempts_sent = 0;
-  pending_tx_.last_attempt_d2_seq = 0;
-  tx_ui_sync_.active = false;
-  tx_ui_sync_.cycles_waited = 0;
-  queued_tx_.active = false;
-  queued_tx_.scheduled = false;
-  flush_deferred_user_tx_();
+  handle_tx_result_(result);
 }
 
 void DaikinEkhheComponent::check_pending_restore_(const std::vector<uint8_t> &buffer) {
@@ -3520,6 +3570,7 @@ bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
                  now_ms - cycle_start_ms_, cycle_types.c_str(), uart_active_);
     }
     pending_tx_.active = true;
+    pending_tx_.origin = TxOrigin::USER;
     pending_tx_.index = index;
     pending_tx_.value = value;
     pending_tx_.bit_position = bit_position;

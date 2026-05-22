@@ -437,6 +437,28 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     PROFILE_RESTORE,
     RESTORE_DEFAULTS,
   };
+  enum class TxOrigin : uint8_t {
+    USER,
+    CALIBRATION,
+  };
+  enum class TxResultStatus : uint8_t {
+    BLOCKED,
+    ALREADY_CURRENT,
+    APPLIED,
+    FAILED,
+  };
+  struct TxResult {
+    TxOrigin origin = TxOrigin::USER;
+    TxResultStatus status = TxResultStatus::BLOCKED;
+    uint8_t index = 0;
+    uint8_t value = 0;
+    uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t attempts_sent = 0;
+    uint8_t current_value = 0;
+    bool has_current_value = false;
+    uint32_t delay_ms = 0;
+    uint32_t elapsed_ms = 0;
+  };
   void send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
                                 uint8_t index, uint8_t value, uint8_t bit_position,
                                 uint8_t attempts_sent);
@@ -447,6 +469,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
+  void handle_tx_result_(const TxResult &result);
+  void reset_pending_tx_();
   bool defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position);
   bool has_deferred_user_tx_(uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
@@ -525,6 +549,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   struct PendingTx {
     bool active = false;
+    TxOrigin origin = TxOrigin::USER;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
