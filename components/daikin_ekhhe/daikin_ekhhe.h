@@ -90,10 +90,11 @@ class DaikinEkhheActionButton : public button::Button {
  public:
   enum class Action : uint8_t {
     RESTORE_DEFAULT_SETTINGS,
-    SAVE_KNOWN_GOOD_PROFILE,
-    RESTORE_KNOWN_GOOD_PROFILE,
-    RESTORE_AUTO_SNAPSHOT,
-  };
+	    SAVE_KNOWN_GOOD_PROFILE,
+	    RESTORE_KNOWN_GOOD_PROFILE,
+	    RESTORE_AUTO_SNAPSHOT,
+	    CALIBRATE_TX_SEND_TIMING,
+	  };
 
   explicit DaikinEkhheActionButton(Action action) : action_(action) {}
   void press_action() override;
@@ -140,8 +141,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   void register_debug_switch(DaikinEkhheDebugSwitch *sw);
 #endif
-  void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
-  void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
+	  void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
+	  void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
+	  void register_tx_calibration_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
   void set_dd_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b5_text_ = sensor; }
   void set_dd_heating_demand(binary_sensor::BinarySensor *sensor) { this->dd_heating_demand_ = sensor; }
@@ -158,10 +160,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   // Allow UART command sending for Number/Select control
   bool send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
   void restore_default_settings();
-  void save_known_good_profile();
-  void restore_known_good_profile();
-  void restore_auto_snapshot();
-  void set_debug_packet(const std::string &value);
+	  void save_known_good_profile();
+	  void restore_known_good_profile();
+	  void restore_auto_snapshot();
+	  void calibrate_tx_send_timing();
+	  void set_debug_packet(const std::string &value);
   void set_debug_freeze(bool enabled);
   void update_number_cache(const std::string &number_name, float value);
   void update_select_cache(const std::string &select_name, const std::string &value);
@@ -367,8 +370,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
 #endif
-  text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
-  text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
+	  text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
+	  text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
+	  text_sensor::TextSensor *tx_calibration_status_sensor_ = nullptr;
   text_sensor::TextSensor *dd_b1_text_ = nullptr;
   text_sensor::TextSensor *dd_b5_text_ = nullptr;
   binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
@@ -404,10 +408,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
   void publish_debug_outputs_();
-  void publish_profile_statuses_();
-  void publish_profile_status_(bool known_good);
-  std::string format_profile_status_(bool known_good) const;
-  void load_persistent_profiles_();
+	  void publish_profile_statuses_();
+	  void publish_profile_status_(bool known_good);
+	  std::string format_profile_status_(bool known_good) const;
+	  void publish_tx_calibration_status_(const std::string &status);
+	  void load_persistent_profiles_();
   bool capture_current_cc_packet_(std::vector<uint8_t> &packet) const;
   bool save_profile_(bool known_good, const std::vector<uint8_t> &packet);
   bool auto_save_snapshot_if_needed_();

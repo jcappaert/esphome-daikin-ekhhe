@@ -4,7 +4,18 @@ from esphome.components import text_sensor
 from esphome.const import CONF_ID, DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
 
 from . import CONF_EKHHE_ID, DaikinEkhhe, DEBUG_COMPONENTS
-from .const import CURRENT_TIME, DAIKIN_RAW_FRAME_HEX, DAIKIN_RAW_FRAME_META, DAIKIN_UNKNOWN_FIELDS, DAIKIN_FRAME_DIFF, DAIKIN_KNOWN_GOOD_PROFILE_STATUS, DAIKIN_AUTO_SNAPSHOT_STATUS, DAIKIN_DD_B1_TEXT, DAIKIN_DD_B5_TEXT
+from .const import (
+    CURRENT_TIME,
+    DAIKIN_AUTO_SNAPSHOT_STATUS,
+    DAIKIN_DD_B1_TEXT,
+    DAIKIN_DD_B5_TEXT,
+    DAIKIN_FRAME_DIFF,
+    DAIKIN_KNOWN_GOOD_PROFILE_STATUS,
+    DAIKIN_RAW_FRAME_HEX,
+    DAIKIN_RAW_FRAME_META,
+    DAIKIN_TX_CALIBRATION_STATUS,
+    DAIKIN_UNKNOWN_FIELDS,
+)
 
 
 CONFIG_SCHEMA = cv.Schema(
@@ -29,6 +40,9 @@ CONFIG_SCHEMA = cv.Schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
         cv.Optional(DAIKIN_AUTO_SNAPSHOT_STATUS): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(DAIKIN_TX_CALIBRATION_STATUS): text_sensor.text_sensor_schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
         cv.Optional(DAIKIN_DD_B1_TEXT): text_sensor.text_sensor_schema(
@@ -64,6 +78,9 @@ async def to_code(config):
     if DAIKIN_AUTO_SNAPSHOT_STATUS in config:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_AUTO_SNAPSHOT_STATUS])
         cg.add(hub.register_auto_snapshot_status_sensor(sens))
+    if DAIKIN_TX_CALIBRATION_STATUS in config:
+        sens = await text_sensor.new_text_sensor(config[DAIKIN_TX_CALIBRATION_STATUS])
+        cg.add(hub.register_tx_calibration_status_sensor(sens))
     if DAIKIN_DD_B1_TEXT in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_DD_B1_TEXT])
         cg.add(hub.set_dd_b1_text(sens))

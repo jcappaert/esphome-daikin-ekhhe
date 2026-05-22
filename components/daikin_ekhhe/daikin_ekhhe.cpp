@@ -1848,6 +1848,13 @@ void DaikinEkhheComponent::publish_profile_status_(bool known_good) {
   sensor->publish_state(format_profile_status_(known_good));
 }
 
+void DaikinEkhheComponent::publish_tx_calibration_status_(const std::string &status) {
+  if (tx_calibration_status_sensor_ == nullptr) {
+    return;
+  }
+  tx_calibration_status_sensor_->publish_state(status);
+}
+
 std::string DaikinEkhheComponent::format_profile_status_(bool known_good) const {
   const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
   if (!profile.valid || profile.length == 0) {
@@ -2536,6 +2543,11 @@ void DaikinEkhheComponent::register_auto_snapshot_status_sensor(esphome::text_se
   publish_profile_status_(false);
 }
 
+void DaikinEkhheComponent::register_tx_calibration_status_sensor(esphome::text_sensor::TextSensor *sensor) {
+  this->tx_calibration_status_sensor_ = sensor;
+  publish_tx_calibration_status_("idle");
+}
+
 void DaikinEkhheComponent::set_sensor_value(const std::string &sensor_name, float value) {
   if (sensors_.find(sensor_name) != sensors_.end()) {
     if (!cycle_publish_allowed_) {
@@ -2773,6 +2785,11 @@ void DaikinEkhheComponent::restore_auto_snapshot() {
   restore_profile_(false);
 }
 
+void DaikinEkhheComponent::calibrate_tx_send_timing() {
+  DAIKIN_WARN(TAG, "TX send timing calibration requested but is not implemented yet.");
+  publish_tx_calibration_status_("not_implemented");
+}
+
 void DaikinEkhheComponent::restore_default_settings() {
   if (last_cc_packet_.empty()) {
     DAIKIN_WARN(TAG, "Restore defaults requested before any CC packet was captured.");
@@ -2851,12 +2868,14 @@ void DaikinEkhheActionButton::press_action() {
     this->parent_->restore_default_settings();
   } else if (this->action_ == Action::SAVE_KNOWN_GOOD_PROFILE) {
     this->parent_->save_known_good_profile();
-  } else if (this->action_ == Action::RESTORE_KNOWN_GOOD_PROFILE) {
-    this->parent_->restore_known_good_profile();
-  } else if (this->action_ == Action::RESTORE_AUTO_SNAPSHOT) {
-    this->parent_->restore_auto_snapshot();
-  }
-}
+	  } else if (this->action_ == Action::RESTORE_KNOWN_GOOD_PROFILE) {
+	    this->parent_->restore_known_good_profile();
+	  } else if (this->action_ == Action::RESTORE_AUTO_SNAPSHOT) {
+	    this->parent_->restore_auto_snapshot();
+	  } else if (this->action_ == Action::CALIBRATE_TX_SEND_TIMING) {
+	    this->parent_->calibrate_tx_send_timing();
+	  }
+	}
 #endif
 
 
