@@ -154,7 +154,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void update_timestamp(uint8_t hour, uint8_t minute);
 
   // Allow UART command sending for Number/Select control
-  void send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  bool send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
   void restore_default_settings();
   void save_known_good_profile();
   void restore_known_good_profile();

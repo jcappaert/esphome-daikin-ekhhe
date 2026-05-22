@@ -2850,15 +2850,17 @@ void DaikinEkhheNumber::control(float value) {
     auto it_i = I_NUMBER_PARAM_INDEX.find(name);
     if (it_u != U_NUMBER_PARAM_INDEX.end()) {
         uint8_t index = it_u->second;
-        this->parent_->send_uart_cc_command(index, (uint8_t)value, BIT_POSITION_NO_BITMASK);
-        this->parent_->update_number_cache(name, value);
-        this->publish_state(value);
-    } 
+        if (this->parent_->send_uart_cc_command(index, (uint8_t)value, BIT_POSITION_NO_BITMASK)) {
+            this->parent_->update_number_cache(name, value);
+            this->publish_state(value);
+        }
+    }
     else if (it_i != I_NUMBER_PARAM_INDEX.end()) {
         uint8_t index = it_i->second;
-        this->parent_->send_uart_cc_command(index, (int8_t)value, BIT_POSITION_NO_BITMASK);
-        this->parent_->update_number_cache(name, value);
-        this->publish_state(value);
+        if (this->parent_->send_uart_cc_command(index, (int8_t)value, BIT_POSITION_NO_BITMASK)) {
+            this->parent_->update_number_cache(name, value);
+            this->publish_state(value);
+        }
     }
     else {
         DAIKIN_WARN(TAG, "No matching UART command for Number: %s", name.c_str());
@@ -2908,9 +2910,10 @@ void DaikinEkhheSelect::control(const std::string &value) {
     }
 
     // Update value in ESPHome
-    this->parent_->send_uart_cc_command(param_index, uart_value, bit_position);
-    this->parent_->update_select_cache(name, value);
-    this->publish_state(value);
+    if (this->parent_->send_uart_cc_command(param_index, uart_value, bit_position)) {
+        this->parent_->update_select_cache(name, value);
+        this->publish_state(value);
+    }
 }
 
 void DaikinEkhheComponent::send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
@@ -3455,24 +3458,23 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
   reset_queued_profile_restore_();
 }
 
-void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
+bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
     // Check that a CC packet is stored
     // since we need the last one as a basis for the new packet
     if (last_cc_packet_.empty()) {
         DAIKIN_WARN(TAG, "No CC packet received yet. Cannot send command.");
-        return;
+        return false;
     }
     if (pending_restore_.active || restore_ui_sync_.active) {
         DAIKIN_WARN(TAG, "Restore defaults in progress, ignoring single-parameter write.");
-        return;
+        return false;
     }
     if (pending_profile_restore_.active || profile_ui_sync_.active) {
         DAIKIN_WARN(TAG, "Profile restore in progress, ignoring single-parameter write.");
-        return;
+        return false;
     }
     if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active) {
-        defer_single_field_tx_(index, value, bit_position);
-        return;
+        return defer_single_field_tx_(index, value, bit_position);
     }
 
     auto_save_snapshot_if_needed_();
@@ -3524,12 +3526,13 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
       uint32_t d2_age_ms = millis() - d2_entry->timestamp_ms;
       if (d2_age_ms <= kTxDelayAfterD2Ms) {
         schedule_queued_tx_from_d2_(*d2_entry);
-        return;
+        return true;
       }
     }
 
     DAIKIN_DBG(TAG, "TX scheduling: waiting_for_next_d2 index=%u value=0x%02X bit=%u",
                index, value, bit_position);
+    return true;
 }
 
 
