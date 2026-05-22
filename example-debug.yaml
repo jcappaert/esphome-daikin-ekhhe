@@ -41,6 +41,7 @@ daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
     mode: debug
+    tx_send_calibration: 75
 
 sensor:
   - platform: daikin_ekhhe
@@ -184,6 +185,8 @@ number:
       name: "Boost mode target temperature"
     electric_target_temperature:
       name: "Electric mode target temperature"
+    tx_send_calibration:
+      name: "TX Send Calibration"
 
 select:
   - platform: daikin_ekhhe

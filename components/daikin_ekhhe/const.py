@@ -94,6 +94,7 @@ DAIKIN_DD_B5_TEXT = "dd_b5_text_sensor"
 DD_HEATING_DEMAND = "dd_heating_demand"
 HP_ACTIVE = "hp_active"
 EH_ACTIVE = "eh_active"
+TX_SEND_CALIBRATION = "tx_send_calibration"
 
 FRAMES_CAPTURED_TOTAL = "frames_captured_total"
 FRAMES_DROPPED_TOTAL = "frames_dropped_total"

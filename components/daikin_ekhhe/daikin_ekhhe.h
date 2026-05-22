@@ -125,6 +125,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void on_shutdown();
   void set_update_interval(int interval_ms);
   void set_continuous_rx(bool enabled);
+  void set_tx_delay_after_d2_ms(uint32_t delay_ms);
+  uint32_t get_tx_delay_after_d2_ms() const { return this->tx_delay_after_d2_ms_; }
 
   // Methods to register sensors, binary sensors, and numbers
   void register_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
@@ -340,7 +342,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kCdContextLogDelayMs = 4000;
   static constexpr uint8_t kCdContextFramesBefore = 6;
   static constexpr uint8_t kCdContextFramesAfter = 8;
-  static constexpr uint32_t kTxDelayAfterD2Ms = 75;
+  static constexpr uint32_t kDefaultTxDelayAfterD2Ms = 75;
+  static constexpr uint32_t kMaxTxDelayAfterD2Ms = 250;
   static constexpr uint8_t kTxMaxRepeats = 5;
   static constexpr uint8_t kDeferredTxMax = 8;
 
@@ -665,6 +668,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   // Cycle management
   unsigned long last_process_time_ = 0;
   unsigned long update_interval_ = 10000;
+  uint32_t tx_delay_after_d2_ms_ = kDefaultTxDelayAfterD2Ms;
 };
 
 using namespace daikin_ekhhe;

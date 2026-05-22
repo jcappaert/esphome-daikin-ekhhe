@@ -17,6 +17,7 @@ Other than this, the only customization available for the module is:
 * update_interval
 * mode (production or debug)
 * continuous_rx (debug only)
+* tx_send_calibration
 
 `update_interval` sets the normal polling interval in seconds when the component is idle.
 
@@ -25,6 +26,11 @@ Other than this, the only customization available for the module is:
 `continuous_rx: true` is an additional debug-only option that keeps RX running continuously after each parsed cycle for
 reverse engineering. By default it is `false`, so even in debug mode `update_interval` is respected unless a write is
 in flight.
+
+`tx_send_calibration` adjusts the delay, in milliseconds, used when sending write packets on the bus. The default is
+`75`. Most users should not need to change it, but it can help tune write reliability on units with slightly different
+bus timing. The optional `tx_send_calibration` number entity can be enabled while testing; changes apply immediately
+but are not persisted unless the value is also written into YAML.
 
 ## Debug / Reverse Engineering
 There is a debug mode that enables internal raw UART capture and optional Home Assistant entities for inspection. These

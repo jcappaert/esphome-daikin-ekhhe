@@ -8,6 +8,7 @@ from esphome.const import (
     CONF_STEP,
     CONF_UNIT_OF_MEASUREMENT,
     CONF_DEVICE_CLASS,
+    ENTITY_CATEGORY_CONFIG,
 )
 from esphome.const import (
     CONF_ID,
@@ -15,6 +16,7 @@ from esphome.const import (
     UNIT_EMPTY,
     UNIT_CELSIUS,
     UNIT_HOUR,
+    UNIT_MILLISECOND,
     UNIT_SECOND,
     UNIT_PERCENT,
     UNIT_MINUTE,
@@ -87,6 +89,7 @@ TYPES = [
     BOOST_T_TEMPERATURE,
     ELECTRIC_T_TEMPERATURE,
     VAC_DAYS,
+    TX_SEND_CALIBRATION,
 ]
 
 CONFIG_SCHEMA = (
@@ -438,6 +441,16 @@ CONFIG_SCHEMA = (
                 cv.Optional(CONF_STEP, default=1): cv.positive_float,
                 cv.Optional(CONF_DEVICE_CLASS, default=DEVICE_CLASS_DURATION): cv.string,
                 cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_EMPTY): cv.string,
+            }),
+            cv.Optional(TX_SEND_CALIBRATION): number.number_schema(
+                DaikinEkhheNumber, entity_category=ENTITY_CATEGORY_CONFIG
+            ).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
+                cv.Optional(CONF_MAX_VALUE, default=250): cv.float_,
+                cv.Optional(CONF_MIN_VALUE, default=0): cv.float_,
+                cv.Optional(CONF_STEP, default=1): cv.positive_float,
+                cv.Optional(CONF_DEVICE_CLASS, default=DEVICE_CLASS_DURATION): cv.string,
+                cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_MILLISECOND): cv.string,
             }),
         }
 

@@ -40,6 +40,7 @@ daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
     mode: debug
+    tx_send_calibration: 75
 
 sensor:
   - platform: daikin_ekhhe
@@ -57,6 +58,8 @@ number:
   - platform: daikin_ekhhe
     low_water_hp_hysteris:
       name: "CI Debug Lower water temp hysteresis"
+    tx_send_calibration:
+      name: "CI TX Send Calibration"
 
 select:
   - platform: daikin_ekhhe
