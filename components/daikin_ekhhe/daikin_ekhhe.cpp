@@ -5,6 +5,7 @@
 
 #include <cinttypes>
 #include <cstdio>
+#include <algorithm>
 #include <numeric>
 #include <ctime>
 #include <cmath>
@@ -1061,7 +1062,8 @@ void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_e
 
   const uint32_t now_ms = millis();
   const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
-  const uint32_t delay_ms = d2_age_ms >= kTxDelayAfterD2Ms ? 0 : (kTxDelayAfterD2Ms - d2_age_ms);
+  const uint32_t delay_ms =
+      d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
   const uint32_t generation = queued_tx_.generation;
 
   queued_tx_.active = true;
@@ -1112,7 +1114,8 @@ void DaikinEkhheComponent::schedule_queued_restore_from_d2_(const RawFrameEntry 
 
   const uint32_t now_ms = millis();
   const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
-  const uint32_t delay_ms = d2_age_ms >= kTxDelayAfterD2Ms ? 0 : (kTxDelayAfterD2Ms - d2_age_ms);
+  const uint32_t delay_ms =
+      d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
   const uint32_t generation = queued_restore_.generation;
 
   queued_restore_.active = true;
@@ -1159,7 +1162,8 @@ void DaikinEkhheComponent::schedule_queued_profile_restore_from_d2_(const RawFra
 
   const uint32_t now_ms = millis();
   const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
-  const uint32_t delay_ms = d2_age_ms >= kTxDelayAfterD2Ms ? 0 : (kTxDelayAfterD2Ms - d2_age_ms);
+  const uint32_t delay_ms =
+      d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
   const uint32_t generation = queued_profile_restore_.generation;
 
   queued_profile_restore_.active = true;
@@ -1969,7 +1973,7 @@ void DaikinEkhheComponent::restore_profile_(bool known_good) {
   const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
   if (d2_entry != nullptr) {
     uint32_t d2_age_ms = millis() - d2_entry->timestamp_ms;
-    if (d2_age_ms <= kTxDelayAfterD2Ms) {
+    if (d2_age_ms <= tx_delay_after_d2_ms_) {
       schedule_queued_profile_restore_from_d2_(*d2_entry);
       return;
     }
@@ -2401,6 +2405,9 @@ void DaikinEkhheComponent::register_binary_sensor(const std::string &sensor_name
 void DaikinEkhheComponent::register_number(const std::string &number_name, esphome::number::Number *number) {
   if (number != nullptr) {
     numbers_[number_name] = number;
+    if (number_name == TX_SEND_CALIBRATION) {
+      number->publish_state(this->tx_delay_after_d2_ms_);
+    }
   }
 }
 
@@ -2587,6 +2594,7 @@ void DaikinEkhheComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  Update interval: %lu ms", this->update_interval_);
     ESP_LOGCONFIG(TAG, "  Debug mode: %s", YESNO(debug_mode_));
     ESP_LOGCONFIG(TAG, "  Continuous RX: %s", YESNO(this->continuous_rx_));
+    ESP_LOGCONFIG(TAG, "  TX send calibration: %u ms", this->tx_delay_after_d2_ms_);
 
     // Log all enabled sensors
     ESP_LOGCONFIG(TAG, "Enabled Sensors:");
@@ -2639,6 +2647,14 @@ void DaikinEkhheComponent::set_update_interval(int interval_ms) {
 
 void DaikinEkhheComponent::set_continuous_rx(bool enabled) {
     this->continuous_rx_ = enabled;
+}
+
+void DaikinEkhheComponent::set_tx_delay_after_d2_ms(uint32_t delay_ms) {
+    this->tx_delay_after_d2_ms_ = std::min(delay_ms, kMaxTxDelayAfterD2Ms);
+    auto it = numbers_.find(TX_SEND_CALIBRATION);
+    if (it != numbers_.end() && it->second != nullptr) {
+      it->second->publish_state(this->tx_delay_after_d2_ms_);
+    }
 }
 
 void DaikinEkhheComponent::set_debug_packet(const std::string &value) {
@@ -2726,7 +2742,7 @@ void DaikinEkhheComponent::restore_default_settings() {
   const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
   if (d2_entry != nullptr) {
     uint32_t d2_age_ms = millis() - d2_entry->timestamp_ms;
-    if (d2_age_ms <= kTxDelayAfterD2Ms) {
+    if (d2_age_ms <= tx_delay_after_d2_ms_) {
       schedule_queued_restore_from_d2_(*d2_entry);
       return;
     }
@@ -2778,6 +2794,14 @@ void DaikinEkhheNumber::control(float value) {
 
     // Use get_name() to determine which UART command to send
     auto name = this->internal_id_;
+
+    if (name == TX_SEND_CALIBRATION) {
+        uint32_t delay_ms = value <= 0.0f ? 0 : static_cast<uint32_t>(value);
+        this->parent_->set_tx_delay_after_d2_ms(delay_ms);
+        delay_ms = this->parent_->get_tx_delay_after_d2_ms();
+        ESP_LOGI(TAG, "TX send calibration set to %u ms", delay_ms);
+        return;
+    }
 
     // Get the CC array index from map, send UART command and update UI state
     auto it_u = U_NUMBER_PARAM_INDEX.find(name);
@@ -3449,7 +3473,7 @@ void DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
     const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
     if (d2_entry != nullptr) {
       uint32_t d2_age_ms = millis() - d2_entry->timestamp_ms;
-      if (d2_age_ms <= kTxDelayAfterD2Ms) {
+      if (d2_age_ms <= tx_delay_after_d2_ms_) {
         schedule_queued_tx_from_d2_(*d2_entry);
         return;
       }
