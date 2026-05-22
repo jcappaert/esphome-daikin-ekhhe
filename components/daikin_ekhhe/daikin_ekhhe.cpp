@@ -2069,6 +2069,49 @@ void DaikinEkhheComponent::advance_tx_calibration_candidate_() {
   start_tx_calibration_candidate_();
 }
 
+void DaikinEkhheComponent::start_tx_calibration_restore_recovery_(const std::string &reason, bool resume_search) {
+  tx_calibration_.phase = TxCalibrationPhase::FAIL_RESTORE;
+  tx_calibration_.last_error = reason;
+  tx_calibration_.recovery_resume_search = resume_search;
+  tx_calibration_.recovery_attempts = 0;
+  tx_calibration_.recovery_index = tx_calibration_.candidate_index + 1;
+  if (tx_calibration_.candidate_count > 0 && tx_calibration_.recovery_index >= tx_calibration_.candidate_count) {
+    tx_calibration_.recovery_index = 0;
+  }
+
+  DAIKIN_WARN(TAG, "TX calibration restore recovery: reason=%s resume=%u",
+              reason.c_str(), resume_search);
+  publish_tx_calibration_status_(format_tx_calibration_status_());
+
+  if (!send_next_tx_calibration_restore_recovery_()) {
+    fail_tx_calibration_("restore_original_failed");
+  }
+}
+
+bool DaikinEkhheComponent::send_next_tx_calibration_restore_recovery_() {
+  if (tx_calibration_.candidate_count == 0 ||
+      tx_calibration_.recovery_attempts >= tx_calibration_.candidate_count) {
+    return false;
+  }
+
+  if (tx_calibration_.recovery_index >= tx_calibration_.candidate_count) {
+    tx_calibration_.recovery_index = 0;
+  }
+
+  tx_calibration_.candidate_delay_ms = tx_calibration_.candidates[tx_calibration_.recovery_index];
+  tx_delay_after_d2_ms_ = tx_calibration_.candidate_delay_ms;
+  tx_calibration_.recovery_index++;
+  tx_calibration_.recovery_attempts++;
+
+  DAIKIN_WARN(TAG, "TX calibration restore recovery attempt %u/%u: delay=%u value=%u",
+              static_cast<unsigned>(tx_calibration_.recovery_attempts),
+              static_cast<unsigned>(tx_calibration_.candidate_count),
+              static_cast<unsigned>(tx_calibration_.candidate_delay_ms),
+              static_cast<unsigned>(tx_calibration_.original_vacation_days));
+  publish_tx_calibration_status_(format_tx_calibration_status_());
+  return send_tx_calibration_write_(tx_calibration_.original_vacation_days);
+}
+
 void DaikinEkhheComponent::complete_tx_calibration_success_(uint32_t delay_ms) {
   tx_calibration_.phase = TxCalibrationPhase::COMPLETE;
   set_tx_delay_after_d2_ms(delay_ms);
@@ -2136,12 +2179,7 @@ void DaikinEkhheComponent::handle_tx_calibration_result_(const TxResult &result)
     }
 
     if (result.has_current_value && result.current_value != tx_calibration_.original_vacation_days) {
-      tx_calibration_.phase = TxCalibrationPhase::FAIL_RESTORE;
-      tx_delay_after_d2_ms_ = tx_calibration_.original_delay_ms;
-      publish_tx_calibration_status_(format_tx_calibration_status_());
-      if (!send_tx_calibration_write_(tx_calibration_.original_vacation_days)) {
-        fail_tx_calibration_("failed_toggle_restore_send_failed");
-      }
+      start_tx_calibration_restore_recovery_("candidate_toggle_changed_without_confirm", true);
       return;
     }
 
@@ -2175,12 +2213,7 @@ void DaikinEkhheComponent::handle_tx_calibration_result_(const TxResult &result)
       return;
     }
 
-    tx_calibration_.phase = TxCalibrationPhase::FAIL_RESTORE;
-    tx_delay_after_d2_ms_ = tx_calibration_.original_delay_ms;
-    publish_tx_calibration_status_(format_tx_calibration_status_());
-    if (!send_tx_calibration_write_(tx_calibration_.original_vacation_days)) {
-      fail_tx_calibration_("restore_retry_send_failed");
-    }
+    start_tx_calibration_restore_recovery_("candidate_restore_failed", true);
     return;
   }
 
@@ -2195,12 +2228,7 @@ void DaikinEkhheComponent::handle_tx_calibration_result_(const TxResult &result)
     }
 
     if (result.has_current_value && result.current_value != tx_calibration_.original_vacation_days) {
-      tx_calibration_.phase = TxCalibrationPhase::FAIL_RESTORE;
-      tx_delay_after_d2_ms_ = tx_calibration_.original_delay_ms;
-      publish_tx_calibration_status_(format_tx_calibration_status_());
-      if (!send_tx_calibration_write_(tx_calibration_.original_vacation_days)) {
-        fail_tx_calibration_("verify_failed_restore_send_failed");
-      }
+      start_tx_calibration_restore_recovery_("verify_toggle_changed_without_confirm", true);
       return;
     }
 
@@ -2230,20 +2258,24 @@ void DaikinEkhheComponent::handle_tx_calibration_result_(const TxResult &result)
       return;
     }
 
-    tx_calibration_.phase = TxCalibrationPhase::FAIL_RESTORE;
-    tx_delay_after_d2_ms_ = tx_calibration_.original_delay_ms;
-    publish_tx_calibration_status_(format_tx_calibration_status_());
-    if (!send_tx_calibration_write_(tx_calibration_.original_vacation_days)) {
-      fail_tx_calibration_("verify_restore_retry_send_failed");
-    }
+    start_tx_calibration_restore_recovery_("verify_restore_failed", true);
     return;
   }
 
   if (tx_calibration_.phase == TxCalibrationPhase::FAIL_RESTORE) {
     if (success) {
-      complete_tx_calibration_("failed reason=probe_failed_original_restored");
+      if (tx_calibration_.recovery_resume_search) {
+        DAIKIN_WARN(TAG, "TX calibration original value restored during recovery; continuing search.");
+        tx_calibration_.current_score.valid = false;
+        tx_calibration_.current_score.failed_writes++;
+        advance_tx_calibration_candidate_();
+      } else {
+        complete_tx_calibration_("failed reason=probe_failed_original_restored");
+      }
     } else {
-      fail_tx_calibration_("restore_original_failed");
+      if (!send_next_tx_calibration_restore_recovery_()) {
+        fail_tx_calibration_("restore_original_failed");
+      }
     }
     return;
   }

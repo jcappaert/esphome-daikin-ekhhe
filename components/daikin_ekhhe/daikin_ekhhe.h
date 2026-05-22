@@ -436,6 +436,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 	  bool tx_calibration_score_is_first_attempt_(const TxCalibrationScore &score) const;
 	  void start_tx_calibration_candidate_();
 	  void advance_tx_calibration_candidate_();
+	  void start_tx_calibration_restore_recovery_(const std::string &reason, bool resume_search);
+	  bool send_next_tx_calibration_restore_recovery_();
 	  void complete_tx_calibration_success_(uint32_t delay_ms);
 	  void complete_tx_calibration_(const std::string &status);
 	  void fail_tx_calibration_(const std::string &reason);
@@ -646,6 +648,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t candidate_index = 0;
     uint8_t verify_count = 0;
     bool fine_candidates_added = false;
+    bool recovery_resume_search = false;
+    uint8_t recovery_index = 0;
+    uint8_t recovery_attempts = 0;
     TxCalibrationScore current_score;
     TxCalibrationScore best_score;
     uint32_t best_delay_ms = kDefaultTxDelayAfterD2Ms;
