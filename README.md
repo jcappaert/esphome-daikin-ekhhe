@@ -114,6 +114,21 @@ message such as `success best=75 verified=1 attempts=4 retries=0 candidates=1`. 
 copy it into YAML if you want it to survive a reboot. On failure, the component restores the original timing value and
 reports the reason in `daikin_tx_calibration_status`.
 
+### Calibration validation checklist
+Use this checklist when testing calibration on real hardware:
+
+* Confirm the unit is not in Vacation mode before pressing `daikin_calibrate_tx_send_timing`.
+* Enable the `tx_send_calibration` number and `daikin_tx_calibration_status` text sensor so the selected runtime value
+  and progress are visible.
+* Keep logs open at least at debug level for the first run; useful lines include `TX calibration started`,
+  `TX calibration candidate`, `TX CD sent`, `TX applied`, `TX not applied`, and `TX calibration complete`.
+* Expect `vacation_days` to briefly move by one and then return to its original value during each candidate.
+* Treat `success best=...` as the value to copy into YAML under `tx_send_calibration`.
+* If the status starts with `blocked`, fix the precondition named in the status and run it again.
+* If the status starts with `failed`, verify that `vacation_days` returned to its original value before trying again.
+* If restore recovery fails, manually restore `vacation_days` from Home Assistant or the UI before doing further tests.
+* Reboot only after copying the selected value to YAML if you want the calibrated value to persist.
+
 ## Restore Default Settings
 The component exposes a normal button entity named `daikin_restore_default_settings`. Pressing it builds a single `CD`
 packet from the latest valid `CC` frame and overwrites the following settings with documented default values from the
