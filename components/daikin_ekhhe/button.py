@@ -5,6 +5,7 @@ from esphome.const import CONF_ID, ENTITY_CATEGORY_CONFIG, ENTITY_CATEGORY_DIAGN
 
 from . import CONF_EKHHE_ID, DaikinEkhhe, daikin_ekhhe_ns, DEBUG_COMPONENTS
 from .const import (
+    DAIKIN_CALIBRATE_TX_SEND_TIMING,
     DAIKIN_RESTORE_AUTO_SNAPSHOT,
     DAIKIN_RESTORE_DEFAULT_SETTINGS,
     DAIKIN_RESTORE_KNOWN_GOOD_PROFILE,
@@ -28,6 +29,9 @@ CONFIG_SCHEMA = cv.Schema(
             DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
         ),
         cv.Optional(DAIKIN_RESTORE_AUTO_SNAPSHOT): button.button_schema(
+            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+        ),
+        cv.Optional(DAIKIN_CALIBRATE_TX_SEND_TIMING): button.button_schema(
             DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
         ),
     }
@@ -69,6 +73,15 @@ async def to_code(config):
         var = cg.new_Pvariable(
             conf[CONF_ID],
             cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::RESTORE_AUTO_SNAPSHOT"),
+        )
+        await button.register_button(var, conf)
+        cg.add(var.set_parent(hub))
+
+    if DAIKIN_CALIBRATE_TX_SEND_TIMING in config:
+        conf = config[DAIKIN_CALIBRATE_TX_SEND_TIMING]
+        var = cg.new_Pvariable(
+            conf[CONF_ID],
+            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::CALIBRATE_TX_SEND_TIMING"),
         )
         await button.register_button(var, conf)
         cg.add(var.set_parent(hub))

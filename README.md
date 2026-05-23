@@ -32,6 +32,25 @@ in flight.
 bus timing. The optional `tx_send_calibration` number entity can be enabled while testing; changes apply immediately
 but are not persisted unless the value is also written into YAML.
 
+Optional TX calibration entities can be enabled to find a working timing value from Home Assistant:
+
+```yaml
+number:
+  - platform: daikin_ekhhe
+    tx_send_calibration:
+      name: "TX Send Calibration"
+
+button:
+  - platform: daikin_ekhhe
+    daikin_calibrate_tx_send_timing:
+      name: "Calibrate TX Send Timing"
+
+text_sensor:
+  - platform: daikin_ekhhe
+    daikin_tx_calibration_status:
+      name: "TX Calibration Status"
+```
+
 ## Debug / Reverse Engineering
 There is a debug mode that enables internal raw UART capture and optional Home Assistant entities for inspection. These
 entities are only active when `mode: debug` is set on the component.
@@ -63,16 +82,52 @@ Normal maintenance button:
 * daikin_save_known_good_profile (button)
 * daikin_restore_known_good_profile (button)
 * daikin_restore_auto_snapshot (button)
+* daikin_calibrate_tx_send_timing (button)
 
 Diagnostic text sensors:
 * daikin_known_good_profile_status
 * daikin_auto_snapshot_status
+* daikin_tx_calibration_status
 
 ### Example YAML files
 See `example-production.yaml` and `example-debug.yaml` in the repository root.
 
 If all goes well, you should get something like this in the UI (there are a lot of paramters and variables ...):
 ![esphome UI example](https://github.com/jcappaert/esphome-daikin-ekhhe/blob/main/images/ekhhe_all.PNG)
+
+## TX Send Timing Calibration
+If writes are received but do not reliably apply, enable the optional `tx_send_calibration` number,
+`daikin_calibrate_tx_send_timing` button, and `daikin_tx_calibration_status` text sensor. Pressing the calibration
+button runs an active, bounded timing search.
+
+The calibration uses `vacation_days` as a reversible probe. It temporarily writes a nearby value, waits for D2 readback
+confirmation, then restores the original value before moving to the next candidate. It refuses to run while the unit is
+currently in Vacation mode, while another write/restore is active, or before valid CC/D2 packets have been captured.
+
+The search starts with the current `tx_send_calibration` value, then tests nearby timings in a coarse centered sweep.
+If it finds a first-attempt candidate, it verifies it with one extra toggle/restore pair and stops early. If only retry
+successes are found, it performs a small fine check around the best retry candidate. Calibration keeps RX active while
+running, suppresses automatic profile snapshots for the probe writes, and blocks unrelated writes until it finishes.
+
+On success, the runtime `tx_send_calibration` number is updated to the selected value and the status sensor reports a
+message such as `success best=75 verified=1 attempts=4 retries=0 candidates=1`. The value is not persisted to flash;
+copy it into YAML if you want it to survive a reboot. On failure, the component restores the original timing value and
+reports the reason in `daikin_tx_calibration_status`.
+
+### Calibration validation checklist
+Use this checklist when testing calibration on real hardware:
+
+* Confirm the unit is not in Vacation mode before pressing `daikin_calibrate_tx_send_timing`.
+* Enable the `tx_send_calibration` number and `daikin_tx_calibration_status` text sensor so the selected runtime value
+  and progress are visible.
+* Keep logs open at least at debug level for the first run; useful lines include `TX calibration started`,
+  `TX calibration candidate`, `TX CD sent`, `TX applied`, `TX not applied`, and `TX calibration complete`.
+* Expect `vacation_days` to briefly move by one and then return to its original value during each candidate.
+* Treat `success best=...` as the value to copy into YAML under `tx_send_calibration`.
+* If the status starts with `blocked`, fix the precondition named in the status and run it again.
+* If the status starts with `failed`, verify that `vacation_days` returned to its original value before trying again.
+* If restore recovery fails, manually restore `vacation_days` from Home Assistant or the UI before doing further tests.
+* Reboot only after copying the selected value to YAML if you want the calibrated value to persist.
 
 ## Restore Default Settings
 The component exposes a normal button entity named `daikin_restore_default_settings`. Pressing it builds a single `CD`
