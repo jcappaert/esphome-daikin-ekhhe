@@ -157,6 +157,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   // Allow UART command sending for Number/Select control
   bool send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  bool send_uart_c2_command(uint8_t index, uint8_t value, uint8_t bit_position);
   void restore_default_settings();
   void save_known_good_profile();
   void restore_known_good_profile();
@@ -480,18 +481,21 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     const char *label;
   };
   const TxPacketFamilySpec &tx_packet_family_spec_(TxPacketFamily family) const;
-  void send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
+  void send_prebuilt_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &command, TxPacketKind kind,
                                 uint8_t index, uint8_t value, uint8_t bit_position,
                                 uint8_t attempts_sent);
-  bool validate_outbound_cd_packet_(const std::vector<uint8_t> &base_packet,
+  bool validate_outbound_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                     const std::vector<uint8_t> &command, TxPacketKind kind,
                                     uint8_t index, uint8_t value, uint8_t bit_position,
                                     std::string &reason);
+  bool send_uart_command_(TxPacketFamily family, uint8_t index, uint8_t value, uint8_t bit_position);
+  void send_uart_tx_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet, bool apply_change,
+                            uint8_t index, uint8_t value, uint8_t bit_position);
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
-  bool defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position);
-  bool has_deferred_user_tx_(uint8_t index, uint8_t bit_position) const;
+  bool defer_single_field_tx_(TxPacketFamily family, uint8_t index, uint8_t value, uint8_t bit_position);
+  bool has_deferred_user_tx_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
   void send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
@@ -569,6 +573,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   struct PendingTx {
     bool active = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
@@ -591,6 +596,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   PendingProfileRestore pending_profile_restore_;
   struct TxUiSync {
     bool active = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
@@ -611,6 +617,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
@@ -621,6 +628,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   };
   QueuedTx queued_tx_;
   struct DeferredTx {
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
