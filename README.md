@@ -66,6 +66,8 @@ Normal maintenance button:
 * daikin_restore_auto_snapshot (button)
 
 Diagnostic text sensors:
+* power_board_firmware_version
+* ui_firmware_version
 * daikin_known_good_profile_status
 * daikin_auto_snapshot_status
 

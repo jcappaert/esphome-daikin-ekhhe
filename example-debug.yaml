@@ -25,8 +25,9 @@ web_server:
 
 external_components:
   - source:
-      type: local
-      path: C:\Users\jeroe\git\esphome-daikin-ekhhe/components
+      type: git
+      url: https://github.com/jcappaert/esphome-daikin-ekhhe
+      ref: main
     components: [daikin_ekhhe]
 
 uart:
@@ -187,8 +188,6 @@ number:
       name: "P56: Evaporator max activation delta"
     evaporator_max_speed_deactivation_delta:
       name: "P57: Evaporator max deactivation delta"
-    evaporator_fan_compressor_off_mode:
-      name: "P58: Evaporator fan compressor off mode"
     evaporator_fan_speed_compressor_off:
       name: "P59: Evaporator fan off speed"
     evaporation_air_delta1_setpoint_calc:
@@ -258,6 +257,8 @@ select:
       name: "P33: EEV control"
     eev_control_mode:
       name: "P39: EEV control mode"
+    evaporator_fan_compressor_off_mode:
+      name: "P58: Evaporator fan compressor off mode"
     daikin_debug_packet:
       name: "Daikin Debug Packet"
 
@@ -279,6 +280,10 @@ text_sensor:
   - platform: daikin_ekhhe
     current_time:
       name: "Current Time UTC"
+    power_board_firmware_version:
+      name: "J: Power board firmware version"
+    ui_firmware_version:
+      name: "L: UI firmware version"
     daikin_raw_frame_hex:
       name: "Daikin Raw Frame Hex"
     daikin_raw_frame_meta:

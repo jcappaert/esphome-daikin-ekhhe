@@ -71,6 +71,8 @@ select:
   - platform: daikin_ekhhe
     operational_mode:
       name: "CI Debug Operational mode"
+    evaporator_fan_compressor_off_mode:
+      name: "CI Debug P58 Evaporator Fan Compressor Off Mode"
   - platform: daikin_ekhhe
     daikin_debug_packet:
       name: "CI Debug Packet"
@@ -79,6 +81,10 @@ text_sensor:
   - platform: daikin_ekhhe
     current_time:
       name: "CI Current Time UTC"
+    power_board_firmware_version:
+      name: "CI Power Board Firmware Version"
+    ui_firmware_version:
+      name: "CI UI Firmware Version"
     daikin_raw_frame_meta:
       name: "CI Debug Raw Frame Meta"
     daikin_known_good_profile_status:

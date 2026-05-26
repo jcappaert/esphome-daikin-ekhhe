@@ -366,6 +366,8 @@ static const ManagedFieldSpec PROFILE_MANAGED_FIELDS[] = {
      DaikinEkhheComponent::D2_PACKET_P51_IDX, BIT_POSITION_NO_BITMASK, 0},
     {"P52", DaikinEkhheComponent::CC_PACKET_P52_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_P52_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P54", DaikinEkhheComponent::CC_PACKET_P54_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::D2_PACKET_P54_IDX, BIT_POSITION_NO_BITMASK, 0},
     {"ECO_TARGET", DaikinEkhheComponent::CC_PACKET_ECO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_ECO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0},
     {"AUTO_TARGET", DaikinEkhheComponent::CC_PACKET_AUTO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0,
@@ -388,6 +390,21 @@ bool is_profile_managed_field(uint8_t cc_index, uint8_t bit_position) {
     }
   }
   return false;
+}
+
+const ManagedFieldSpec *find_managed_field_by_cc(uint8_t cc_index, uint8_t bit_position) {
+  for (const auto &field : PROFILE_MANAGED_FIELDS) {
+    if (field.cc_index != cc_index) {
+      continue;
+    }
+    if (bit_position == BIT_POSITION_NO_BITMASK && field.cc_bit_position == BIT_POSITION_NO_BITMASK) {
+      return &field;
+    }
+    if (bit_position != BIT_POSITION_NO_BITMASK && field.cc_bit_position == bit_position) {
+      return &field;
+    }
+  }
+  return nullptr;
 }
 
 constexpr uint32_t PROFILE_MAGIC = 0x454b4850U;
@@ -1040,6 +1057,26 @@ bool DaikinEkhheComponent::field_matches_target_(const std::vector<uint8_t> &buf
   return bit == (value & 0x01);
 }
 
+uint8_t DaikinEkhheComponent::tx_readback_index_(TxPacketFamily family, uint8_t write_index,
+                                                 uint8_t bit_position) const {
+  if (family == TxPacketFamily::EXTENDED) {
+    return write_index;
+  }
+
+  const ManagedFieldSpec *field = find_managed_field_by_cc(write_index, bit_position);
+  return field != nullptr ? field->d2_index : write_index;
+}
+
+uint8_t DaikinEkhheComponent::tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index,
+                                                        uint8_t bit_position) const {
+  if (family == TxPacketFamily::EXTENDED || bit_position == BIT_POSITION_NO_BITMASK) {
+    return bit_position;
+  }
+
+  const ManagedFieldSpec *field = find_managed_field_by_cc(write_index, bit_position);
+  return field != nullptr ? field->d2_bit_position : bit_position;
+}
+
 bool DaikinEkhheComponent::tx_operation_active_() const {
   return pending_tx_.active || pending_restore_.active || pending_profile_restore_.active;
 }
@@ -1478,6 +1515,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           DD_PACKET_H_IDX,
           DD_PACKET_I_IDX,
           DD_PACKET_DIG_IDX,
+          DD_PACKET_J_FW_IDX,
           DD_PACKET_END,
       };
       return has_offset(dd_known, sizeof(dd_known) / sizeof(dd_known[0]), offset);
@@ -1681,6 +1719,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           CC_PACKET_P50_IDX,
           CC_PACKET_P51_IDX,
           CC_PACKET_P52_IDX,
+          CC_PACKET_L_FW_IDX,
           CC_PACKET_P54_IDX,
           CC_PACKET_END,
       };
@@ -2264,6 +2303,8 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
     set_sensor_value(entry.first, entry.second);
   }
 
+  set_text_sensor_value_(J_POWER_FW_VERSION, "U" + std::to_string(buffer[DD_PACKET_J_FW_IDX]));
+
   // update binary_sensors
   std::map<std::string, bool> binary_sensor_values = {
       {DIG1_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x01)},
@@ -2380,6 +2421,19 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
       continue;
     }
     set_number_value(param_name, buffer[param_index]);
+  }
+  for (const auto &entry : SELECT_EXTENDED_PARAM_INDEX) {
+    const std::string &param_name = entry.first;
+    uint8_t param_index = entry.second;
+    if (param_index >= buffer.size()) {
+      continue;
+    }
+    if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::EXTENDED &&
+         pending_tx_.index == param_index && pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
+        has_deferred_user_tx_(TxPacketFamily::EXTENDED, param_index, BIT_POSITION_NO_BITMASK)) {
+      continue;
+    }
+    set_select_value(param_name, buffer[param_index]);
   }
 }
 
@@ -2522,6 +2576,8 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
     set_select_value(param_name, bit_value);
   }
 
+  set_text_sensor_value_(L_UI_FW_VERSION, "U" + std::to_string(buffer[CC_PACKET_L_FW_IDX]));
+
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
 
   if (tx_ui_sync_.active && tx_ui_sync_.family == TxPacketFamily::MAIN) {
@@ -2625,13 +2681,19 @@ void DaikinEkhheComponent::register_number(const std::string &number_name, espho
 
 void DaikinEkhheComponent::register_select(const std::string &select_name, select::Select *select) {
   if (select != nullptr) {
-      //selects_[select_name] = select;
-      selects_[select_name] = static_cast<DaikinEkhheSelect *>(select);
+    selects_[select_name] = static_cast<DaikinEkhheSelect *>(select);
+  }
+}
+
+void DaikinEkhheComponent::register_text_sensor(const std::string &text_sensor_name,
+                                                esphome::text_sensor::TextSensor *sensor) {
+  if (sensor != nullptr) {
+    text_sensors_[text_sensor_name] = sensor;
   }
 }
 
 void DaikinEkhheComponent::register_timestamp_sensor(text_sensor::TextSensor *sensor) {
-    this->timestamp_sensor_ = sensor;
+  this->timestamp_sensor_ = sensor;
 }
 
 void DaikinEkhheComponent::register_debug_text_sensor(const std::string &sensor_name,
@@ -2687,6 +2749,21 @@ void DaikinEkhheComponent::set_sensor_value(const std::string &sensor_name, floa
     }
   }
 
+}
+
+void DaikinEkhheComponent::set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value) {
+  if (text_sensors_.find(text_sensor_name) == text_sensors_.end()) {
+    return;
+  }
+  if (!cycle_publish_allowed_) {
+    return;
+  }
+  if (should_publish_text_(text_sensor_name, value, last_published_text_values_,
+                           last_published_text_ms_, kSlowPublishRefreshMs)) {
+    defer([this, text_sensor_name, value]() {
+      text_sensors_[text_sensor_name]->publish_state(value);
+    });
+  }
 }
 
 void DaikinEkhheComponent::set_binary_sensor_value(const std::string &sensor_name, bool value) {
@@ -3068,13 +3145,19 @@ void DaikinEkhheSelect::control(const std::string &value) {
     }
     uint8_t uart_value = static_cast<uint8_t>(it->second);
   
-    // Look up the CC packet index for this select entity
+    bool extended_family = false;
+
+    // Look up the packet index for this select entity
     auto index_it = SELECT_PARAM_INDEX.find(name);
     uint8_t param_index = PARAM_INDEX_INVALID;
     if (index_it != SELECT_PARAM_INDEX.end()) {
       param_index = index_it->second;
     } else {
-      DAIKIN_WARN(TAG, "Select %s NOT found in SELECT_PARAM_INDEX", name.c_str());
+      auto extended_index_it = SELECT_EXTENDED_PARAM_INDEX.find(name);
+      if (extended_index_it != SELECT_EXTENDED_PARAM_INDEX.end()) {
+        param_index = extended_index_it->second;
+        extended_family = true;
+      }
     }
 
     // Look up if this select is part of a bitmask
@@ -3083,12 +3166,21 @@ void DaikinEkhheSelect::control(const std::string &value) {
     if (bitmask_it != SELECT_BITMASKS.end()) {
         param_index = bitmask_it->second.first;  // Get the byte index
         bit_position = bitmask_it->second.second;  // Get the bit position
+        extended_family = false;
     } else {
             DAIKIN_DBG(TAG, "Select %s not in SELECT_BITMASKS", name.c_str());
     }
 
+    if (param_index == PARAM_INDEX_INVALID) {
+        DAIKIN_WARN(TAG, "No matching UART command for Select: %s", name.c_str());
+        return;
+    }
+
     // Update value in ESPHome
-    if (this->parent_->send_uart_cc_command(param_index, uart_value, bit_position)) {
+    bool sent = extended_family
+                    ? this->parent_->send_uart_c2_command(param_index, uart_value, bit_position)
+                    : this->parent_->send_uart_cc_command(param_index, uart_value, bit_position);
+    if (sent) {
         this->parent_->update_select_cache(name, value);
         this->publish_state(value);
     }
@@ -3435,7 +3527,11 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
     return;
   }
   const auto &spec = tx_packet_family_spec_(pending_tx_.family);
-  if (pending_tx_.index >= buffer.size()) {
+  const uint8_t readback_index =
+      tx_readback_index_(pending_tx_.family, pending_tx_.index, pending_tx_.bit_position);
+  const uint8_t readback_bit_position =
+      tx_readback_bit_position_(pending_tx_.family, pending_tx_.index, pending_tx_.bit_position);
+  if (readback_index >= buffer.size()) {
     pending_tx_.active = false;
     pending_tx_.family = TxPacketFamily::MAIN;
     pending_tx_.attempts_sent = 0;
@@ -3446,34 +3542,35 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
     return;
   }
 
-  bool matched = field_matches_target_(buffer, pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
+  bool matched = field_matches_target_(buffer, readback_index, pending_tx_.value, readback_bit_position);
 
   if (matched) {
     if (pending_tx_.attempts_sent == 0) {
-      DAIKIN_DBG(TAG, "TX already current: family=%s index=%u value=0x%02X bit=%u",
-                 spec.label, pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
+      DAIKIN_DBG(TAG, "TX already current: family=%s index=%u readback_index=%u value=0x%02X bit=%u",
+                 spec.label, pending_tx_.index, readback_index, pending_tx_.value, pending_tx_.bit_position);
     } else {
       bool retried = pending_tx_.attempts_sent > 1;
       if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
         if (retried) {
-          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u value=0x%02X attempts=%u",
+          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u readback_index=%u value=0x%02X attempts=%u",
                       spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
-                      pending_tx_.index, pending_tx_.value, pending_tx_.attempts_sent);
+                      pending_tx_.index, readback_index, pending_tx_.value, pending_tx_.attempts_sent);
         } else {
-          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u value=0x%02X",
+          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u readback_index=%u value=0x%02X",
                    spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
-                   pending_tx_.index, pending_tx_.value);
+                   pending_tx_.index, readback_index, pending_tx_.value);
         }
       } else {
-        uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+        uint8_t bit = (buffer[readback_index] >> readback_bit_position) & 0x01;
         if (retried) {
-          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u bit=%u value=%u attempts=%u",
+          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u readback_index=%u bit=%u readback_bit=%u value=%u attempts=%u",
                       spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
-                      pending_tx_.index, pending_tx_.bit_position, bit, pending_tx_.attempts_sent);
+                      pending_tx_.index, readback_index, pending_tx_.bit_position, readback_bit_position, bit,
+                      pending_tx_.attempts_sent);
         } else {
-          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u bit=%u value=%u",
+          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u readback_index=%u bit=%u readback_bit=%u value=%u",
                    spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
-                   pending_tx_.index, pending_tx_.bit_position, bit);
+                   pending_tx_.index, readback_index, pending_tx_.bit_position, readback_bit_position, bit);
         }
       }
       DAIKIN_DBG(TAG, "TX timing: applied_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
@@ -3501,21 +3598,21 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   }
 
   if (pending_tx_.attempts_sent < kTxMaxRepeats) {
-    DAIKIN_DBG(TAG, "TX retry pending: family=%s readback=%s index=%u attempt=%u/%u",
+    DAIKIN_DBG(TAG, "TX retry pending: family=%s readback=%s index=%u readback_index=%u attempt=%u/%u",
                spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
-               pending_tx_.index, pending_tx_.attempts_sent, kTxMaxRepeats);
+               pending_tx_.index, readback_index, pending_tx_.attempts_sent, kTxMaxRepeats);
     return;
   }
 
   if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u expected=0x%02X current=0x%02X",
+    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u readback_index=%u expected=0x%02X current=0x%02X",
                 spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
-                pending_tx_.index, pending_tx_.value, buffer[pending_tx_.index]);
+                pending_tx_.index, readback_index, pending_tx_.value, buffer[readback_index]);
   } else {
-    uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
-    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u bit=%u expected=%u current=%u",
+    uint8_t bit = (buffer[readback_index] >> readback_bit_position) & 0x01;
+    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u readback_index=%u bit=%u readback_bit=%u expected=%u current=%u",
                 spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
-                pending_tx_.index, pending_tx_.bit_position,
+                pending_tx_.index, readback_index, pending_tx_.bit_position, readback_bit_position,
                 pending_tx_.value & 0x01, bit);
   }
   DAIKIN_DBG(TAG, "TX timing: failed_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
@@ -3524,28 +3621,33 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
     if (pending_tx_.family == TxPacketFamily::EXTENDED) {
       for (const auto &entry : U_NUMBER_EXTENDED_PARAM_INDEX) {
         if (entry.second == index) {
-          set_number_value(entry.first, buffer[index]);
+          set_number_value(entry.first, buffer[readback_index]);
+        }
+      }
+      for (const auto &entry : SELECT_EXTENDED_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_select_value(entry.first, buffer[readback_index]);
         }
       }
     } else {
       for (const auto &entry : U_NUMBER_PARAM_INDEX) {
         if (entry.second == index) {
-          set_number_value(entry.first, buffer[index]);
+          set_number_value(entry.first, buffer[readback_index]);
         }
       }
       for (const auto &entry : I_NUMBER_PARAM_INDEX) {
         if (entry.second == index) {
-          set_number_value(entry.first, static_cast<int8_t>(buffer[index]));
+          set_number_value(entry.first, static_cast<int8_t>(buffer[readback_index]));
         }
       }
       for (const auto &entry : SELECT_PARAM_INDEX) {
         if (entry.second == index) {
-          set_select_value(entry.first, buffer[index]);
+          set_select_value(entry.first, buffer[readback_index]);
         }
       }
     }
   } else {
-    uint8_t bit = (buffer[index] >> pending_tx_.bit_position) & 0x01;
+    uint8_t bit = (buffer[readback_index] >> readback_bit_position) & 0x01;
     for (const auto &entry : SELECT_BITMASKS) {
       if (entry.second.first == index && entry.second.second == pending_tx_.bit_position) {
         set_select_value(entry.first, bit);

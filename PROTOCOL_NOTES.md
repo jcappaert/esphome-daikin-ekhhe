@@ -138,6 +138,19 @@ The current write-family model is:
 | Main block | `D2` | `CC` | `CD` | 71 |
 | Extended block | `D4` | `C1` | `C2` | 51 |
 
+## Firmware version fields
+
+Manual UI readout showed firmware values `J = U14` and `L = U20`. Current best
+matches from stable captured bytes are:
+
+| UI field | Meaning | Packet byte | Published value |
+| --- | --- | --- | --- |
+| `J` | Power-board firmware version | `DD[39]` | `U<DD[39]>` |
+| `L` | UI firmware version | `CC[66]` | `U<CC[66]>` |
+
+These are stable identity-style fields rather than controllable parameters, so
+cross-device captures remain useful for extra confirmation.
+
 Observed targeted `C2` evidence:
 
 * During a P53/P55 display edit, checksum-valid `C2` frames appeared.
@@ -179,4 +192,3 @@ Implementation implication:
   `D2` and `C2` confirms against `D4`.
 * If hardware testing shows that `C2` needs a materially different send delay,
   add a separate extended TX calibration as a follow-up rather than guessing now.
-

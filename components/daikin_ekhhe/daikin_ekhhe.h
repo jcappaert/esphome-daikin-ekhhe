@@ -133,6 +133,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_binary_sensor(const std::string &sensor_name, esphome::binary_sensor::BinarySensor *binary_sensor);
   void register_number(const std::string &number_name, esphome::number::Number *number);
   void register_select(const std::string &select_name, select::Select *select);
+  void register_text_sensor(const std::string &text_sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
@@ -180,6 +181,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     DD_PACKET_H_IDX     = 14,
     DD_PACKET_I_IDX     = 18,
     DD_PACKET_DIG_IDX   = 21,
+    DD_PACKET_J_FW_IDX  = 39,
     DD_PACKET_END       = 40,
     DD_PACKET_SIZE      = 41,
   };
@@ -343,6 +345,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     CC_PACKET_P50_IDX   = 63,
     CC_PACKET_P51_IDX   = 64,
     CC_PACKET_P52_IDX   = 65,
+    CC_PACKET_L_FW_IDX  = 66,
     CC_PACKET_P54_IDX   = 68,
     CC_PACKET_END       = 70,
     CC_PACKET_SIZE      = 71,
@@ -391,6 +394,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, esphome::binary_sensor::BinarySensor *> binary_sensors_;
   std::map<std::string, esphome::number::Number *> numbers_;
   std::map<std::string, DaikinEkhheSelect *> selects_;
+  std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
   std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
   std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
@@ -444,6 +448,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool auto_save_snapshot_if_needed_();
   void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
+  void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
   const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
   const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
@@ -511,6 +516,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void reset_queued_restore_();
   void reset_pending_profile_restore_();
   void reset_queued_profile_restore_();
+  uint8_t tx_readback_index_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
+  uint8_t tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
   bool field_matches_target_(const std::vector<uint8_t> &buffer, uint8_t index, uint8_t value,
                              uint8_t bit_position) const;
 
@@ -700,6 +707,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, uint32_t> last_published_binary_ms_;
   std::map<std::string, std::string> last_published_select_values_;
   std::map<std::string, uint32_t> last_published_select_ms_;
+  std::map<std::string, std::string> last_published_text_values_;
+  std::map<std::string, uint32_t> last_published_text_ms_;
   std::string last_published_timestamp_;
   uint32_t last_published_timestamp_ms_ = 0;
   std::map<std::string, float> debug_last_published_values_;
@@ -766,7 +775,6 @@ static const std::map<std::string, uint8_t> U_NUMBER_EXTENDED_PARAM_INDEX = {
   {P55_EVA_BAND1_PROP,      DaikinEkhheComponent::EXT_PACKET_P55_IDX},
   {P56_EVA_MAX_ACT_DELTA,   DaikinEkhheComponent::EXT_PACKET_P56_IDX},
   {P57_EVA_MAX_DEACT_DELTA, DaikinEkhheComponent::EXT_PACKET_P57_IDX},
-  {P58_EVA_FAN_COMP_OFF,    DaikinEkhheComponent::EXT_PACKET_P58_IDX},
   {P59_EVA_FAN_OFF_SPEED,   DaikinEkhheComponent::EXT_PACKET_P59_IDX},
   {P60_EVA_AIR_DELTA1,      DaikinEkhheComponent::EXT_PACKET_P60_IDX},
   {P61_EVA_AIR_DELTA2,      DaikinEkhheComponent::EXT_PACKET_P61_IDX},
@@ -806,11 +814,15 @@ static const std::map<std::string, uint8_t> SELECT_PARAM_INDEX = {
   {P14_EVA_BLOWER_TYPE,  DaikinEkhheComponent::CC_PACKET_P14_IDX},
   {P16_SOLAR_MODE_INT,   DaikinEkhheComponent::CC_PACKET_P16_IDX},
   {P23_PV_MODE_INT,      DaikinEkhheComponent::CC_PACKET_P23_IDX},
-  {P24_OFF_PEAK_MODE,    DaikinEkhheComponent::CC_PACKET_P24_IDX}, 
+  {P24_OFF_PEAK_MODE,    DaikinEkhheComponent::CC_PACKET_P24_IDX},
+};
+
+static const std::map<std::string, uint8_t> SELECT_EXTENDED_PARAM_INDEX = {
+  {P58_EVA_FAN_COMP_OFF, DaikinEkhheComponent::EXT_PACKET_P58_IDX},
 };
 
 static const std::map<std::string, std::pair<uint8_t, uint8_t>> SELECT_BITMASKS = {
-  {POWER_STATUS,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 0}}, 
+  {POWER_STATUS,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 0}},
   {P39_EEV_MODE,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 2}},
   {P13_HW_CIRC_PUMP_MODE, {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 4}},
   {P11_DISP_WAT_T_PROBE,  {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 0}},

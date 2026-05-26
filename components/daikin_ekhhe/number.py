@@ -2,31 +2,22 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import number
 from esphome.const import (
-    CONF_ID,
-    CONF_MIN_VALUE,
+    CONF_DEVICE_CLASS,
     CONF_MAX_VALUE,
+    CONF_MIN_VALUE,
     CONF_STEP,
     CONF_UNIT_OF_MEASUREMENT,
-    CONF_DEVICE_CLASS,
-    ENTITY_CATEGORY_CONFIG,
-)
-from esphome.const import (
-    CONF_ID,
-    ICON_EMPTY,
-    UNIT_EMPTY,
-    UNIT_CELSIUS,
-    UNIT_HOUR,
-    UNIT_MILLISECOND,
-    UNIT_SECOND,
-    UNIT_PERCENT,
-    UNIT_MINUTE,
-    DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_DURATION,
     DEVICE_CLASS_TIMESTAMP,
-    STATE_CLASS_MEASUREMENT,
-    STATE_CLASS_TOTAL_INCREASING,
-    ENTITY_CATEGORY_DIAGNOSTIC,
-    ENTITY_CATEGORY_NONE
+    DEVICE_CLASS_TEMPERATURE,
+    ENTITY_CATEGORY_CONFIG,
+    UNIT_CELSIUS,
+    UNIT_EMPTY,
+    UNIT_HOUR,
+    UNIT_MILLISECOND,
+    UNIT_MINUTE,
+    UNIT_PERCENT,
+    UNIT_SECOND,
 )
 
 
@@ -89,7 +80,6 @@ TYPES = [
     P55_EVA_BAND1_PROP,
     P56_EVA_MAX_ACT_DELTA,
     P57_EVA_MAX_DEACT_DELTA,
-    P58_EVA_FAN_COMP_OFF,
     P59_EVA_FAN_OFF_SPEED,
     P60_EVA_AIR_DELTA1,
     P61_EVA_AIR_DELTA2,
@@ -460,13 +450,6 @@ CONFIG_SCHEMA = (
                 cv.Optional(CONF_STEP, default=1): cv.positive_float,
                 cv.Optional(CONF_DEVICE_CLASS, default=DEVICE_CLASS_TEMPERATURE): cv.string,
                 cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_CELSIUS): cv.string,
-            }),
-            cv.Optional(P58_EVA_FAN_COMP_OFF): number.number_schema(DaikinEkhheNumber).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
-                cv.Optional(CONF_MAX_VALUE, default=2): cv.float_,
-                cv.Optional(CONF_MIN_VALUE, default=0): cv.float_,
-                cv.Optional(CONF_STEP, default=1): cv.positive_float,
-                cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_EMPTY): cv.string,
             }),
             cv.Optional(P59_EVA_FAN_OFF_SPEED): number.number_schema(DaikinEkhheNumber).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
