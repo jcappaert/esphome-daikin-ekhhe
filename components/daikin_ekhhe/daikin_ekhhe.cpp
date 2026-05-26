@@ -3147,8 +3147,10 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(TxPacketFamily family, const
   tx_waiting_for_first_cc_ = track_tx;
 
   if (kind == TxPacketKind::SINGLE_FIELD) {
-    ESP_LOGI(TAG, "TX %s sent: family=%s index=%u value=0x%02X bit=%u len=%u",
-             tx_type.c_str(), spec.label, index, value, bit_position, static_cast<unsigned>(command.size()));
+    ESP_LOGI(TAG, "TX %s sent: family=%s base=%s readback=%s index=%u value=0x%02X bit=%u len=%u",
+             tx_type.c_str(), spec.label, packet_type_to_string_(spec.base_packet_type).c_str(),
+             packet_type_to_string_(spec.readback_packet_type).c_str(), index, value, bit_position,
+             static_cast<unsigned>(command.size()));
     DAIKIN_DBG(TAG, "TX timing: request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else if (kind == TxPacketKind::PROFILE_RESTORE) {
@@ -3454,20 +3456,24 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
       bool retried = pending_tx_.attempts_sent > 1;
       if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
         if (retried) {
-          DAIKIN_WARN(TAG, "TX applied after retries: family=%s index=%u value=0x%02X attempts=%u",
-                      spec.label, pending_tx_.index, pending_tx_.value, pending_tx_.attempts_sent);
+          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u value=0x%02X attempts=%u",
+                      spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                      pending_tx_.index, pending_tx_.value, pending_tx_.attempts_sent);
         } else {
-          ESP_LOGI(TAG, "TX applied: family=%s index=%u value=0x%02X",
-                   spec.label, pending_tx_.index, pending_tx_.value);
+          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u value=0x%02X",
+                   spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                   pending_tx_.index, pending_tx_.value);
         }
       } else {
         uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
         if (retried) {
-          DAIKIN_WARN(TAG, "TX applied after retries: family=%s index=%u bit=%u value=%u attempts=%u",
-                      spec.label, pending_tx_.index, pending_tx_.bit_position, bit, pending_tx_.attempts_sent);
+          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u bit=%u value=%u attempts=%u",
+                      spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                      pending_tx_.index, pending_tx_.bit_position, bit, pending_tx_.attempts_sent);
         } else {
-          ESP_LOGI(TAG, "TX applied: family=%s index=%u bit=%u value=%u",
-                   spec.label, pending_tx_.index, pending_tx_.bit_position, bit);
+          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u bit=%u value=%u",
+                   spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                   pending_tx_.index, pending_tx_.bit_position, bit);
         }
       }
       DAIKIN_DBG(TAG, "TX timing: applied_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
@@ -3495,18 +3501,21 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   }
 
   if (pending_tx_.attempts_sent < kTxMaxRepeats) {
-    DAIKIN_DBG(TAG, "TX retry pending: family=%s index=%u attempt=%u/%u",
-               spec.label, pending_tx_.index, pending_tx_.attempts_sent, kTxMaxRepeats);
+    DAIKIN_DBG(TAG, "TX retry pending: family=%s readback=%s index=%u attempt=%u/%u",
+               spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+               pending_tx_.index, pending_tx_.attempts_sent, kTxMaxRepeats);
     return;
   }
 
   if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-    DAIKIN_WARN(TAG, "TX not applied: family=%s index=%u expected=0x%02X current=0x%02X",
-                spec.label, pending_tx_.index, pending_tx_.value, buffer[pending_tx_.index]);
+    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u expected=0x%02X current=0x%02X",
+                spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                pending_tx_.index, pending_tx_.value, buffer[pending_tx_.index]);
   } else {
     uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
-    DAIKIN_WARN(TAG, "TX not applied: family=%s index=%u bit=%u expected=%u current=%u",
-                spec.label, pending_tx_.index, pending_tx_.bit_position,
+    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u bit=%u expected=%u current=%u",
+                spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                pending_tx_.index, pending_tx_.bit_position,
                 pending_tx_.value & 0x01, bit);
   }
   DAIKIN_DBG(TAG, "TX timing: failed_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
