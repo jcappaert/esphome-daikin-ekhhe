@@ -1526,6 +1526,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           D2_PACKET_P50_IDX,
           D2_PACKET_P51_IDX,
           D2_PACKET_P52_IDX,
+          D2_PACKET_P54_IDX,
           D2_PACKET_END,
       };
       return has_offset(d2_known, sizeof(d2_known) / sizeof(d2_known[0]), offset);
@@ -1533,6 +1534,25 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
     case D4_PACKET_START_BYTE: {
       static const uint8_t d4_known[] = {
           D4_PACKET_START_IDX,
+          EXT_PACKET_P53_IDX,
+          EXT_PACKET_P71_IDX,
+          EXT_PACKET_P58_IDX,
+          EXT_PACKET_P59_IDX,
+          EXT_PACKET_P56_IDX,
+          EXT_PACKET_P57_IDX,
+          EXT_PACKET_P60_IDX,
+          EXT_PACKET_P61_IDX,
+          EXT_PACKET_P62_IDX,
+          EXT_PACKET_P63_IDX,
+          EXT_PACKET_P64_IDX,
+          EXT_PACKET_P65_IDX,
+          EXT_PACKET_P55_IDX,
+          EXT_PACKET_P66_IDX,
+          EXT_PACKET_P67_IDX,
+          EXT_PACKET_P68_IDX,
+          EXT_PACKET_P69_IDX,
+          EXT_PACKET_P70_IDX,
+          EXT_PACKET_P72_IDX,
           D4_PACKET_END,
       };
       return has_offset(d4_known, sizeof(d4_known) / sizeof(d4_known[0]), offset);
@@ -1540,6 +1560,25 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
     case C1_PACKET_START_BYTE: {
       static const uint8_t c1_known[] = {
           C1_PACKET_START_IDX,
+          EXT_PACKET_P53_IDX,
+          EXT_PACKET_P71_IDX,
+          EXT_PACKET_P58_IDX,
+          EXT_PACKET_P59_IDX,
+          EXT_PACKET_P56_IDX,
+          EXT_PACKET_P57_IDX,
+          EXT_PACKET_P60_IDX,
+          EXT_PACKET_P61_IDX,
+          EXT_PACKET_P62_IDX,
+          EXT_PACKET_P63_IDX,
+          EXT_PACKET_P64_IDX,
+          EXT_PACKET_P65_IDX,
+          EXT_PACKET_P55_IDX,
+          EXT_PACKET_P66_IDX,
+          EXT_PACKET_P67_IDX,
+          EXT_PACKET_P68_IDX,
+          EXT_PACKET_P69_IDX,
+          EXT_PACKET_P70_IDX,
+          EXT_PACKET_P72_IDX,
           C1_PACKET_END,
       };
       return has_offset(c1_known, sizeof(c1_known) / sizeof(c1_known[0]), offset);
@@ -1547,6 +1586,25 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
     case C2_PACKET_START_BYTE: {
       static const uint8_t c2_known[] = {
           C2_PACKET_START_IDX,
+          EXT_PACKET_P53_IDX,
+          EXT_PACKET_P71_IDX,
+          EXT_PACKET_P58_IDX,
+          EXT_PACKET_P59_IDX,
+          EXT_PACKET_P56_IDX,
+          EXT_PACKET_P57_IDX,
+          EXT_PACKET_P60_IDX,
+          EXT_PACKET_P61_IDX,
+          EXT_PACKET_P62_IDX,
+          EXT_PACKET_P63_IDX,
+          EXT_PACKET_P64_IDX,
+          EXT_PACKET_P65_IDX,
+          EXT_PACKET_P55_IDX,
+          EXT_PACKET_P66_IDX,
+          EXT_PACKET_P67_IDX,
+          EXT_PACKET_P68_IDX,
+          EXT_PACKET_P69_IDX,
+          EXT_PACKET_P70_IDX,
+          EXT_PACKET_P72_IDX,
           C2_PACKET_END,
       };
       return has_offset(c2_known, sizeof(c2_known) / sizeof(c2_known[0]), offset);
@@ -2251,6 +2309,7 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
       {P50_ANTIFREEZE_SET,        buffer[D2_PACKET_P50_IDX]},
       {P51_EVA_HIGH_SET,          buffer[D2_PACKET_P51_IDX]},
       {P52_EVA_LOW_SET,           buffer[D2_PACKET_P52_IDX]},
+      {P54_LOW_PRESS_BYPASS,      buffer[D2_PACKET_P54_IDX]},
 
       {ECO_T_TEMPERATURE,         buffer[D2_PACKET_ECO_TTARGET_IDX]},
       {AUTO_T_TEMPERATURE,        buffer[D2_PACKET_AUTO_TTARGET_IDX]},
@@ -2295,8 +2354,14 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
 }
 
 void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
-  // STUB function only
-  return;
+  for (const auto &entry : U_NUMBER_EXTENDED_PARAM_INDEX) {
+    const std::string &param_name = entry.first;
+    uint8_t param_index = entry.second;
+    if (param_index >= buffer.size()) {
+      continue;
+    }
+    set_number_value(param_name, buffer[param_index]);
+  }
 }
 
 void DaikinEkhheComponent::parse_c1_packet(std::vector<uint8_t> buffer) {

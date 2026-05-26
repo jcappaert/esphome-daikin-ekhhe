@@ -240,8 +240,31 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     D2_PACKET_P50_IDX   = 62,
     D2_PACKET_P51_IDX   = 63,
     D2_PACKET_P52_IDX   = 64,
-    D2_PACKET_END       = 70, 
+    D2_PACKET_P54_IDX   = 66,
+    D2_PACKET_END       = 70,
     D2_PACKET_SIZE      = 71,
+  };
+
+  enum EkhheExtendedParameterPacket {
+    EXT_PACKET_P53_IDX = 1,
+    EXT_PACKET_P71_IDX = 2,
+    EXT_PACKET_P58_IDX = 3,
+    EXT_PACKET_P59_IDX = 4,
+    EXT_PACKET_P56_IDX = 5,
+    EXT_PACKET_P57_IDX = 6,
+    EXT_PACKET_P60_IDX = 7,
+    EXT_PACKET_P61_IDX = 8,
+    EXT_PACKET_P62_IDX = 9,
+    EXT_PACKET_P63_IDX = 10,
+    EXT_PACKET_P64_IDX = 11,
+    EXT_PACKET_P65_IDX = 12,
+    EXT_PACKET_P55_IDX = 13,
+    EXT_PACKET_P66_IDX = 14,
+    EXT_PACKET_P67_IDX = 15,
+    EXT_PACKET_P68_IDX = 16,
+    EXT_PACKET_P69_IDX = 17,
+    EXT_PACKET_P70_IDX = 18,
+    EXT_PACKET_P72_IDX = 19,
   };
 
   enum EkhheD4Packet {
@@ -316,11 +339,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     CC_PACKET_P47_IDX   = 60, 
     CC_PACKET_P48_IDX   = 61, 
     CC_PACKET_P49_IDX   = 62, 
-    CC_PACKET_P50_IDX   = 63, 
-    CC_PACKET_P51_IDX   = 64, 
+    CC_PACKET_P50_IDX   = 63,
+    CC_PACKET_P51_IDX   = 64,
     CC_PACKET_P52_IDX   = 65,
-    CC_PACKET_P54_IDX   = 60,
-    CC_PACKET_END       = 70, 
+    CC_PACKET_P54_IDX   = 68,
+    CC_PACKET_END       = 70,
     CC_PACKET_SIZE      = 71,
   };
 
@@ -722,11 +745,34 @@ static const std::map<std::string, uint8_t> U_NUMBER_PARAM_INDEX = {
   {P50_ANTIFREEZE_SET,      DaikinEkhheComponent::CC_PACKET_P50_IDX},
   {P51_EVA_HIGH_SET,        DaikinEkhheComponent::CC_PACKET_P51_IDX},
   {P52_EVA_LOW_SET,         DaikinEkhheComponent::CC_PACKET_P52_IDX},
+  {P54_LOW_PRESS_BYPASS,    DaikinEkhheComponent::CC_PACKET_P54_IDX},
   {ECO_T_TEMPERATURE,       DaikinEkhheComponent::CC_PACKET_ECO_TTARGET_IDX},
   {AUTO_T_TEMPERATURE,      DaikinEkhheComponent::CC_PACKET_AUTO_TTARGET_IDX},
   {BOOST_T_TEMPERATURE,     DaikinEkhheComponent::CC_PACKET_BOOST_TTGARGET_IDX},
   {ELECTRIC_T_TEMPERATURE,  DaikinEkhheComponent::CC_PACKET_ELECTRIC_TTARGET_IDX},
   {VAC_DAYS,                DaikinEkhheComponent::CC_PACKET_VAC_DAYS}
+};
+
+static const std::map<std::string, uint8_t> U_NUMBER_EXTENDED_PARAM_INDEX = {
+  {P53_EVA_FAN_DEFR_SPEED,  DaikinEkhheComponent::EXT_PACKET_P53_IDX},
+  {P55_EVA_BAND1_PROP,      DaikinEkhheComponent::EXT_PACKET_P55_IDX},
+  {P56_EVA_MAX_ACT_DELTA,   DaikinEkhheComponent::EXT_PACKET_P56_IDX},
+  {P57_EVA_MAX_DEACT_DELTA, DaikinEkhheComponent::EXT_PACKET_P57_IDX},
+  {P58_EVA_FAN_COMP_OFF,    DaikinEkhheComponent::EXT_PACKET_P58_IDX},
+  {P59_EVA_FAN_OFF_SPEED,   DaikinEkhheComponent::EXT_PACKET_P59_IDX},
+  {P60_EVA_AIR_DELTA1,      DaikinEkhheComponent::EXT_PACKET_P60_IDX},
+  {P61_EVA_AIR_DELTA2,      DaikinEkhheComponent::EXT_PACKET_P61_IDX},
+  {P62_EVA_AIR_DELTA3,      DaikinEkhheComponent::EXT_PACKET_P62_IDX},
+  {P63_EVA_AIR_DELTA4,      DaikinEkhheComponent::EXT_PACKET_P63_IDX},
+  {P64_EVA_AIR_DELTA5,      DaikinEkhheComponent::EXT_PACKET_P64_IDX},
+  {P65_EVA_AIR_DELTA6,      DaikinEkhheComponent::EXT_PACKET_P65_IDX},
+  {P66_EVA_BAND2_PROP,      DaikinEkhheComponent::EXT_PACKET_P66_IDX},
+  {P67_EVA_BAND3_PROP,      DaikinEkhheComponent::EXT_PACKET_P67_IDX},
+  {P68_EVA_BAND4_PROP,      DaikinEkhheComponent::EXT_PACKET_P68_IDX},
+  {P69_EVA_BAND5_PROP,      DaikinEkhheComponent::EXT_PACKET_P69_IDX},
+  {P70_EVA_BAND6_PROP,      DaikinEkhheComponent::EXT_PACKET_P70_IDX},
+  {P71_EC_FAN_SILENT_RED,   DaikinEkhheComponent::EXT_PACKET_P71_IDX},
+  {P72_EC_FAN_REG_GAIN,     DaikinEkhheComponent::EXT_PACKET_P72_IDX},
 };
 
 // int8_t variables

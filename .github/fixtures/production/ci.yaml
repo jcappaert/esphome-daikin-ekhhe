@@ -55,6 +55,12 @@ number:
   - platform: daikin_ekhhe
     low_water_hp_hysteris:
       name: "CI Lower water temp hysteresis"
+    evaporator_fan_defrost_speed_setpoint:
+      name: "CI P53 Evaporator Fan Defrost Speed"
+    low_pressure_switch_bypass_time:
+      name: "CI P54 Low Pressure Bypass Time"
+    ec_fan_speed_regulator_gain:
+      name: "CI P72 EC Fan Speed Regulator Gain"
 
 select:
   - platform: daikin_ekhhe
