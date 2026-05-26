@@ -256,6 +256,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     C1_PACKET_SIZE      = 51,
   };
 
+  enum EkhheC2Packet {
+    C2_PACKET_START_IDX = 0,
+    C2_PACKET_END       = 50,
+    C2_PACKET_SIZE      = 51,
+  };
+
   enum EkhheCCPacket {
     CC_PACKET_START_IDX = 0,
     CC_PACKET_MASK1_IDX = 1,
@@ -352,8 +358,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint8_t kPacketMaskD4 = 1 << 2;
   static constexpr uint8_t kPacketMaskC1 = 1 << 3;
   static constexpr uint8_t kPacketMaskCC = 1 << 4;
+  static constexpr uint8_t kPacketMaskC2 = 1 << 5;
   static constexpr uint8_t kRequiredPacketMask = kPacketMaskDD | kPacketMaskD2 | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskCC;
-  static constexpr uint8_t kChecksumPacketMask = kPacketMaskDD | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskCC;
+  static constexpr uint8_t kChecksumPacketMask = kPacketMaskDD | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskC2 | kPacketMaskCC;
 
   // variables for sensors etc.
   std::map<std::string, esphome::sensor::Sensor *> sensors_;
@@ -437,6 +444,19 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     PROFILE_RESTORE,
     RESTORE_DEFAULTS,
   };
+  enum class TxPacketFamily : uint8_t {
+    MAIN,
+    EXTENDED,
+  };
+  struct TxPacketFamilySpec {
+    TxPacketFamily family;
+    uint8_t base_packet_type;
+    uint8_t write_packet_type;
+    uint8_t readback_packet_type;
+    uint8_t packet_size;
+    const char *label;
+  };
+  const TxPacketFamilySpec &tx_packet_family_spec_(TxPacketFamily family) const;
   void send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
                                 uint8_t index, uint8_t value, uint8_t bit_position,
                                 uint8_t attempts_sent);
@@ -471,6 +491,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::vector<uint8_t> last_dd_packet_;
   std::vector<uint8_t> last_cc_packet_;  // Always store CC for sending commands
   std::vector<uint8_t> last_c1_packet_;
+  std::vector<uint8_t> last_c2_packet_;
   std::vector<uint8_t> last_d4_packet_;
   std::map<uint8_t, std::vector<uint8_t>> latest_packets_;
 

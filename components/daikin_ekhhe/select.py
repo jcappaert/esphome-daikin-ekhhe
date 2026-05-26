@@ -42,7 +42,7 @@ DaikinEkhheDebugSelect = daikin_ekhhe_ns.class_(
     "DaikinEkhheDebugSelect", select.Select, cg.Component
     )
 
-DEBUG_PACKET_OPTIONS = ["latest", "DD", "D2", "D4", "C1", "CC"]
+DEBUG_PACKET_OPTIONS = ["latest", "DD", "D2", "D4", "C1", "C2", "CC", "CD"]
 
 
 # taken from tuya select

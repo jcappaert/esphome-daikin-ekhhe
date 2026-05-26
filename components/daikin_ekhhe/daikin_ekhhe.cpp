@@ -22,6 +22,7 @@ static const uint8_t DD_PACKET_START_BYTE = 0xDD;
 static const uint8_t D2_PACKET_START_BYTE = 0xD2;
 static const uint8_t D4_PACKET_START_BYTE = 0xD4;
 static const uint8_t C1_PACKET_START_BYTE = 0xC1;
+static const uint8_t C2_PACKET_START_BYTE = 0xC2;
 static const uint8_t CC_PACKET_START_BYTE = 0xCC;
 static const uint8_t CD_PACKET_START_BYTE = 0xCD;
 
@@ -32,6 +33,7 @@ static const std::map<uint8_t, uint8_t> PACKET_SIZES = {
     {D2_PACKET_START_BYTE, DaikinEkhheComponent::D2_PACKET_SIZE},
     {D4_PACKET_START_BYTE, DaikinEkhheComponent::D4_PACKET_SIZE},
     {C1_PACKET_START_BYTE, DaikinEkhheComponent::C1_PACKET_SIZE},
+    {C2_PACKET_START_BYTE, DaikinEkhheComponent::C2_PACKET_SIZE},
     {CC_PACKET_START_BYTE, DaikinEkhheComponent::CC_PACKET_SIZE},
     {CD_PACKET_START_BYTE, DaikinEkhheComponent::CD_PACKET_SIZE},
 };
@@ -629,6 +631,9 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   if (byte == CC_PACKET_START_BYTE) {
     last_cc_profile_ms_ = now_ms;
   }
+  if (byte == C2_PACKET_START_BYTE) {
+    last_c2_packet_ = packet;
+  }
   if (byte == D2_PACKET_START_BYTE && pending_restore_.active) {
     check_pending_restore_(packet);
   }
@@ -754,6 +759,8 @@ uint8_t DaikinEkhheComponent::packet_mask_for_start_(uint8_t start_byte) const {
       return kPacketMaskD4;
     case C1_PACKET_START_BYTE:
       return kPacketMaskC1;
+    case C2_PACKET_START_BYTE:
+      return kPacketMaskC2;
     case CC_PACKET_START_BYTE:
       return kPacketMaskCC;
     default:
@@ -767,6 +774,7 @@ std::string DaikinEkhheComponent::packet_mask_to_string_(uint8_t mask) const {
   if (mask & kPacketMaskD2) out += "D2,";
   if (mask & kPacketMaskD4) out += "D4,";
   if (mask & kPacketMaskC1) out += "C1,";
+  if (mask & kPacketMaskC2) out += "C2,";
   if (mask & kPacketMaskCC) out += "CC,";
   if (out.empty()) {
     return "none";
@@ -884,7 +892,9 @@ uint8_t DaikinEkhheComponent::packet_type_from_string_(const std::string &value)
   if (value == "D2") return D2_PACKET_START_BYTE;
   if (value == "D4") return D4_PACKET_START_BYTE;
   if (value == "C1") return C1_PACKET_START_BYTE;
+  if (value == "C2") return C2_PACKET_START_BYTE;
   if (value == "CC") return CC_PACKET_START_BYTE;
+  if (value == "CD") return CD_PACKET_START_BYTE;
   return 0;
 }
 
@@ -898,6 +908,8 @@ std::string DaikinEkhheComponent::packet_type_to_string_(uint8_t packet_type) co
       return "D4";
     case C1_PACKET_START_BYTE:
       return "C1";
+    case C2_PACKET_START_BYTE:
+      return "C2";
     case CC_PACKET_START_BYTE:
       return "CC";
     case CD_PACKET_START_BYTE:
@@ -1532,6 +1544,13 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
       };
       return has_offset(c1_known, sizeof(c1_known) / sizeof(c1_known[0]), offset);
     }
+    case C2_PACKET_START_BYTE: {
+      static const uint8_t c2_known[] = {
+          C2_PACKET_START_IDX,
+          C2_PACKET_END,
+      };
+      return has_offset(c2_known, sizeof(c2_known) / sizeof(c2_known[0]), offset);
+    }
     case CC_PACKET_START_BYTE: {
       static const uint8_t cc_known[] = {
           CC_PACKET_START_IDX,
@@ -1598,6 +1617,28 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
     default:
       return false;
   }
+}
+
+const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_family_spec_(
+    TxPacketFamily family) const {
+  static const TxPacketFamilySpec main_family = {
+      TxPacketFamily::MAIN,
+      CC_PACKET_START_BYTE,
+      CD_PACKET_START_BYTE,
+      D2_PACKET_START_BYTE,
+      CD_PACKET_SIZE,
+      "main",
+  };
+  static const TxPacketFamilySpec extended_family = {
+      TxPacketFamily::EXTENDED,
+      C1_PACKET_START_BYTE,
+      C2_PACKET_START_BYTE,
+      D4_PACKET_START_BYTE,
+      C2_PACKET_SIZE,
+      "extended",
+  };
+
+  return family == TxPacketFamily::EXTENDED ? extended_family : main_family;
 }
 
 std::string DaikinEkhheComponent::format_unknown_fields_(const RawFrameEntry &entry) const {
