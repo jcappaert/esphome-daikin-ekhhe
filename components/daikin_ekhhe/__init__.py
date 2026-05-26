@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import uart, sensor
+from esphome.components import uart
 from esphome.const import (
     CONF_ID
 )
@@ -14,6 +14,7 @@ DEBUG_COMPONENTS = set()
 CODEOWNERS = ["@jcappaert"]
 
 DEPENDENCIES = ["uart"]
+AUTO_LOAD = ["binary_sensor", "number", "select", "sensor", "text_sensor"]
 
 daikin_ekhhe_ns = cg.esphome_ns.namespace("daikin_ekkhe")
 DaikinEkhhe = daikin_ekhhe_ns.class_("DaikinEkhheComponent", cg.Component, uart.UARTDevice)
