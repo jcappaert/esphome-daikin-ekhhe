@@ -14,7 +14,7 @@ DEBUG_COMPONENTS = set()
 CODEOWNERS = ["@jcappaert"]
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["binary_sensor", "number", "select", "sensor", "text_sensor"]
+AUTO_LOAD = ["binary_sensor", "number", "select", "sensor", "text_sensor", "time"]
 
 daikin_ekhhe_ns = cg.esphome_ns.namespace("daikin_ekkhe")
 DaikinEkhhe = daikin_ekhhe_ns.class_("DaikinEkhheComponent", cg.Component, uart.UARTDevice)
