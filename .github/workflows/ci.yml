@@ -34,6 +34,12 @@ jobs:
       - name: Compile production firmware
         run: esphome compile .github/fixtures/production/ci.yaml
 
+      - name: Validate minimal config
+        run: esphome config .github/fixtures/minimal/ci.yaml
+
+      - name: Compile minimal firmware
+        run: esphome compile .github/fixtures/minimal/ci.yaml
+
       - name: Validate debug config
         run: esphome config .github/fixtures/debug/ci.yaml
 
