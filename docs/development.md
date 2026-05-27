@@ -69,18 +69,6 @@ When adding newly decoded fields:
 - Update `docs/configuration.md` if the user-facing entity set changes.
 - Update `docs/protocol.md` if the finding changes packet-family understanding.
 
-## Documentation Work
-
-Keep the README short and user-facing. Put deeper details in:
-
-- [hardware](hardware.md)
-- [configuration](configuration.md)
-- [operations](operations.md)
-- [protocol](protocol.md)
-- [development](development.md)
-
-Avoid committing private lab hostnames, local IP addresses, Wi-Fi names, passwords, capture files with sensitive deployment details, or generated build artifacts.
-
 ## CI Notes
 
 The workflow caches Python dependencies and PlatformIO packages to keep ESPHome compilation reasonably fast. The minimal fixture is especially important because it catches accidental hard dependencies on optional entities.
