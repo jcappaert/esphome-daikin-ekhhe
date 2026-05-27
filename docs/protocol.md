@@ -2,31 +2,37 @@
 
 This document summarizes the current reverse-engineering model for the Daikin EKHHE / Altherma M HW display bus. It is a working protocol reference, not an official Daikin specification.
 
-## Confidence Levels
+## Protocol Overview
 
-Strong observations:
+The bus appears to be a structured conversation between the display/UI board and the main control board. The control board publishes state and readback packets, and the UI normally answers with packets that mirror or acknowledge that state. When a setting changes, the UI-side packet in that part of the cycle is replaced by a write packet until the main control board reports the changed value back.
+
+Bus observations:
 
 - The bus has a repeating multi-packet cycle.
 - `D2` and `CC` carry closely related main settings/state.
 - `D4` and `C1` carry closely related extended settings/state.
+- `Cx` packets are display/UI-originated and `Dx` packets are control-board-originated.
 - UI-originated main-setting writes use `CD` in the normal UI response slot.
 - UI-originated extended-setting writes use `C2` with the same payload schema as `C1`.
 - Writes are confirmed by later controller readback, not by seeing the transmit packet itself.
-
-Moderate observations:
-
-- `Cx` packets are display/UI-originated and `Dx` packets are control-board-originated.
 - The UI appears to repeat write packets once per cycle until readback reflects the requested value.
 - `CC` is the UI's normal response to `D2`, while `CD` is the modified response used for pending main-setting writes.
 - `C1` is the UI's normal extended-state packet, while `C2` is the modified packet used for pending extended-setting writes.
 
-Still open:
+## Bus Unknowns
 
-- Full fault and protection-code decoding.
-- Some status-only fields in `DD`.
-- Whether all units and firmware revisions use identical timing margins.
+The following areas still need reverse engineering:
+
+- Detailed status flags.
+- Detailed equipment/component state, such as fan state and other internal actuators.
+- Fault codes, error codes, and protection codes.
+- Status-only fields in `DD`.
+- Remaining unknown or partially decoded bitmasks.
+- Device identity fields such as model/type, serial number, or additional software versions if present.
 
 ## Packet Families
+
+The currently useful mental model is to group packets by ownership and purpose. `Dx` packets come from the main control board and are the authoritative readback source. `Cx` packets come from the display/UI side. In idle operation, the UI-side packets echo or return the current values. During a setting change, the UI-side packet for that family changes into a write packet.
 
 | Family | Control/readback packet | Idle UI packet | UI write packet | Payload size |
 | --- | --- | --- | --- | ---: |
@@ -34,7 +40,7 @@ Still open:
 | Main settings | `D2` | `CC` | `CD` | 71 |
 | Extended settings | `D4` | `C1` | `C2` | 51 |
 
-The implementation uses these families when selecting a write packet and readback confirmation packet.
+The implementation uses these families when selecting the packet to send and the packet to trust for confirmation.
 
 ## Observed Idle Cycle
 
@@ -54,9 +60,9 @@ Typical inter-packet timings from captures:
 | `D2 -> CC` | 138 to 143 ms |
 | `CC -> D4` | 337 to 341 ms |
 
-Some captures showed slight ordering variation, so implementation should reason in terms of packet family and readback packet rather than one rigid global sequence.
-
 ## Main-Block Writes: `CC` / `CD` / `D2`
+
+The main settings block is the best understood write path. In idle operation, the main control board sends `D2` and the UI responds with `CC`. When the UI changes a main-block setting, that normal response becomes `CD`. The changed value is not considered applied until it comes back from the control board in a later `D2`.
 
 Normal idle behavior:
 
@@ -70,7 +76,7 @@ Main-setting write behavior:
 ... D2 -> CD -> D4 -> DD -> C1 -> D2 -> ...
 ```
 
-Observed UI behavior:
+Observed write behavior:
 
 - `CD` appears in the normal `D2 -> Cx` response slot.
 - Repeated `CD` packets are separated by normal cycle traffic.
@@ -81,7 +87,9 @@ The current model is that the UI sends one `CD` per cycle while an edit is pendi
 
 ## Extended-Block Writes: `C1` / `C2` / `D4`
 
-Targeted captures confirmed a second write packet family:
+The extended settings block follows the same principle with a different packet family. `D4` is the control-board readback packet and `C1` is the normal UI-side packet. When the UI changes an extended setting, the UI-side packet becomes `C2`. The changed value is confirmed against a later `D4`.
+
+Known extended write-packet properties:
 
 - `C2` has start byte `0xC2`.
 - `C2` length is 51 bytes.
