@@ -1,0 +1,72 @@
+esphome:
+  name: daikin-ekhhe
+  friendly_name: Daikin EKHHE
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/jcappaert/esphome-daikin-ekhhe
+      ref: main
+    components: [daikin_ekhhe]
+
+uart:
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+  id: my_uart
+
+daikin_ekhhe:
+  - id: daikin_component
+    update_interval: 10
+    mode: production
+
+sensor:
+  - platform: daikin_ekhhe
+    low_water_temp_probe:
+      name: "Lower water temperature"
+    upper_water_temp_probe:
+      name: "Upper water temperature"
+
+binary_sensor:
+  - platform: daikin_ekhhe
+    hp_active:
+      name: "Heat pump active"
+    eh_active:
+      name: "Electric heater active"
+
+number:
+  - platform: daikin_ekhhe
+    auto_target_temperature:
+      name: "Auto mode target temperature"
+    eco_target_temperature:
+      name: "Eco mode target temperature"
+    boost_target_temperature:
+      name: "Boost mode target temperature"
+    electric_target_temperature:
+      name: "Electric mode target temperature"
+
+select:
+  - platform: daikin_ekhhe
+    power_status:
+      name: "Power status"
+    operational_mode:
+      name: "Operational mode"
