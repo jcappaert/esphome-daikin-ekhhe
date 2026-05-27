@@ -186,12 +186,3 @@ daikin_ekhhe:
 ```
 
 Debug mode enables raw frame inspection entities when they are also declared in YAML. By default `update_interval` is still respected in debug mode. Set `continuous_rx: true` only when you need continuous bus capture for troubleshooting or reverse engineering.
-
-## Production Defaults
-
-For normal use:
-
-- Use `mode: production`.
-- Leave `continuous_rx` unset.
-- Leave `tx_send_calibration` at its default unless write confirmation is unreliable.
-- Prefer the minimal example first, then add entities from the full example as needed.
