@@ -72,7 +72,7 @@ Diagnostic text sensors:
 * daikin_auto_snapshot_status
 
 ### Example YAML files
-See `example-production.yaml` and `example-debug.yaml` in the repository root.
+See `examples/production.yaml`, `examples/minimal.yaml`, and `examples/debug.yaml`.
 
 If all goes well, you should get something like this in the UI (there are a lot of paramters and variables ...):
 ![esphome UI example](https://github.com/jcappaert/esphome-daikin-ekhhe/blob/main/images/ekhhe_all.PNG)
