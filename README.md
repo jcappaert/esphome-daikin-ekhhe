@@ -8,6 +8,8 @@ ESPHome external component for Daikin EKHHE domestic hot water heat pumps, also 
 
 The component exposes known heat-pump readings, operating controls, installer parameters, target temperatures, recovery buttons, and debug tools through ESPHome and Home Assistant.
 
+<!-- Screenshot placeholder: add refreshed Home Assistant overview screenshot here before release. -->
+
 ## Status And Safety
 
 This project is experimental and reverse engineered. It has been tested primarily with an `EKHHE260PCV37`.
@@ -30,18 +32,15 @@ Recommended safety steps:
 - Number entities for known numeric installer parameters, target temperatures, and TX timing calibration.
 - Persistent known-good and automatic recovery snapshots for managed settings.
 - Restore-defaults button for documented default values in the supported main settings block.
-- Debug mode with raw packet capture, frame metadata, packet diffs, and bus health counters.
-- Support for both known write packet families:
-  - Main settings: `CC` base, `CD` write, `D2` readback.
-  - Extended settings: `C1` base, `C2` write, `D4` readback.
+- Debug mode with diagnostic logging and bus health counters.
 
 ## Hardware
 
-You need an ESP32 with a UART connected through an RS485 transceiver to the display bus. The original display must remain connected.
+You need an ESP32 with a UART connected through an RS485 transceiver to the display bus on connector `CN23`. The original display must remain connected.
 
 Typical wiring uses:
 
-- RS485 `A`, `B`, and `GND` tapped from the display bus connector.
+- RS485 `A`, `B`, and `GND` tapped from `CN23`.
 - ESP32 UART RX/TX connected to the RS485 transceiver.
 - A suitable 5 V or 3.3 V power arrangement for your ESP32 board.
 
@@ -106,18 +105,8 @@ For complete starting points, use:
 - [Hardware](docs/hardware.md): RS485 wiring, display-bus tap, and installation cautions.
 - [Configuration](docs/configuration.md): YAML options, examples, entity groups, debug mode, and TX timing.
 - [Operations](docs/operations.md): writes, retries, profiles, restore defaults, and troubleshooting.
-- [Protocol](docs/protocol.md): reverse-engineered packet families, cycle timing, and write behavior.
+- [Protocol](docs/protocol.md): reverse-engineering notes for contributors.
 - [Development](docs/development.md): local validation, CI fixtures, and debugging workflow.
-
-## Screenshots
-
-Current screenshots are being refreshed.
-
-Planned image slots:
-
-- Home Assistant overview with the minimal entity set.
-- Production entity set with grouped settings.
-- Debug mode packet inspection entities.
 
 ## Credits
 
