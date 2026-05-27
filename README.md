@@ -102,6 +102,8 @@ For complete starting points, use:
 
 ## Documentation
 
+The links below are ordered as the recommended reading path for new users and contributors.
+
 - [Hardware](docs/hardware.md): RS485 wiring, display-bus tap, and installation cautions.
 - [Configuration](docs/configuration.md): YAML options, examples, entity groups, debug mode, and TX timing.
 - [Operations](docs/operations.md): writes, retries, profiles, restore defaults, and troubleshooting.
