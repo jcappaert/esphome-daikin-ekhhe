@@ -43,11 +43,13 @@ daikin_ekhhe:
 
 The optional `tx_send_calibration` number entity can expose this timing in Home Assistant for testing. Changes made through the number entity apply immediately but are not persisted unless you also update YAML.
 
-## Core Entity Groups
+## Entity Groups
 
-### Sensors
+Entities are optional and are declared under the normal ESPHome platforms (`sensor`, `binary_sensor`, `select`, `number`, `button`, and `text_sensor`). The groups below are organized by device functionality instead of YAML platform.
 
-The component exposes known probe and runtime readings:
+### Temperature And Runtime Readings
+
+Useful read-only values for monitoring the heat pump:
 
 - `low_water_temp_probe`
 - `upper_water_temp_probe`
@@ -59,26 +61,51 @@ The component exposes known probe and runtime readings:
 - `solar_collector_temp_probe`
 - `eev_opening_step`
 
-### Binary Sensors
+### Basic Operation
 
-Normal binary sensors:
+Common day-to-day controls and state indicators:
+
+- `power_status`
+- `operational_mode`
+- `hp_active`
+- `eh_active`
+- `vacation_days`
+
+### Target Temperatures
+
+Writable target temperatures for the operating modes:
+
+- `auto_target_temperature`
+- `eco_target_temperature`
+- `boost_target_temperature`
+- `electric_target_temperature`
+
+### Digital Input Configuration
+
+Configuration and status related to the digital inputs:
 
 - `dig1_config`
 - `dig2_config`
 - `dig3_config`
-- `hp_active`
-- `eh_active`
+- `dig1_hp_start_delay`
+- `dig1_low_water_temp_threshold`
 
-Debug-only binary sensor:
+### Installer Parameters
 
-- `dd_heating_demand`
+The component exposes known installer parameters as either numbers or selects depending on how the parameter behaves in the Daikin UI.
 
-### Selects
+Writable numeric parameters currently include:
 
-Normal selects:
+- `P1-P4`
+- `P7-P10`
+- `P17-P22`
+- `P25-P32`
+- `P34-P38`
+- `P40-P57`
+- `P59-P72`
 
-- `power_status`
-- `operational_mode`
+Menu-style parameters currently include:
+
 - `defrosting_mode`
 - `elec_heater_during_defrosting`
 - `display_water_probe_temp`
@@ -93,57 +120,59 @@ Normal selects:
 - `eev_control_mode`
 - `evaporator_fan_compressor_off_mode`
 
-Debug-only select:
+The menu-style list corresponds to `P5`, `P6`, `P11-P16`, `P23`, `P24`, `P33`, `P39`, and `P58`.
 
-- `daikin_debug_packet`
+### Firmware And Clock
 
-### Numbers
+Diagnostic identity and time values:
 
-Number entities include writable numeric installer parameters, target temperatures, vacation days, and optional timing calibration.
+- `current_time`
+- `power_board_firmware_version`
+- `ui_firmware_version`
 
-Supported settings currently include `P1-P4`, `P7-P10`, `P17-P22`, `P25-P32`, `P34-P38`, `P40-P57`, and `P59-P72`. `P5`, `P6`, `P11-P16`, `P23`, `P24`, `P33`, `P39`, and `P58` are exposed as selects.
+### Recovery And Maintenance
 
-Target temperature numbers:
-
-- `auto_target_temperature`
-- `eco_target_temperature`
-- `boost_target_temperature`
-- `electric_target_temperature`
-
-Other optional numbers:
-
-- `vacation_days`
-- `tx_send_calibration`
-
-### Buttons
-
-Maintenance and recovery buttons:
+Recovery controls and status entities:
 
 - `daikin_restore_default_settings`
 - `daikin_save_known_good_profile`
 - `daikin_restore_known_good_profile`
 - `daikin_restore_auto_snapshot`
-
-Read [operations](operations.md) before enabling or pressing restore buttons.
-
-### Text Sensors
-
-Normal and diagnostic text sensors:
-
-- `current_time`
-- `power_board_firmware_version`
-- `ui_firmware_version`
 - `daikin_known_good_profile_status`
 - `daikin_auto_snapshot_status`
 
-Debug-only text sensors:
+Read [operations](operations.md) before enabling or pressing restore buttons.
+
+### TX Timing
+
+Optional timing calibration:
+
+- `tx_send_calibration`
+
+This can be useful if read values work but writes repeatedly fail on your specific ESP32 or RS485 setup.
+
+### Debug And Reverse Engineering
+
+Debug-only entities:
 
 - `daikin_raw_frame_hex`
 - `daikin_raw_frame_meta`
 - `daikin_unknown_fields`
 - `daikin_frame_diff`
+- `daikin_debug_packet`
+- `daikin_debug_freeze`
+- `dd_heating_demand`
 - `dd_b1_text_sensor`
 - `dd_b5_text_sensor`
+- `frames_captured_total`
+- `frames_dropped_total`
+- `frames_truncated_total`
+- `crc_errors_total`
+- `framing_errors_total`
+- `bytes_captured_total`
+- `cycle_parse_time_ms`
+- `cycle_total_time_ms`
+- `cycle_over_budget_total`
 
 ## Debug Mode
 
