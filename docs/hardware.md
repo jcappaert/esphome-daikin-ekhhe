@@ -6,14 +6,14 @@ This component listens and writes on the RS485 bus between the Daikin EKHHE cont
 
 - ESP32 board. The examples use an ESP32-C3 devkit.
 - UART-to-RS485 transceiver module.
-- Connection to the display bus `A`, `B`, and `GND` lines.
+- Connection to the display bus `A`, `B`, and `GND` lines connected to the main board on CN23.
 - Power for the ESP32 board from a suitable local supply.
 
 The original display should remain connected because it is an active participant in the bus protocol and remains the best way to verify settings locally.
 
 ## Wiring Notes
 
-Earlier EKHHE reverse-engineering notes identify `CN23` as the display RS485 connection with `A`, `B`, and `GND`. Some installations may also be able to source low-voltage power from nearby connectors such as `CN21` or `CN22`, but you must verify this on your own unit and board revision before using it.
+Some installations may also be able to source low-voltage power from nearby connectors such as `CN21` or `CN22`, but you must verify this on your own unit and board revision before using it and make sure it's appropriate for your ESP32 board.
 
 Typical UART settings:
 
@@ -30,14 +30,14 @@ uart:
 If you receive no valid frames, try these checks first:
 
 - Confirm ESP32 RX/TX are connected to the RS485 module correctly.
-- Confirm the RS485 module direction control, if present, is wired or configured correctly.
+- Confirm the RS485 module direction control or enable line, if present, is wired or configured correctly.
 - Swap `A` and `B` if the adapter labels appear inverted.
 - Confirm ESP32 ground is connected to bus ground.
 - Confirm the original display still works normally.
 
 ## Safety Notes
 
-Power down the unit before modifying wiring. Avoid loose splices, floating grounds, and unsupported power taps. This project is reverse engineered and can write installer settings; wiring mistakes or incorrect settings can misconfigure or damage the device.
+Power down the unit before modifying wiring. Avoid loose splices, floating grounds, and unsupported power taps. This project is reverse engineered and can write installer settings. Wiring mistakes or incorrect settings can misconfigure or damage the device.
 
 ## Related Work
 

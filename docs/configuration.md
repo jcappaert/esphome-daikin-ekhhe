@@ -36,12 +36,12 @@ daikin_ekhhe:
 
 | Option | Default | Description |
 | --- | ---: | --- |
-| `update_interval` | `10` | Idle polling interval in seconds. Writes temporarily keep RX active until confirmation and UI sync complete. |
+| `update_interval` | `10` | Idle polling interval in seconds. Higher values can reduce CPU load on mroe constrained ESP variants. Writes temporarily keep RX active until confirmation and UI sync complete. |
 | `mode` | `production` | Use `production` for normal operation or `debug` to enable debug-only entities and logging paths. |
 | `continuous_rx` | `false` | Debug-only option. When true in debug mode, RX keeps running continuously instead of respecting `update_interval`. |
-| `tx_send_calibration` | `75` | Delay in milliseconds used when scheduling write packets. Most users should leave this at the default unless diagnosing write failures. |
+| `tx_send_calibration` | `75` | Delay in milliseconds used when scheduling write packets. This might need to be calibrated for your specific ESP32 chip if parameters writes are not working. |
 
-The optional `tx_send_calibration` number entity can expose this timing in Home Assistant for testing. Changes made through the number entity apply immediately but are not persisted unless you also update YAML.
+The optional `tx_send_calibration` number entity can expose this timing as a Number. Changes made through the number entity apply immediately but are not persisted unless you also update YAML.
 
 ## Entity Groups
 
