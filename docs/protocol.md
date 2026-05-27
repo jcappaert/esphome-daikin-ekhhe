@@ -120,17 +120,6 @@ The component treats writes as temporary UI-side responses:
 
 For now, both `CD` and `C2` writes use the same `tx_send_calibration` timing option. If future captures show that the extended family needs materially different timing, a separate calibration should be added rather than guessed.
 
-## Firmware Version Fields
-
-Manual display readout showed firmware values `J = U14` and `L = U20` on the tested unit. Current best field matches:
-
-| UI field | Meaning | Packet byte | Published value |
-| --- | --- | --- | --- |
-| `J` | Power-board firmware version | `DD[39]` | `U<DD[39]>` |
-| `L` | UI firmware version | `CC[66]` | `U<CC[66]>` |
-
-These are identity-style fields rather than controllable settings. Cross-device captures are useful for extra confirmation.
-
 ## Implementation Implications
 
 - Do not treat successful UART transmit as successful setting application.
