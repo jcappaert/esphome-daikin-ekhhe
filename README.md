@@ -29,8 +29,9 @@ in flight.
 
 `tx_send_calibration` adjusts the delay, in milliseconds, used when sending write packets on the bus. The default is
 `75`. Most users should not need to change it, but it can help tune write reliability on units with slightly different
-bus timing. The optional `tx_send_calibration` number entity can be enabled while testing; changes apply immediately
-but are not persisted unless the value is also written into YAML.
+bus timing. The same timing is used for both supported write packet families (`CD` and `C2`). The optional
+`tx_send_calibration` number entity can be enabled while testing; changes apply immediately but are not persisted unless
+the value is also written into YAML.
 
 ## Debug / Reverse Engineering
 There is a debug mode that enables internal raw UART capture and optional Home Assistant entities for inspection. These
@@ -55,7 +56,7 @@ Sensors:
 * cycle_over_budget_total
 
 Controls:
-* daikin_debug_packet (select: latest, DD, D2, D4, C1, CC)
+* daikin_debug_packet (select: latest, DD, D2, D4, C1, C2, CC, CD)
 * daikin_debug_freeze (switch)
 
 Normal maintenance button:
@@ -65,6 +66,8 @@ Normal maintenance button:
 * daikin_restore_auto_snapshot (button)
 
 Diagnostic text sensors:
+* power_board_firmware_version
+* ui_firmware_version
 * daikin_known_good_profile_status
 * daikin_auto_snapshot_status
 
@@ -86,6 +89,10 @@ This restore is sent and confirmed as one batch operation, not as a loop of indi
 that scope, such as the current operating mode, power state, clock values, and vacation days, are preserved from the
 latest `CC` base packet.
 
+Extended settings `P53` and `P55-P72` are not included in this batch restore yet. They are writable as individual
+settings through the `C2` packet path, but factory-default and profile restore support for the extended packet family is
+planned separately.
+
 **!! WARNING !!**: this button rewrites many installer parameters at once. Use it only when you really intend to
 restore those settings to their documented defaults.
 
@@ -98,31 +105,39 @@ A lot of the protocol reverse engineering has been done by lorbetzki [here](http
 ## RX/TX behavior
 The component listens on the UART/RS485 bus and processes a repeating read cycle. Each cycle collects a set of packet
 types (DD, D2, D4, C1, CC). Frames are assembled by detecting a start byte and then reading the expected length from
-the packet size table. Packets that require a checksum are validated before they are accepted into the cycle set.
+the packet size table. Packets that require a checksum are validated before they are accepted into the cycle set. A
+`C2` packet may also appear during writes, but it is not required for a normal idle cycle.
 
 When all required packets are present, parsing runs and sensors are updated. The latest valid CC packet is always
-stored because it is also the base for writes.
+stored because it is the base for main-block writes. The latest valid C1 packet is also stored as the base for
+extended-block writes.
 
 When idle, RX follows `update_interval`. A write request bypasses that idle wait: it immediately starts an RX cycle if
 needed and then waits for the next observed D2 packet.
 
-For TX, the component reuses the last received CC packet, changes a single byte/bit (or prepares a managed full-packet
-restore), rewrites the checksum, and transmits a CD packet. The write is scheduled relative to the observed D2 packet
-rather than being sent immediately.
+For TX, individual settings now use one of two fixed packet families:
 
-Writes are confirmed from subsequent D2 readback, not from the transmit itself. For normal writes, the component checks
-the requested field. For restore-defaults and profile restores, it checks the whole managed field batch together. If
-the request is not yet present in D2, the component retries on later cycles, up to a small fixed maximum. If the value
-or restore batch still does not apply, it logs a warning. If it eventually applies after retries, it also logs a
-warning so that non-first-try writes are visible in the logs.
+* Main family: `CC` is the base packet, `CD` is transmitted, and success is confirmed from `D2`.
+* Extended family: `C1` is the base packet, `C2` is transmitted, and success is confirmed from `D4`.
+
+`P1-P52`, target temperatures, vacation days, and `P54` use the main family. `P53` and `P55-P72` use the extended
+family. For either family, the component changes a single byte/bit, rewrites the checksum, and schedules the write
+relative to the observed D2 packet rather than sending immediately.
+
+Writes are confirmed from controller readback, not from the transmit itself. For normal writes, the component checks the
+requested field in `D2` or `D4` depending on packet family. For restore-defaults and profile restores, it still checks
+the whole managed main-family field batch together. If the request is not yet present in readback, the component retries
+on later cycles, up to a small fixed maximum. If the value or restore batch still does not apply, it logs a warning. If
+it eventually applies after retries, it also logs a warning so that non-first-try writes are visible in the logs.
 
 Before normal single-field writes, the component can also store an automatic recovery snapshot in non-volatile storage.
 That auto-save is rate-limited and only occurs when the current managed fields differ from the stored auto snapshot.
 
-While a write is pending, and for a short UI-sync phase immediately after D2 confirms success, the component keeps RX
-alive even when `continuous_rx` is disabled. During that UI-sync phase, stale CC updates for the target field are
-suppressed until CC also reflects the applied value, so Home Assistant does not briefly jump back to the old value. If
-CC does not catch up after a few cycles, the UI-sync phase times out and normal polling resumes.
+While a write is pending, and for a short UI-sync phase immediately after readback confirms success, the component keeps
+RX alive even when `continuous_rx` is disabled. During that UI-sync phase, stale UI-originated updates for the target
+field are suppressed until `CC` or `C1` also reflects the applied value, so Home Assistant does not briefly jump back to
+the old value. If the UI packet does not catch up after a few cycles, the UI-sync phase times out and normal polling
+resumes.
 
 ## Persistent Profiles
 The component now supports two persistent profile slots stored in flash:
@@ -134,8 +149,9 @@ The component now supports two persistent profile slots stored in flash:
   - saved automatically before normal writes, subject to a cooldown and diff check
   - intended as an undo/recovery point
 
-Both profile restore buttons send one managed `CD` packet built from the current `CC` base packet plus the stored
-managed fields, rather than replaying stale runtime bytes such as the old clock value.
+Both profile restore buttons currently send one managed `CD` packet built from the current `CC` base packet plus the
+stored managed fields, rather than replaying stale runtime bytes such as the old clock value. Extended-family
+parameters (`P53`, `P55-P72`) are not included in persistent profiles yet.
 
 The diagnostic sensors `daikin_known_good_profile_status` and `daikin_auto_snapshot_status` report whether each slot is
 empty or valid.

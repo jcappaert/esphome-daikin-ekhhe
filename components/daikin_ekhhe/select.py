@@ -2,9 +2,8 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import select
 from esphome.const import (
-    CONF_ID,
     CONF_OPTIONS,
-    ENTITY_CATEGORY_DIAGNOSTIC
+    ENTITY_CATEGORY_DIAGNOSTIC,
 )
 
 from . import (
@@ -30,19 +29,20 @@ TYPES = [
     P16_SOLAR_MODE_INT,
     P23_PV_MODE_INT,
     P24_OFF_PEAK_MODE,
-    P33_EEV_CONTROL, 
+    P33_EEV_CONTROL,
     P39_EEV_MODE,
+    P58_EVA_FAN_COMP_OFF,
 ]
 
 
 DaikinEkhheSelect = daikin_ekhhe_ns.class_(
     "DaikinEkhheSelect", select.Select, cg.Component
-    )
+)
 DaikinEkhheDebugSelect = daikin_ekhhe_ns.class_(
     "DaikinEkhheDebugSelect", select.Select, cg.Component
-    )
+)
 
-DEBUG_PACKET_OPTIONS = ["latest", "DD", "D2", "D4", "C1", "CC"]
+DEBUG_PACKET_OPTIONS = ["latest", "DD", "D2", "D4", "C1", "C2", "CC", "CD"]
 
 
 # taken from tuya select
@@ -59,8 +59,6 @@ def ensure_option_map(value):
         raise cv.Invalid("Mapping values must be unique.")
 
     return value
-
-
 
 
 CONFIG_SCHEMA = (
@@ -123,6 +121,10 @@ CONFIG_SCHEMA = (
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'automatic', 1: 'manual'}): ensure_option_map
             }),
+            cv.Optional(P58_EVA_FAN_COMP_OFF): select.select_schema(DaikinEkhheSelect).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
+                cv.Optional(CONF_OPTIONS, default={0: 'Disabled', 1: 'Enabled', 2: 'Auto'}): ensure_option_map
+            }),
             cv.Optional(DAIKIN_DEBUG_PACKET): select.select_schema(
                 DaikinEkhheDebugSelect, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
@@ -144,13 +146,9 @@ async def setup_conf(config, key, hub):
         )
 
         cg.add(sens.set_select_mappings(cpp_map_expr))
-        #cg.add(sens.set_select_mappings(list(options_map.keys())))
-        #cg.add(sens.set_select_mappings(options_map))
         cg.add(getattr(hub, f"register_select")(key, sens))
         cg.add(sens.set_parent(hub))
         cg.add(sens.set_internal_id(key))
-
-
 
 async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])

@@ -133,6 +133,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_binary_sensor(const std::string &sensor_name, esphome::binary_sensor::BinarySensor *binary_sensor);
   void register_number(const std::string &number_name, esphome::number::Number *number);
   void register_select(const std::string &select_name, select::Select *select);
+  void register_text_sensor(const std::string &text_sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
@@ -157,6 +158,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   // Allow UART command sending for Number/Select control
   bool send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  bool send_uart_c2_command(uint8_t index, uint8_t value, uint8_t bit_position);
   void restore_default_settings();
   void save_known_good_profile();
   void restore_known_good_profile();
@@ -179,6 +181,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     DD_PACKET_H_IDX     = 14,
     DD_PACKET_I_IDX     = 18,
     DD_PACKET_DIG_IDX   = 21,
+    DD_PACKET_J_FW_IDX  = 39,
     DD_PACKET_END       = 40,
     DD_PACKET_SIZE      = 41,
   };
@@ -240,8 +243,31 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     D2_PACKET_P50_IDX   = 62,
     D2_PACKET_P51_IDX   = 63,
     D2_PACKET_P52_IDX   = 64,
-    D2_PACKET_END       = 70, 
+    D2_PACKET_P54_IDX   = 66,
+    D2_PACKET_END       = 70,
     D2_PACKET_SIZE      = 71,
+  };
+
+  enum EkhheExtendedParameterPacket {
+    EXT_PACKET_P53_IDX = 1,
+    EXT_PACKET_P71_IDX = 2,
+    EXT_PACKET_P58_IDX = 3,
+    EXT_PACKET_P59_IDX = 4,
+    EXT_PACKET_P56_IDX = 5,
+    EXT_PACKET_P57_IDX = 6,
+    EXT_PACKET_P60_IDX = 7,
+    EXT_PACKET_P61_IDX = 8,
+    EXT_PACKET_P62_IDX = 9,
+    EXT_PACKET_P63_IDX = 10,
+    EXT_PACKET_P64_IDX = 11,
+    EXT_PACKET_P65_IDX = 12,
+    EXT_PACKET_P55_IDX = 13,
+    EXT_PACKET_P66_IDX = 14,
+    EXT_PACKET_P67_IDX = 15,
+    EXT_PACKET_P68_IDX = 16,
+    EXT_PACKET_P69_IDX = 17,
+    EXT_PACKET_P70_IDX = 18,
+    EXT_PACKET_P72_IDX = 19,
   };
 
   enum EkhheD4Packet {
@@ -254,6 +280,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     C1_PACKET_START_IDX = 0,
     C1_PACKET_END       = 50,
     C1_PACKET_SIZE      = 51,
+  };
+
+  enum EkhheC2Packet {
+    C2_PACKET_START_IDX = 0,
+    C2_PACKET_END       = 50,
+    C2_PACKET_SIZE      = 51,
   };
 
   enum EkhheCCPacket {
@@ -310,11 +342,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     CC_PACKET_P47_IDX   = 60, 
     CC_PACKET_P48_IDX   = 61, 
     CC_PACKET_P49_IDX   = 62, 
-    CC_PACKET_P50_IDX   = 63, 
-    CC_PACKET_P51_IDX   = 64, 
+    CC_PACKET_P50_IDX   = 63,
+    CC_PACKET_P51_IDX   = 64,
     CC_PACKET_P52_IDX   = 65,
-    CC_PACKET_P54_IDX   = 60,
-    CC_PACKET_END       = 70, 
+    CC_PACKET_L_FW_IDX  = 66,
+    CC_PACKET_P54_IDX   = 68,
+    CC_PACKET_END       = 70,
     CC_PACKET_SIZE      = 71,
   };
 
@@ -352,14 +385,16 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint8_t kPacketMaskD4 = 1 << 2;
   static constexpr uint8_t kPacketMaskC1 = 1 << 3;
   static constexpr uint8_t kPacketMaskCC = 1 << 4;
+  static constexpr uint8_t kPacketMaskC2 = 1 << 5;
   static constexpr uint8_t kRequiredPacketMask = kPacketMaskDD | kPacketMaskD2 | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskCC;
-  static constexpr uint8_t kChecksumPacketMask = kPacketMaskDD | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskCC;
+  static constexpr uint8_t kChecksumPacketMask = kPacketMaskDD | kPacketMaskD4 | kPacketMaskC1 | kPacketMaskC2 | kPacketMaskCC;
 
   // variables for sensors etc.
   std::map<std::string, esphome::sensor::Sensor *> sensors_;
   std::map<std::string, esphome::binary_sensor::BinarySensor *> binary_sensors_;
   std::map<std::string, esphome::number::Number *> numbers_;
   std::map<std::string, DaikinEkhheSelect *> selects_;
+  std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
   std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
   std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
@@ -413,6 +448,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool auto_save_snapshot_if_needed_();
   void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
+  void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
   const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
   const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
@@ -437,18 +473,34 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     PROFILE_RESTORE,
     RESTORE_DEFAULTS,
   };
-  void send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
+  enum class TxPacketFamily : uint8_t {
+    MAIN,
+    EXTENDED,
+  };
+  struct TxPacketFamilySpec {
+    TxPacketFamily family;
+    uint8_t base_packet_type;
+    uint8_t write_packet_type;
+    uint8_t readback_packet_type;
+    uint8_t packet_size;
+    const char *label;
+  };
+  const TxPacketFamilySpec &tx_packet_family_spec_(TxPacketFamily family) const;
+  void send_prebuilt_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &command, TxPacketKind kind,
                                 uint8_t index, uint8_t value, uint8_t bit_position,
                                 uint8_t attempts_sent);
-  bool validate_outbound_cd_packet_(const std::vector<uint8_t> &base_packet,
+  bool validate_outbound_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                     const std::vector<uint8_t> &command, TxPacketKind kind,
                                     uint8_t index, uint8_t value, uint8_t bit_position,
                                     std::string &reason);
+  bool send_uart_command_(TxPacketFamily family, uint8_t index, uint8_t value, uint8_t bit_position);
+  void send_uart_tx_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet, bool apply_change,
+                            uint8_t index, uint8_t value, uint8_t bit_position);
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
                             uint8_t index, uint8_t value, uint8_t bit_position);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
-  bool defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position);
-  bool has_deferred_user_tx_(uint8_t index, uint8_t bit_position) const;
+  bool defer_single_field_tx_(TxPacketFamily family, uint8_t index, uint8_t value, uint8_t bit_position);
+  bool has_deferred_user_tx_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
   void send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
@@ -464,6 +516,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void reset_queued_restore_();
   void reset_pending_profile_restore_();
   void reset_queued_profile_restore_();
+  uint8_t tx_readback_index_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
+  uint8_t tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
   bool field_matches_target_(const std::vector<uint8_t> &buffer, uint8_t index, uint8_t value,
                              uint8_t bit_position) const;
 
@@ -471,6 +525,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::vector<uint8_t> last_dd_packet_;
   std::vector<uint8_t> last_cc_packet_;  // Always store CC for sending commands
   std::vector<uint8_t> last_c1_packet_;
+  std::vector<uint8_t> last_c2_packet_;
   std::vector<uint8_t> last_d4_packet_;
   std::map<uint8_t, std::vector<uint8_t>> latest_packets_;
 
@@ -525,6 +580,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 
   struct PendingTx {
     bool active = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
@@ -547,6 +603,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   PendingProfileRestore pending_profile_restore_;
   struct TxUiSync {
     bool active = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
@@ -567,6 +624,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
@@ -577,6 +635,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   };
   QueuedTx queued_tx_;
   struct DeferredTx {
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
@@ -648,6 +707,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, uint32_t> last_published_binary_ms_;
   std::map<std::string, std::string> last_published_select_values_;
   std::map<std::string, uint32_t> last_published_select_ms_;
+  std::map<std::string, std::string> last_published_text_values_;
+  std::map<std::string, uint32_t> last_published_text_ms_;
   std::string last_published_timestamp_;
   uint32_t last_published_timestamp_ms_ = 0;
   std::map<std::string, float> debug_last_published_values_;
@@ -701,11 +762,33 @@ static const std::map<std::string, uint8_t> U_NUMBER_PARAM_INDEX = {
   {P50_ANTIFREEZE_SET,      DaikinEkhheComponent::CC_PACKET_P50_IDX},
   {P51_EVA_HIGH_SET,        DaikinEkhheComponent::CC_PACKET_P51_IDX},
   {P52_EVA_LOW_SET,         DaikinEkhheComponent::CC_PACKET_P52_IDX},
+  {P54_LOW_PRESS_BYPASS,    DaikinEkhheComponent::CC_PACKET_P54_IDX},
   {ECO_T_TEMPERATURE,       DaikinEkhheComponent::CC_PACKET_ECO_TTARGET_IDX},
   {AUTO_T_TEMPERATURE,      DaikinEkhheComponent::CC_PACKET_AUTO_TTARGET_IDX},
   {BOOST_T_TEMPERATURE,     DaikinEkhheComponent::CC_PACKET_BOOST_TTGARGET_IDX},
   {ELECTRIC_T_TEMPERATURE,  DaikinEkhheComponent::CC_PACKET_ELECTRIC_TTARGET_IDX},
   {VAC_DAYS,                DaikinEkhheComponent::CC_PACKET_VAC_DAYS}
+};
+
+static const std::map<std::string, uint8_t> U_NUMBER_EXTENDED_PARAM_INDEX = {
+  {P53_EVA_FAN_DEFR_SPEED,  DaikinEkhheComponent::EXT_PACKET_P53_IDX},
+  {P55_EVA_BAND1_PROP,      DaikinEkhheComponent::EXT_PACKET_P55_IDX},
+  {P56_EVA_MAX_ACT_DELTA,   DaikinEkhheComponent::EXT_PACKET_P56_IDX},
+  {P57_EVA_MAX_DEACT_DELTA, DaikinEkhheComponent::EXT_PACKET_P57_IDX},
+  {P59_EVA_FAN_OFF_SPEED,   DaikinEkhheComponent::EXT_PACKET_P59_IDX},
+  {P60_EVA_AIR_DELTA1,      DaikinEkhheComponent::EXT_PACKET_P60_IDX},
+  {P61_EVA_AIR_DELTA2,      DaikinEkhheComponent::EXT_PACKET_P61_IDX},
+  {P62_EVA_AIR_DELTA3,      DaikinEkhheComponent::EXT_PACKET_P62_IDX},
+  {P63_EVA_AIR_DELTA4,      DaikinEkhheComponent::EXT_PACKET_P63_IDX},
+  {P64_EVA_AIR_DELTA5,      DaikinEkhheComponent::EXT_PACKET_P64_IDX},
+  {P65_EVA_AIR_DELTA6,      DaikinEkhheComponent::EXT_PACKET_P65_IDX},
+  {P66_EVA_BAND2_PROP,      DaikinEkhheComponent::EXT_PACKET_P66_IDX},
+  {P67_EVA_BAND3_PROP,      DaikinEkhheComponent::EXT_PACKET_P67_IDX},
+  {P68_EVA_BAND4_PROP,      DaikinEkhheComponent::EXT_PACKET_P68_IDX},
+  {P69_EVA_BAND5_PROP,      DaikinEkhheComponent::EXT_PACKET_P69_IDX},
+  {P70_EVA_BAND6_PROP,      DaikinEkhheComponent::EXT_PACKET_P70_IDX},
+  {P71_EC_FAN_SILENT_RED,   DaikinEkhheComponent::EXT_PACKET_P71_IDX},
+  {P72_EC_FAN_REG_GAIN,     DaikinEkhheComponent::EXT_PACKET_P72_IDX},
 };
 
 // int8_t variables
@@ -731,11 +814,15 @@ static const std::map<std::string, uint8_t> SELECT_PARAM_INDEX = {
   {P14_EVA_BLOWER_TYPE,  DaikinEkhheComponent::CC_PACKET_P14_IDX},
   {P16_SOLAR_MODE_INT,   DaikinEkhheComponent::CC_PACKET_P16_IDX},
   {P23_PV_MODE_INT,      DaikinEkhheComponent::CC_PACKET_P23_IDX},
-  {P24_OFF_PEAK_MODE,    DaikinEkhheComponent::CC_PACKET_P24_IDX}, 
+  {P24_OFF_PEAK_MODE,    DaikinEkhheComponent::CC_PACKET_P24_IDX},
+};
+
+static const std::map<std::string, uint8_t> SELECT_EXTENDED_PARAM_INDEX = {
+  {P58_EVA_FAN_COMP_OFF, DaikinEkhheComponent::EXT_PACKET_P58_IDX},
 };
 
 static const std::map<std::string, std::pair<uint8_t, uint8_t>> SELECT_BITMASKS = {
-  {POWER_STATUS,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 0}}, 
+  {POWER_STATUS,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 0}},
   {P39_EEV_MODE,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 2}},
   {P13_HW_CIRC_PUMP_MODE, {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 4}},
   {P11_DISP_WAT_T_PROBE,  {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 0}},

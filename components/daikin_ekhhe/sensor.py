@@ -1,22 +1,15 @@
 import esphome.codegen as cg
-from esphome.core import EnumValue
 import esphome.config_validation as cv
 from esphome.components import sensor
 from esphome.const import (
-    CONF_ID,
-    ICON_EMPTY,
     UNIT_EMPTY,
     UNIT_CELSIUS,
-    UNIT_PERCENT,
-    UNIT_MINUTE,
     UNIT_MILLISECOND,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_DURATION,
-    DEVICE_CLASS_TIMESTAMP,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
     ENTITY_CATEGORY_DIAGNOSTIC,
-    ENTITY_CATEGORY_NONE
 )
 
 from . import (
@@ -27,7 +20,7 @@ from . import (
 from .const import *
 
 TYPES = [
-    # sensor parametersr
+    # sensor parameters
     A_LOW_WAT_T_PROBE,
     B_UP_WAT_T_PROBE,
     C_DEFROST_T_PROBE,
@@ -37,8 +30,6 @@ TYPES = [
     G_COMP_GAS_T_PROBE,
     H_SOLAR_T_PROBE,
     I_EEV_STEP,
-    J_POWER_FW_VERSION,
-    L_UI_FW_VERSION,
 ]
 
 DEBUG_TYPES = [
@@ -114,20 +105,6 @@ CONFIG_SCHEMA = (
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
             ),
             cv.Optional(I_EEV_STEP): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                #device_class=DEVICE_CLASS_NONE,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
-            ),
-            cv.Optional(J_POWER_FW_VERSION): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                #device_class=DEVICE_CLASS_NONE,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
-            ),
-            cv.Optional(L_UI_FW_VERSION): sensor.sensor_schema(
                 unit_of_measurement=UNIT_EMPTY,
                 accuracy_decimals=0,
                 #device_class=DEVICE_CLASS_NONE,

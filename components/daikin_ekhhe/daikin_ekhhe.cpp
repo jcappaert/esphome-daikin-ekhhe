@@ -22,6 +22,7 @@ static const uint8_t DD_PACKET_START_BYTE = 0xDD;
 static const uint8_t D2_PACKET_START_BYTE = 0xD2;
 static const uint8_t D4_PACKET_START_BYTE = 0xD4;
 static const uint8_t C1_PACKET_START_BYTE = 0xC1;
+static const uint8_t C2_PACKET_START_BYTE = 0xC2;
 static const uint8_t CC_PACKET_START_BYTE = 0xCC;
 static const uint8_t CD_PACKET_START_BYTE = 0xCD;
 
@@ -32,6 +33,7 @@ static const std::map<uint8_t, uint8_t> PACKET_SIZES = {
     {D2_PACKET_START_BYTE, DaikinEkhheComponent::D2_PACKET_SIZE},
     {D4_PACKET_START_BYTE, DaikinEkhheComponent::D4_PACKET_SIZE},
     {C1_PACKET_START_BYTE, DaikinEkhheComponent::C1_PACKET_SIZE},
+    {C2_PACKET_START_BYTE, DaikinEkhheComponent::C2_PACKET_SIZE},
     {CC_PACKET_START_BYTE, DaikinEkhheComponent::CC_PACKET_SIZE},
     {CD_PACKET_START_BYTE, DaikinEkhheComponent::CD_PACKET_SIZE},
 };
@@ -364,6 +366,8 @@ static const ManagedFieldSpec PROFILE_MANAGED_FIELDS[] = {
      DaikinEkhheComponent::D2_PACKET_P51_IDX, BIT_POSITION_NO_BITMASK, 0},
     {"P52", DaikinEkhheComponent::CC_PACKET_P52_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_P52_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P54", DaikinEkhheComponent::CC_PACKET_P54_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::D2_PACKET_P54_IDX, BIT_POSITION_NO_BITMASK, 0},
     {"ECO_TARGET", DaikinEkhheComponent::CC_PACKET_ECO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_ECO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0},
     {"AUTO_TARGET", DaikinEkhheComponent::CC_PACKET_AUTO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0,
@@ -386,6 +390,21 @@ bool is_profile_managed_field(uint8_t cc_index, uint8_t bit_position) {
     }
   }
   return false;
+}
+
+const ManagedFieldSpec *find_managed_field_by_cc(uint8_t cc_index, uint8_t bit_position) {
+  for (const auto &field : PROFILE_MANAGED_FIELDS) {
+    if (field.cc_index != cc_index) {
+      continue;
+    }
+    if (bit_position == BIT_POSITION_NO_BITMASK && field.cc_bit_position == BIT_POSITION_NO_BITMASK) {
+      return &field;
+    }
+    if (bit_position != BIT_POSITION_NO_BITMASK && field.cc_bit_position == bit_position) {
+      return &field;
+    }
+  }
+  return nullptr;
 }
 
 constexpr uint32_t PROFILE_MAGIC = 0x454b4850U;
@@ -618,8 +637,13 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
       tx_waiting_for_first_rx_ = false;
     }
 
-    if (tx_operation_active_() && tx_waiting_for_first_cc_ && byte == CC_PACKET_START_BYTE) {
-      DAIKIN_DBG(TAG, "TX timing: first_cc_after_tx dt=%u", now_ms - tx_sent_ms_);
+    uint8_t tx_readback_type = D2_PACKET_START_BYTE;
+    if (pending_tx_.active) {
+      tx_readback_type = tx_packet_family_spec_(pending_tx_.family).readback_packet_type;
+    }
+    if (tx_operation_active_() && tx_waiting_for_first_cc_ && byte == tx_readback_type) {
+      DAIKIN_DBG(TAG, "TX timing: first_readback_after_tx type=%s dt=%u",
+                 type.c_str(), now_ms - tx_sent_ms_);
       tx_waiting_for_first_cc_ = false;
     }
   }
@@ -629,13 +653,16 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   if (byte == CC_PACKET_START_BYTE) {
     last_cc_profile_ms_ = now_ms;
   }
+  if (byte == C2_PACKET_START_BYTE) {
+    last_c2_packet_ = packet;
+  }
   if (byte == D2_PACKET_START_BYTE && pending_restore_.active) {
     check_pending_restore_(packet);
   }
   if (byte == D2_PACKET_START_BYTE && pending_profile_restore_.active) {
     check_pending_profile_restore_(packet);
   }
-  if (byte == D2_PACKET_START_BYTE && pending_tx_.active) {
+  if (pending_tx_.active && byte == tx_packet_family_spec_(pending_tx_.family).readback_packet_type) {
     check_pending_tx_(packet);
   }
   if (byte == D2_PACKET_START_BYTE &&
@@ -754,6 +781,8 @@ uint8_t DaikinEkhheComponent::packet_mask_for_start_(uint8_t start_byte) const {
       return kPacketMaskD4;
     case C1_PACKET_START_BYTE:
       return kPacketMaskC1;
+    case C2_PACKET_START_BYTE:
+      return kPacketMaskC2;
     case CC_PACKET_START_BYTE:
       return kPacketMaskCC;
     default:
@@ -767,6 +796,7 @@ std::string DaikinEkhheComponent::packet_mask_to_string_(uint8_t mask) const {
   if (mask & kPacketMaskD2) out += "D2,";
   if (mask & kPacketMaskD4) out += "D4,";
   if (mask & kPacketMaskC1) out += "C1,";
+  if (mask & kPacketMaskC2) out += "C2,";
   if (mask & kPacketMaskCC) out += "CC,";
   if (out.empty()) {
     return "none";
@@ -884,7 +914,9 @@ uint8_t DaikinEkhheComponent::packet_type_from_string_(const std::string &value)
   if (value == "D2") return D2_PACKET_START_BYTE;
   if (value == "D4") return D4_PACKET_START_BYTE;
   if (value == "C1") return C1_PACKET_START_BYTE;
+  if (value == "C2") return C2_PACKET_START_BYTE;
   if (value == "CC") return CC_PACKET_START_BYTE;
+  if (value == "CD") return CD_PACKET_START_BYTE;
   return 0;
 }
 
@@ -898,6 +930,8 @@ std::string DaikinEkhheComponent::packet_type_to_string_(uint8_t packet_type) co
       return "D4";
     case C1_PACKET_START_BYTE:
       return "C1";
+    case C2_PACKET_START_BYTE:
+      return "C2";
     case CC_PACKET_START_BYTE:
       return "CC";
     case CD_PACKET_START_BYTE:
@@ -1023,6 +1057,26 @@ bool DaikinEkhheComponent::field_matches_target_(const std::vector<uint8_t> &buf
   return bit == (value & 0x01);
 }
 
+uint8_t DaikinEkhheComponent::tx_readback_index_(TxPacketFamily family, uint8_t write_index,
+                                                 uint8_t bit_position) const {
+  if (family == TxPacketFamily::EXTENDED) {
+    return write_index;
+  }
+
+  const ManagedFieldSpec *field = find_managed_field_by_cc(write_index, bit_position);
+  return field != nullptr ? field->d2_index : write_index;
+}
+
+uint8_t DaikinEkhheComponent::tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index,
+                                                        uint8_t bit_position) const {
+  if (family == TxPacketFamily::EXTENDED || bit_position == BIT_POSITION_NO_BITMASK) {
+    return bit_position;
+  }
+
+  const ManagedFieldSpec *field = find_managed_field_by_cc(write_index, bit_position);
+  return field != nullptr ? field->d2_bit_position : bit_position;
+}
+
 bool DaikinEkhheComponent::tx_operation_active_() const {
   return pending_tx_.active || pending_restore_.active || pending_profile_restore_.active;
 }
@@ -1055,30 +1109,33 @@ void DaikinEkhheComponent::reset_queued_profile_restore_() {
   queued_profile_restore_.anchor_seq = 0;
 }
 
-bool DaikinEkhheComponent::defer_single_field_tx_(uint8_t index, uint8_t value, uint8_t bit_position) {
+bool DaikinEkhheComponent::defer_single_field_tx_(TxPacketFamily family, uint8_t index, uint8_t value,
+                                                  uint8_t bit_position) {
+  const auto &spec = tx_packet_family_spec_(family);
   for (auto &deferred : deferred_user_txs_) {
-    if (deferred.index == index && deferred.bit_position == bit_position) {
+    if (deferred.family == family && deferred.index == index && deferred.bit_position == bit_position) {
       deferred.value = value;
-      ESP_LOGI(TAG, "TX deferred write updated: index=%u value=0x%02X bit=%u queued=%u",
-               index, value, bit_position, static_cast<unsigned>(deferred_user_txs_.size()));
+      ESP_LOGI(TAG, "TX deferred write updated: family=%s index=%u value=0x%02X bit=%u queued=%u",
+               spec.label, index, value, bit_position, static_cast<unsigned>(deferred_user_txs_.size()));
       return true;
     }
   }
 
   if (deferred_user_txs_.size() >= kDeferredTxMax) {
-    DAIKIN_WARN(TAG, "TX deferred write queue full, dropping write: index=%u value=0x%02X bit=%u",
-                index, value, bit_position);
+    DAIKIN_WARN(TAG, "TX deferred write queue full, dropping write: family=%s index=%u value=0x%02X bit=%u",
+                spec.label, index, value, bit_position);
     return false;
   }
 
   DeferredTx deferred;
+  deferred.family = family;
   deferred.index = index;
   deferred.value = value;
   deferred.bit_position = bit_position;
   deferred_user_txs_.push_back(deferred);
 
-  ESP_LOGI(TAG, "TX deferred write queued: index=%u value=0x%02X bit=%u queued=%u",
-           index, value, bit_position, static_cast<unsigned>(deferred_user_txs_.size()));
+  ESP_LOGI(TAG, "TX deferred write queued: family=%s index=%u value=0x%02X bit=%u queued=%u",
+           spec.label, index, value, bit_position, static_cast<unsigned>(deferred_user_txs_.size()));
 
   if (!uart_active_ && !uart_tx_active_) {
     start_uart_cycle();
@@ -1087,9 +1144,9 @@ bool DaikinEkhheComponent::defer_single_field_tx_(uint8_t index, uint8_t value, 
   return true;
 }
 
-bool DaikinEkhheComponent::has_deferred_user_tx_(uint8_t index, uint8_t bit_position) const {
+bool DaikinEkhheComponent::has_deferred_user_tx_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const {
   for (const auto &deferred : deferred_user_txs_) {
-    if (deferred.index == index && deferred.bit_position == bit_position) {
+    if (deferred.family == family && deferred.index == index && deferred.bit_position == bit_position) {
       return true;
     }
   }
@@ -1109,11 +1166,12 @@ void DaikinEkhheComponent::flush_deferred_user_tx_() {
   DeferredTx deferred = deferred_user_txs_.front();
   deferred_user_txs_.erase(deferred_user_txs_.begin());
 
-  ESP_LOGI(TAG, "TX deferred write starting: index=%u value=0x%02X bit=%u remaining=%u",
-           deferred.index, deferred.value, deferred.bit_position,
+  const auto &spec = tx_packet_family_spec_(deferred.family);
+  ESP_LOGI(TAG, "TX deferred write starting: family=%s index=%u value=0x%02X bit=%u remaining=%u",
+           spec.label, deferred.index, deferred.value, deferred.bit_position,
            static_cast<unsigned>(deferred_user_txs_.size()));
 
-  send_uart_cc_command(deferred.index, deferred.value, deferred.bit_position);
+  send_uart_command_(deferred.family, deferred.index, deferred.value, deferred.bit_position);
 }
 
 void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry) {
@@ -1129,20 +1187,24 @@ void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_e
 
   queued_tx_.active = true;
   queued_tx_.scheduled = true;
+  queued_tx_.family = pending_tx_.family;
   queued_tx_.index = pending_tx_.index;
   queued_tx_.value = pending_tx_.value;
   queued_tx_.bit_position = pending_tx_.bit_position;
   queued_tx_.anchor_ms = d2_entry.timestamp_ms;
   queued_tx_.anchor_seq = d2_entry.seq;
 
-  DAIKIN_DBG(TAG, "TX scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
-             d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_tx_.request_ms);
+  const auto &pending_spec = tx_packet_family_spec_(pending_tx_.family);
+  DAIKIN_DBG(TAG, "TX scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
+             pending_spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_tx_.request_ms);
 
   set_timeout(delay_ms, [this, generation]() {
     if (!queued_tx_.active || queued_tx_.generation != generation) {
       return;
     }
 
+    TxPacketFamily family = queued_tx_.family;
+    const auto &spec = tx_packet_family_spec_(family);
     uint8_t index = queued_tx_.index;
     uint8_t value = queued_tx_.value;
     uint8_t bit_position = queued_tx_.bit_position;
@@ -1152,19 +1214,20 @@ void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_e
     queued_tx_.active = false;
     queued_tx_.scheduled = false;
 
-    std::vector<uint8_t> base_packet = last_cc_packet_;
-    auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
-    if (latest_cc != latest_packets_.end()) {
-      base_packet = latest_cc->second;
+    std::vector<uint8_t> base_packet = family == TxPacketFamily::EXTENDED ? last_c1_packet_ : last_cc_packet_;
+    auto latest_base = latest_packets_.find(spec.base_packet_type);
+    if (latest_base != latest_packets_.end()) {
+      base_packet = latest_base->second;
     }
 
     pending_tx_.attempts_sent++;
     pending_tx_.last_attempt_d2_seq = anchor_seq;
 
-    DAIKIN_DBG(TAG, "TX scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
-               anchor_seq, millis() - anchor_ms, pending_tx_.attempts_sent, kTxMaxRepeats,
-               latest_cc != latest_packets_.end());
-    send_uart_cc_packet_(base_packet, true, index, value, bit_position);
+    DAIKIN_DBG(TAG,
+               "TX scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
+               spec.label, anchor_seq, millis() - anchor_ms, pending_tx_.attempts_sent, kTxMaxRepeats,
+               latest_base != latest_packets_.end());
+    send_uart_tx_packet_(family, base_packet, true, index, value, bit_position);
   });
 }
 
@@ -1452,6 +1515,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           DD_PACKET_H_IDX,
           DD_PACKET_I_IDX,
           DD_PACKET_DIG_IDX,
+          DD_PACKET_J_FW_IDX,
           DD_PACKET_END,
       };
       return has_offset(dd_known, sizeof(dd_known) / sizeof(dd_known[0]), offset);
@@ -1514,6 +1578,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           D2_PACKET_P50_IDX,
           D2_PACKET_P51_IDX,
           D2_PACKET_P52_IDX,
+          D2_PACKET_P54_IDX,
           D2_PACKET_END,
       };
       return has_offset(d2_known, sizeof(d2_known) / sizeof(d2_known[0]), offset);
@@ -1521,6 +1586,25 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
     case D4_PACKET_START_BYTE: {
       static const uint8_t d4_known[] = {
           D4_PACKET_START_IDX,
+          EXT_PACKET_P53_IDX,
+          EXT_PACKET_P71_IDX,
+          EXT_PACKET_P58_IDX,
+          EXT_PACKET_P59_IDX,
+          EXT_PACKET_P56_IDX,
+          EXT_PACKET_P57_IDX,
+          EXT_PACKET_P60_IDX,
+          EXT_PACKET_P61_IDX,
+          EXT_PACKET_P62_IDX,
+          EXT_PACKET_P63_IDX,
+          EXT_PACKET_P64_IDX,
+          EXT_PACKET_P65_IDX,
+          EXT_PACKET_P55_IDX,
+          EXT_PACKET_P66_IDX,
+          EXT_PACKET_P67_IDX,
+          EXT_PACKET_P68_IDX,
+          EXT_PACKET_P69_IDX,
+          EXT_PACKET_P70_IDX,
+          EXT_PACKET_P72_IDX,
           D4_PACKET_END,
       };
       return has_offset(d4_known, sizeof(d4_known) / sizeof(d4_known[0]), offset);
@@ -1528,9 +1612,54 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
     case C1_PACKET_START_BYTE: {
       static const uint8_t c1_known[] = {
           C1_PACKET_START_IDX,
+          EXT_PACKET_P53_IDX,
+          EXT_PACKET_P71_IDX,
+          EXT_PACKET_P58_IDX,
+          EXT_PACKET_P59_IDX,
+          EXT_PACKET_P56_IDX,
+          EXT_PACKET_P57_IDX,
+          EXT_PACKET_P60_IDX,
+          EXT_PACKET_P61_IDX,
+          EXT_PACKET_P62_IDX,
+          EXT_PACKET_P63_IDX,
+          EXT_PACKET_P64_IDX,
+          EXT_PACKET_P65_IDX,
+          EXT_PACKET_P55_IDX,
+          EXT_PACKET_P66_IDX,
+          EXT_PACKET_P67_IDX,
+          EXT_PACKET_P68_IDX,
+          EXT_PACKET_P69_IDX,
+          EXT_PACKET_P70_IDX,
+          EXT_PACKET_P72_IDX,
           C1_PACKET_END,
       };
       return has_offset(c1_known, sizeof(c1_known) / sizeof(c1_known[0]), offset);
+    }
+    case C2_PACKET_START_BYTE: {
+      static const uint8_t c2_known[] = {
+          C2_PACKET_START_IDX,
+          EXT_PACKET_P53_IDX,
+          EXT_PACKET_P71_IDX,
+          EXT_PACKET_P58_IDX,
+          EXT_PACKET_P59_IDX,
+          EXT_PACKET_P56_IDX,
+          EXT_PACKET_P57_IDX,
+          EXT_PACKET_P60_IDX,
+          EXT_PACKET_P61_IDX,
+          EXT_PACKET_P62_IDX,
+          EXT_PACKET_P63_IDX,
+          EXT_PACKET_P64_IDX,
+          EXT_PACKET_P65_IDX,
+          EXT_PACKET_P55_IDX,
+          EXT_PACKET_P66_IDX,
+          EXT_PACKET_P67_IDX,
+          EXT_PACKET_P68_IDX,
+          EXT_PACKET_P69_IDX,
+          EXT_PACKET_P70_IDX,
+          EXT_PACKET_P72_IDX,
+          C2_PACKET_END,
+      };
+      return has_offset(c2_known, sizeof(c2_known) / sizeof(c2_known[0]), offset);
     }
     case CC_PACKET_START_BYTE: {
       static const uint8_t cc_known[] = {
@@ -1590,6 +1719,7 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           CC_PACKET_P50_IDX,
           CC_PACKET_P51_IDX,
           CC_PACKET_P52_IDX,
+          CC_PACKET_L_FW_IDX,
           CC_PACKET_P54_IDX,
           CC_PACKET_END,
       };
@@ -1598,6 +1728,28 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
     default:
       return false;
   }
+}
+
+const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_family_spec_(
+    TxPacketFamily family) const {
+  static const TxPacketFamilySpec main_family = {
+      TxPacketFamily::MAIN,
+      CC_PACKET_START_BYTE,
+      CD_PACKET_START_BYTE,
+      D2_PACKET_START_BYTE,
+      CD_PACKET_SIZE,
+      "main",
+  };
+  static const TxPacketFamilySpec extended_family = {
+      TxPacketFamily::EXTENDED,
+      C1_PACKET_START_BYTE,
+      C2_PACKET_START_BYTE,
+      D4_PACKET_START_BYTE,
+      C2_PACKET_SIZE,
+      "extended",
+  };
+
+  return family == TxPacketFamily::EXTENDED ? extended_family : main_family;
 }
 
 std::string DaikinEkhheComponent::format_unknown_fields_(const RawFrameEntry &entry) const {
@@ -2151,6 +2303,8 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
     set_sensor_value(entry.first, entry.second);
   }
 
+  set_text_sensor_value_(J_POWER_FW_VERSION, "U" + std::to_string(buffer[DD_PACKET_J_FW_IDX]));
+
   // update binary_sensors
   std::map<std::string, bool> binary_sensor_values = {
       {DIG1_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x01)},
@@ -2210,6 +2364,7 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
       {P50_ANTIFREEZE_SET,        buffer[D2_PACKET_P50_IDX]},
       {P51_EVA_HIGH_SET,          buffer[D2_PACKET_P51_IDX]},
       {P52_EVA_LOW_SET,           buffer[D2_PACKET_P52_IDX]},
+      {P54_LOW_PRESS_BYPASS,      buffer[D2_PACKET_P54_IDX]},
 
       {ECO_T_TEMPERATURE,         buffer[D2_PACKET_ECO_TTARGET_IDX]},
       {AUTO_T_TEMPERATURE,        buffer[D2_PACKET_AUTO_TTARGET_IDX]},
@@ -2254,18 +2409,63 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
 }
 
 void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
-  // STUB function only
-  return;
+  for (const auto &entry : U_NUMBER_EXTENDED_PARAM_INDEX) {
+    const std::string &param_name = entry.first;
+    uint8_t param_index = entry.second;
+    if (param_index >= buffer.size()) {
+      continue;
+    }
+    if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::EXTENDED &&
+         pending_tx_.index == param_index && pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
+        has_deferred_user_tx_(TxPacketFamily::EXTENDED, param_index, BIT_POSITION_NO_BITMASK)) {
+      continue;
+    }
+    set_number_value(param_name, buffer[param_index]);
+  }
+  for (const auto &entry : SELECT_EXTENDED_PARAM_INDEX) {
+    const std::string &param_name = entry.first;
+    uint8_t param_index = entry.second;
+    if (param_index >= buffer.size()) {
+      continue;
+    }
+    if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::EXTENDED &&
+         pending_tx_.index == param_index && pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
+        has_deferred_user_tx_(TxPacketFamily::EXTENDED, param_index, BIT_POSITION_NO_BITMASK)) {
+      continue;
+    }
+    set_select_value(param_name, buffer[param_index]);
+  }
 }
 
 void DaikinEkhheComponent::parse_c1_packet(std::vector<uint8_t> buffer) {
-  // STUB function only
-  return;
+  if (!tx_ui_sync_.active || tx_ui_sync_.family != TxPacketFamily::EXTENDED) {
+    return;
+  }
+
+  const bool c1_sync_matched =
+      field_matches_target_(buffer, tx_ui_sync_.index, tx_ui_sync_.value, tx_ui_sync_.bit_position);
+  if (c1_sync_matched) {
+    DAIKIN_DBG(TAG, "TX UI synced: family=extended index=%u bit=%u value=0x%02X c1_cycles=%u",
+               tx_ui_sync_.index, tx_ui_sync_.bit_position, tx_ui_sync_.value,
+               tx_ui_sync_.cycles_waited + 1);
+    tx_ui_sync_.active = false;
+    tx_ui_sync_.cycles_waited = 0;
+    return;
+  }
+
+  tx_ui_sync_.cycles_waited++;
+  if (tx_ui_sync_.cycles_waited >= kTxUiSyncMaxCycles) {
+    DAIKIN_WARN(TAG, "TX UI sync timeout: family=extended index=%u bit=%u value=0x%02X cycles=%u",
+                tx_ui_sync_.index, tx_ui_sync_.bit_position, tx_ui_sync_.value,
+                tx_ui_sync_.cycles_waited);
+    tx_ui_sync_.active = false;
+    tx_ui_sync_.cycles_waited = 0;
+  }
 }
 
 void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   const bool cc_sync_matched =
-      tx_ui_sync_.active &&
+      tx_ui_sync_.active && tx_ui_sync_.family == TxPacketFamily::MAIN &&
       field_matches_target_(buffer, tx_ui_sync_.index, tx_ui_sync_.value, tx_ui_sync_.bit_position);
   const bool restore_cc_sync_matched =
       restore_ui_sync_.active && restore_defaults_match_packet(buffer, false);
@@ -2280,9 +2480,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : U_NUMBER_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
-    if ((pending_tx_.active && pending_tx_.index == param_index &&
+    if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::MAIN && pending_tx_.index == param_index &&
          pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
-        has_deferred_user_tx_(param_index, BIT_POSITION_NO_BITMASK)) {
+        has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -2304,9 +2504,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : I_NUMBER_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
-    if ((pending_tx_.active && pending_tx_.index == param_index &&
+    if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::MAIN && pending_tx_.index == param_index &&
          pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
-        has_deferred_user_tx_(param_index, BIT_POSITION_NO_BITMASK)) {
+        has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -2329,9 +2529,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   for (const auto &entry : SELECT_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
-    if ((pending_tx_.active && pending_tx_.index == param_index &&
+    if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::MAIN && pending_tx_.index == param_index &&
          pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
-        has_deferred_user_tx_(param_index, BIT_POSITION_NO_BITMASK)) {
+        has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -2355,9 +2555,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second.first;  // The byte index
     uint8_t bit_position = entry.second.second;  // The specific bit to extract
-    if ((pending_tx_.active && pending_tx_.index == param_index &&
+    if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::MAIN && pending_tx_.index == param_index &&
          pending_tx_.bit_position == bit_position) ||
-        has_deferred_user_tx_(param_index, bit_position)) {
+        has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, bit_position)) {
       continue;
     }
     if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
@@ -2376,9 +2576,11 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
     set_select_value(param_name, bit_value);
   }
 
+  set_text_sensor_value_(L_UI_FW_VERSION, "U" + std::to_string(buffer[CC_PACKET_L_FW_IDX]));
+
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
 
-  if (tx_ui_sync_.active) {
+  if (tx_ui_sync_.active && tx_ui_sync_.family == TxPacketFamily::MAIN) {
     if (cc_sync_matched) {
       DAIKIN_DBG(TAG, "TX UI synced: index=%u bit=%u value=0x%02X cc_cycles=%u",
                  tx_ui_sync_.index, tx_ui_sync_.bit_position, tx_ui_sync_.value,
@@ -2479,13 +2681,19 @@ void DaikinEkhheComponent::register_number(const std::string &number_name, espho
 
 void DaikinEkhheComponent::register_select(const std::string &select_name, select::Select *select) {
   if (select != nullptr) {
-      //selects_[select_name] = select;
-      selects_[select_name] = static_cast<DaikinEkhheSelect *>(select);
+    selects_[select_name] = static_cast<DaikinEkhheSelect *>(select);
+  }
+}
+
+void DaikinEkhheComponent::register_text_sensor(const std::string &text_sensor_name,
+                                                esphome::text_sensor::TextSensor *sensor) {
+  if (sensor != nullptr) {
+    text_sensors_[text_sensor_name] = sensor;
   }
 }
 
 void DaikinEkhheComponent::register_timestamp_sensor(text_sensor::TextSensor *sensor) {
-    this->timestamp_sensor_ = sensor;
+  this->timestamp_sensor_ = sensor;
 }
 
 void DaikinEkhheComponent::register_debug_text_sensor(const std::string &sensor_name,
@@ -2541,6 +2749,21 @@ void DaikinEkhheComponent::set_sensor_value(const std::string &sensor_name, floa
     }
   }
 
+}
+
+void DaikinEkhheComponent::set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value) {
+  if (text_sensors_.find(text_sensor_name) == text_sensors_.end()) {
+    return;
+  }
+  if (!cycle_publish_allowed_) {
+    return;
+  }
+  if (should_publish_text_(text_sensor_name, value, last_published_text_values_,
+                           last_published_text_ms_, kSlowPublishRefreshMs)) {
+    defer([this, text_sensor_name, value]() {
+      text_sensors_[text_sensor_name]->publish_state(value);
+    });
+  }
 }
 
 void DaikinEkhheComponent::set_binary_sensor_value(const std::string &sensor_name, bool value) {
@@ -2872,6 +3095,7 @@ void DaikinEkhheNumber::control(float value) {
     // Get the CC array index from map, send UART command and update UI state
     auto it_u = U_NUMBER_PARAM_INDEX.find(name);
     auto it_i = I_NUMBER_PARAM_INDEX.find(name);
+    auto it_ext = U_NUMBER_EXTENDED_PARAM_INDEX.find(name);
     if (it_u != U_NUMBER_PARAM_INDEX.end()) {
         uint8_t index = it_u->second;
         if (this->parent_->send_uart_cc_command(index, (uint8_t)value, BIT_POSITION_NO_BITMASK)) {
@@ -2882,6 +3106,13 @@ void DaikinEkhheNumber::control(float value) {
     else if (it_i != I_NUMBER_PARAM_INDEX.end()) {
         uint8_t index = it_i->second;
         if (this->parent_->send_uart_cc_command(index, (int8_t)value, BIT_POSITION_NO_BITMASK)) {
+            this->parent_->update_number_cache(name, value);
+            this->publish_state(value);
+        }
+    }
+    else if (it_ext != U_NUMBER_EXTENDED_PARAM_INDEX.end()) {
+        uint8_t index = it_ext->second;
+        if (this->parent_->send_uart_c2_command(index, (uint8_t)value, BIT_POSITION_NO_BITMASK)) {
             this->parent_->update_number_cache(name, value);
             this->publish_state(value);
         }
@@ -2914,13 +3145,19 @@ void DaikinEkhheSelect::control(const std::string &value) {
     }
     uint8_t uart_value = static_cast<uint8_t>(it->second);
   
-    // Look up the CC packet index for this select entity
+    bool extended_family = false;
+
+    // Look up the packet index for this select entity
     auto index_it = SELECT_PARAM_INDEX.find(name);
     uint8_t param_index = PARAM_INDEX_INVALID;
     if (index_it != SELECT_PARAM_INDEX.end()) {
       param_index = index_it->second;
     } else {
-      DAIKIN_WARN(TAG, "Select %s NOT found in SELECT_PARAM_INDEX", name.c_str());
+      auto extended_index_it = SELECT_EXTENDED_PARAM_INDEX.find(name);
+      if (extended_index_it != SELECT_EXTENDED_PARAM_INDEX.end()) {
+        param_index = extended_index_it->second;
+        extended_family = true;
+      }
     }
 
     // Look up if this select is part of a bitmask
@@ -2929,26 +3166,39 @@ void DaikinEkhheSelect::control(const std::string &value) {
     if (bitmask_it != SELECT_BITMASKS.end()) {
         param_index = bitmask_it->second.first;  // Get the byte index
         bit_position = bitmask_it->second.second;  // Get the bit position
+        extended_family = false;
     } else {
             DAIKIN_DBG(TAG, "Select %s not in SELECT_BITMASKS", name.c_str());
     }
 
+    if (param_index == PARAM_INDEX_INVALID) {
+        DAIKIN_WARN(TAG, "No matching UART command for Select: %s", name.c_str());
+        return;
+    }
+
     // Update value in ESPHome
-    if (this->parent_->send_uart_cc_command(param_index, uart_value, bit_position)) {
+    bool sent = extended_family
+                    ? this->parent_->send_uart_c2_command(param_index, uart_value, bit_position)
+                    : this->parent_->send_uart_cc_command(param_index, uart_value, bit_position);
+    if (sent) {
         this->parent_->update_select_cache(name, value);
         this->publish_state(value);
     }
 }
 
-void DaikinEkhheComponent::send_prebuilt_cd_packet_(const std::vector<uint8_t> &command, TxPacketKind kind,
+void DaikinEkhheComponent::send_prebuilt_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &command,
+                                                    TxPacketKind kind,
                                                     uint8_t index, uint8_t value, uint8_t bit_position,
                                                     uint8_t attempts_sent) {
+  const auto &spec = tx_packet_family_spec_(family);
+  const std::string tx_type = packet_type_to_string_(spec.write_packet_type);
   if (command.empty()) {
-    DAIKIN_WARN(TAG, "CD packet empty, cannot send.");
+    DAIKIN_WARN(TAG, "%s packet empty, cannot send.", tx_type.c_str());
     return;
   }
-  if (command.size() < CD_PACKET_SIZE) {
-    DAIKIN_WARN(TAG, "CD packet length %u invalid, cannot send.", static_cast<unsigned>(command.size()));
+  if (command.size() != spec.packet_size) {
+    DAIKIN_WARN(TAG, "%s packet length %u invalid, cannot send.",
+                tx_type.c_str(), static_cast<unsigned>(command.size()));
     return;
   }
 
@@ -2957,9 +3207,9 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(const std::vector<uint8_t> &
   uart_active_ = false;
   uart_tx_active_ = true;
 
-  size_t cc_index = 0;
-  const RawFrameEntry *base_cc_entry = find_latest_frame_by_type_(CC_PACKET_START_BYTE, cc_index, true);
-  uint32_t base_cc_age_ms = base_cc_entry != nullptr ? (millis() - base_cc_entry->timestamp_ms) : 0;
+  size_t base_index = 0;
+  const RawFrameEntry *base_entry = find_latest_frame_by_type_(spec.base_packet_type, base_index, true);
+  uint32_t base_age_ms = base_entry != nullptr ? (millis() - base_entry->timestamp_ms) : 0;
   uint32_t tx_start_ms = millis();
 
   size_t dd_index = 0;
@@ -2974,9 +3224,11 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(const std::vector<uint8_t> &
       return entry != nullptr ? (tx_start_ms - entry->timestamp_ms) : 0;
     };
 
-    DAIKIN_DBG(TAG, "TX start: since_dd=%u since_c1=%u since_d2=%u since_cc=%u base_cc_age=%u len=%u",
+    DAIKIN_DBG(TAG, "TX start: family=%s tx=%s base=%s readback=%s since_dd=%u since_c1=%u since_d2=%u since_base=%u base_age=%u len=%u",
+               spec.label, tx_type.c_str(), packet_type_to_string_(spec.base_packet_type).c_str(),
+               packet_type_to_string_(spec.readback_packet_type).c_str(),
                age_or_zero(latest_dd_entry), age_or_zero(latest_c1_entry), age_or_zero(latest_d2_entry),
-               age_or_zero(base_cc_entry), base_cc_age_ms, static_cast<unsigned>(command.size()));
+               age_or_zero(base_entry), base_age_ms, static_cast<unsigned>(command.size()));
   }
 
   this->write_array(command);
@@ -2987,25 +3239,27 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(const std::vector<uint8_t> &
   tx_waiting_for_first_cc_ = track_tx;
 
   if (kind == TxPacketKind::SINGLE_FIELD) {
-    ESP_LOGI(TAG, "TX CD sent: index=%u value=0x%02X bit=%u len=%u",
-             index, value, bit_position, static_cast<unsigned>(command.size()));
-    DAIKIN_DBG(TAG, "TX timing: request_to_send=%u since_last_rx=%u base_cc_age=%u",
-               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_cc_age_ms);
+    ESP_LOGI(TAG, "TX %s sent: family=%s base=%s readback=%s index=%u value=0x%02X bit=%u len=%u",
+             tx_type.c_str(), spec.label, packet_type_to_string_(spec.base_packet_type).c_str(),
+             packet_type_to_string_(spec.readback_packet_type).c_str(), index, value, bit_position,
+             static_cast<unsigned>(command.size()));
+    DAIKIN_DBG(TAG, "TX timing: request_to_send=%u since_last_rx=%u base_age=%u",
+               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else if (kind == TxPacketKind::PROFILE_RESTORE) {
     ESP_LOGI(TAG, "TX profile restore sent: len=%u attempt=%u/%u",
              static_cast<unsigned>(command.size()), attempts_sent, kTxMaxRepeats);
-    DAIKIN_DBG(TAG, "TX timing: profile_restore_request_to_send=%u since_last_rx=%u base_cc_age=%u",
-               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_cc_age_ms);
+    DAIKIN_DBG(TAG, "TX timing: profile_restore_request_to_send=%u since_last_rx=%u base_age=%u",
+               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else if (kind == TxPacketKind::RESTORE_DEFAULTS) {
     ESP_LOGI(TAG, "TX restore defaults sent: fields=%u attempt=%u/%u len=%u",
              static_cast<unsigned>(RESTORE_DEFAULT_FIELD_COUNT), attempts_sent, kTxMaxRepeats,
              static_cast<unsigned>(command.size()));
-    DAIKIN_DBG(TAG, "TX timing: restore_request_to_send=%u since_last_rx=%u base_cc_age=%u",
-               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_cc_age_ms);
+    DAIKIN_DBG(TAG, "TX timing: restore_request_to_send=%u since_last_rx=%u base_age=%u",
+               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else {
-    ESP_LOGI(TAG, "TX CD sent: snapshot len=%u", static_cast<unsigned>(command.size()));
-    DAIKIN_DBG(TAG, "TX timing: snapshot_send since_last_rx=%u base_cc_age=%u",
-               time_since_last_rx, base_cc_age_ms);
+    ESP_LOGI(TAG, "TX %s sent: snapshot len=%u", tx_type.c_str(), static_cast<unsigned>(command.size()));
+    DAIKIN_DBG(TAG, "TX timing: snapshot_send since_last_rx=%u base_age=%u",
+               time_since_last_rx, base_age_ms);
   }
 
   set_timeout(10, [this]() {
@@ -3014,11 +3268,13 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(const std::vector<uint8_t> &
   });
 }
 
-bool DaikinEkhheComponent::validate_outbound_cd_packet_(const std::vector<uint8_t> &base_packet,
+bool DaikinEkhheComponent::validate_outbound_cd_packet_(TxPacketFamily family,
+                                                        const std::vector<uint8_t> &base_packet,
                                                         const std::vector<uint8_t> &command,
                                                         TxPacketKind kind, uint8_t index,
                                                         uint8_t value, uint8_t bit_position,
                                                         std::string &reason) {
+  const auto &spec = tx_packet_family_spec_(family);
   if (command.empty() || base_packet.empty()) {
     reason = "base or command packet empty";
     return false;
@@ -3030,9 +3286,24 @@ bool DaikinEkhheComponent::validate_outbound_cd_packet_(const std::vector<uint8_
     reason = msg;
     return false;
   }
-  if (command[0] != CD_PACKET_START_BYTE) {
+  if (command.size() != spec.packet_size) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "packet size %u is not expected %u",
+             static_cast<unsigned>(command.size()), static_cast<unsigned>(spec.packet_size));
+    reason = msg;
+    return false;
+  }
+  if (base_packet[0] != spec.base_packet_type) {
     char msg[64];
-    snprintf(msg, sizeof(msg), "command start byte 0x%02X is not CD", command[0]);
+    snprintf(msg, sizeof(msg), "base start byte 0x%02X is not %s",
+             base_packet[0], packet_type_to_string_(spec.base_packet_type).c_str());
+    reason = msg;
+    return false;
+  }
+  if (command[0] != spec.write_packet_type) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "command start byte 0x%02X is not %s",
+             command[0], packet_type_to_string_(spec.write_packet_type).c_str());
     reason = msg;
     return false;
   }
@@ -3051,7 +3322,7 @@ bool DaikinEkhheComponent::validate_outbound_cd_packet_(const std::vector<uint8_
   }
 
   std::vector<uint8_t> expected = base_packet;
-  expected[0] = CD_PACKET_START_BYTE;
+  expected[0] = spec.write_packet_type;
 
   if (kind == TxPacketKind::SINGLE_FIELD) {
     if (index >= expected.size()) {
@@ -3099,21 +3370,37 @@ bool DaikinEkhheComponent::validate_outbound_cd_packet_(const std::vector<uint8_
   return false;
 }
 
-void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
-                                                uint8_t index, uint8_t value, uint8_t bit_position) {
+void DaikinEkhheComponent::send_uart_tx_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
+                                                bool apply_change, uint8_t index, uint8_t value,
+                                                uint8_t bit_position) {
+  const auto &spec = tx_packet_family_spec_(family);
+  const std::string base_type = packet_type_to_string_(spec.base_packet_type);
   if (base_packet.empty()) {
-    DAIKIN_WARN(TAG, "Base CC packet empty, cannot send.");
+    DAIKIN_WARN(TAG, "Base %s packet empty, cannot send.", base_type.c_str());
     return;
   }
-  if (base_packet.size() < CD_PACKET_SIZE) {
-    DAIKIN_WARN(TAG, "Base CC packet length %u invalid, cannot send.", static_cast<unsigned>(base_packet.size()));
+  if (base_packet.size() != spec.packet_size) {
+    DAIKIN_WARN(TAG, "Base %s packet length %u invalid, cannot send.",
+                base_type.c_str(), static_cast<unsigned>(base_packet.size()));
     return;
   }
 
   std::vector<uint8_t> command = base_packet;
-  command[0] = CD_PACKET_START_BYTE;
+  command[0] = spec.write_packet_type;
 
   if (apply_change) {
+    if (index >= command.size()) {
+      DAIKIN_WARN(TAG, "TX blocked: target index %u out of range for %s packet len=%u",
+                  index, base_type.c_str(), static_cast<unsigned>(command.size()));
+      pending_tx_.active = false;
+      pending_tx_.attempts_sent = 0;
+      pending_tx_.last_attempt_d2_seq = 0;
+      queued_tx_.active = false;
+      queued_tx_.scheduled = false;
+      tx_ui_sync_.active = false;
+      tx_ui_sync_.cycles_waited = 0;
+      return;
+    }
     if (bit_position != BIT_POSITION_NO_BITMASK) {
       uint8_t current_value = command[index];
       current_value &= ~(1 << bit_position);
@@ -3127,7 +3414,7 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
   command.back() = ekhhe_checksum(command);
 
   std::string validation_error;
-  if (!validate_outbound_cd_packet_(base_packet, command,
+  if (!validate_outbound_cd_packet_(family, base_packet, command,
                                     apply_change ? TxPacketKind::SINGLE_FIELD : TxPacketKind::SNAPSHOT,
                                     index, value, bit_position, validation_error)) {
     DAIKIN_WARN(TAG, "TX blocked by packet diff guard: %s", validation_error.c_str());
@@ -3148,8 +3435,13 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
     return;
   }
 
-  send_prebuilt_cd_packet_(command, apply_change ? TxPacketKind::SINGLE_FIELD : TxPacketKind::SNAPSHOT,
+  send_prebuilt_cd_packet_(family, command, apply_change ? TxPacketKind::SINGLE_FIELD : TxPacketKind::SNAPSHOT,
                            index, value, bit_position, pending_tx_.attempts_sent);
+}
+
+void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
+                                                uint8_t index, uint8_t value, uint8_t bit_position) {
+  send_uart_tx_packet_(TxPacketFamily::MAIN, base_packet, apply_change, index, value, bit_position);
 }
 
 void DaikinEkhheComponent::send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
@@ -3161,7 +3453,7 @@ void DaikinEkhheComponent::send_restore_defaults_packet_(const std::vector<uint8
   }
 
   std::string validation_error;
-  if (!validate_outbound_cd_packet_(base_packet, command, TxPacketKind::RESTORE_DEFAULTS,
+  if (!validate_outbound_cd_packet_(TxPacketFamily::MAIN, base_packet, command, TxPacketKind::RESTORE_DEFAULTS,
                                     0, 0, BIT_POSITION_NO_BITMASK, validation_error)) {
     DAIKIN_WARN(TAG, "Restore defaults TX blocked by packet diff guard: %s",
                 validation_error.c_str());
@@ -3177,7 +3469,7 @@ void DaikinEkhheComponent::send_restore_defaults_packet_(const std::vector<uint8
     return;
   }
 
-  send_prebuilt_cd_packet_(command, TxPacketKind::RESTORE_DEFAULTS, 0, 0, BIT_POSITION_NO_BITMASK,
+  send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::RESTORE_DEFAULTS, 0, 0, BIT_POSITION_NO_BITMASK,
                            pending_restore_.attempts_sent);
 }
 
@@ -3226,7 +3518,7 @@ void DaikinEkhheComponent::send_profile_restore_packet_(const std::vector<uint8_
     return;
   }
 
-  send_prebuilt_cd_packet_(command, TxPacketKind::PROFILE_RESTORE, 0, 0, BIT_POSITION_NO_BITMASK,
+  send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::PROFILE_RESTORE, 0, 0, BIT_POSITION_NO_BITMASK,
                            pending_profile_restore_.attempts_sent);
 }
 
@@ -3234,8 +3526,14 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   if (!pending_tx_.active) {
     return;
   }
-  if (pending_tx_.index >= buffer.size()) {
+  const auto &spec = tx_packet_family_spec_(pending_tx_.family);
+  const uint8_t readback_index =
+      tx_readback_index_(pending_tx_.family, pending_tx_.index, pending_tx_.bit_position);
+  const uint8_t readback_bit_position =
+      tx_readback_bit_position_(pending_tx_.family, pending_tx_.index, pending_tx_.bit_position);
+  if (readback_index >= buffer.size()) {
     pending_tx_.active = false;
+    pending_tx_.family = TxPacketFamily::MAIN;
     pending_tx_.attempts_sent = 0;
     pending_tx_.last_attempt_d2_seq = 0;
     queued_tx_.active = false;
@@ -3244,34 +3542,40 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
     return;
   }
 
-  bool matched = field_matches_target_(buffer, pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
+  bool matched = field_matches_target_(buffer, readback_index, pending_tx_.value, readback_bit_position);
 
   if (matched) {
     if (pending_tx_.attempts_sent == 0) {
-      DAIKIN_DBG(TAG, "TX already current: index=%u value=0x%02X bit=%u",
-                 pending_tx_.index, pending_tx_.value, pending_tx_.bit_position);
+      DAIKIN_DBG(TAG, "TX already current: family=%s index=%u readback_index=%u value=0x%02X bit=%u",
+                 spec.label, pending_tx_.index, readback_index, pending_tx_.value, pending_tx_.bit_position);
     } else {
       bool retried = pending_tx_.attempts_sent > 1;
       if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
         if (retried) {
-          DAIKIN_WARN(TAG, "TX applied after retries: index=%u value=0x%02X attempts=%u",
-                      pending_tx_.index, pending_tx_.value, pending_tx_.attempts_sent);
+          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u readback_index=%u value=0x%02X attempts=%u",
+                      spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                      pending_tx_.index, readback_index, pending_tx_.value, pending_tx_.attempts_sent);
         } else {
-          ESP_LOGI(TAG, "TX applied: index=%u value=0x%02X",
-                   pending_tx_.index, pending_tx_.value);
+          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u readback_index=%u value=0x%02X",
+                   spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                   pending_tx_.index, readback_index, pending_tx_.value);
         }
       } else {
-        uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
+        uint8_t bit = (buffer[readback_index] >> readback_bit_position) & 0x01;
         if (retried) {
-          DAIKIN_WARN(TAG, "TX applied after retries: index=%u bit=%u value=%u attempts=%u",
-                      pending_tx_.index, pending_tx_.bit_position, bit, pending_tx_.attempts_sent);
+          DAIKIN_WARN(TAG, "TX applied after retries: family=%s readback=%s index=%u readback_index=%u bit=%u readback_bit=%u value=%u attempts=%u",
+                      spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                      pending_tx_.index, readback_index, pending_tx_.bit_position, readback_bit_position, bit,
+                      pending_tx_.attempts_sent);
         } else {
-          ESP_LOGI(TAG, "TX applied: index=%u bit=%u value=%u",
-                   pending_tx_.index, pending_tx_.bit_position, bit);
+          ESP_LOGI(TAG, "TX applied: family=%s readback=%s index=%u readback_index=%u bit=%u readback_bit=%u value=%u",
+                   spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                   pending_tx_.index, readback_index, pending_tx_.bit_position, readback_bit_position, bit);
         }
       }
       DAIKIN_DBG(TAG, "TX timing: applied_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
       tx_ui_sync_.active = true;
+      tx_ui_sync_.family = pending_tx_.family;
       tx_ui_sync_.index = pending_tx_.index;
       tx_ui_sync_.value = pending_tx_.value;
       tx_ui_sync_.bit_position = pending_tx_.bit_position;
@@ -3280,6 +3584,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
     tx_waiting_for_first_rx_ = false;
     tx_waiting_for_first_cc_ = false;
     pending_tx_.active = false;
+    pending_tx_.family = TxPacketFamily::MAIN;
     pending_tx_.attempts_sent = 0;
     pending_tx_.last_attempt_d2_seq = 0;
     queued_tx_.active = false;
@@ -3293,40 +3598,56 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   }
 
   if (pending_tx_.attempts_sent < kTxMaxRepeats) {
-    DAIKIN_DBG(TAG, "TX retry pending: index=%u attempt=%u/%u",
-               pending_tx_.index, pending_tx_.attempts_sent, kTxMaxRepeats);
+    DAIKIN_DBG(TAG, "TX retry pending: family=%s readback=%s index=%u readback_index=%u attempt=%u/%u",
+               spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+               pending_tx_.index, readback_index, pending_tx_.attempts_sent, kTxMaxRepeats);
     return;
   }
 
   if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-    DAIKIN_WARN(TAG, "TX not applied: index=%u expected=0x%02X current=0x%02X",
-                pending_tx_.index, pending_tx_.value, buffer[pending_tx_.index]);
+    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u readback_index=%u expected=0x%02X current=0x%02X",
+                spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                pending_tx_.index, readback_index, pending_tx_.value, buffer[readback_index]);
   } else {
-    uint8_t bit = (buffer[pending_tx_.index] >> pending_tx_.bit_position) & 0x01;
-    DAIKIN_WARN(TAG, "TX not applied: index=%u bit=%u expected=%u current=%u",
-                pending_tx_.index, pending_tx_.bit_position,
+    uint8_t bit = (buffer[readback_index] >> readback_bit_position) & 0x01;
+    DAIKIN_WARN(TAG, "TX not applied: family=%s readback=%s index=%u readback_index=%u bit=%u readback_bit=%u expected=%u current=%u",
+                spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                pending_tx_.index, readback_index, pending_tx_.bit_position, readback_bit_position,
                 pending_tx_.value & 0x01, bit);
   }
   DAIKIN_DBG(TAG, "TX timing: failed_after=%u attempts=%u", millis() - tx_sent_ms_, pending_tx_.attempts_sent);
   uint8_t index = pending_tx_.index;
   if (pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) {
-    for (const auto &entry : U_NUMBER_PARAM_INDEX) {
-      if (entry.second == index) {
-        set_number_value(entry.first, buffer[index]);
+    if (pending_tx_.family == TxPacketFamily::EXTENDED) {
+      for (const auto &entry : U_NUMBER_EXTENDED_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_number_value(entry.first, buffer[readback_index]);
+        }
       }
-    }
-    for (const auto &entry : I_NUMBER_PARAM_INDEX) {
-      if (entry.second == index) {
-        set_number_value(entry.first, static_cast<int8_t>(buffer[index]));
+      for (const auto &entry : SELECT_EXTENDED_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_select_value(entry.first, buffer[readback_index]);
+        }
       }
-    }
-    for (const auto &entry : SELECT_PARAM_INDEX) {
-      if (entry.second == index) {
-        set_select_value(entry.first, buffer[index]);
+    } else {
+      for (const auto &entry : U_NUMBER_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_number_value(entry.first, buffer[readback_index]);
+        }
+      }
+      for (const auto &entry : I_NUMBER_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_number_value(entry.first, static_cast<int8_t>(buffer[readback_index]));
+        }
+      }
+      for (const auto &entry : SELECT_PARAM_INDEX) {
+        if (entry.second == index) {
+          set_select_value(entry.first, buffer[readback_index]);
+        }
       }
     }
   } else {
-    uint8_t bit = (buffer[index] >> pending_tx_.bit_position) & 0x01;
+    uint8_t bit = (buffer[readback_index] >> readback_bit_position) & 0x01;
     for (const auto &entry : SELECT_BITMASKS) {
       if (entry.second.first == index && entry.second.second == pending_tx_.bit_position) {
         set_select_value(entry.first, bit);
@@ -3336,6 +3657,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
   pending_tx_.active = false;
+  pending_tx_.family = TxPacketFamily::MAIN;
   pending_tx_.attempts_sent = 0;
   pending_tx_.last_attempt_d2_seq = 0;
   tx_ui_sync_.active = false;
@@ -3483,10 +3805,21 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
 }
 
 bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position) {
-    // Check that a CC packet is stored
-    // since we need the last one as a basis for the new packet
-    if (last_cc_packet_.empty()) {
-        DAIKIN_WARN(TAG, "No CC packet received yet. Cannot send command.");
+    return send_uart_command_(TxPacketFamily::MAIN, index, value, bit_position);
+}
+
+bool DaikinEkhheComponent::send_uart_c2_command(uint8_t index, uint8_t value, uint8_t bit_position) {
+    return send_uart_command_(TxPacketFamily::EXTENDED, index, value, bit_position);
+}
+
+bool DaikinEkhheComponent::send_uart_command_(TxPacketFamily family, uint8_t index, uint8_t value,
+                                              uint8_t bit_position) {
+    const auto &spec = tx_packet_family_spec_(family);
+    const std::vector<uint8_t> &base_cache =
+        family == TxPacketFamily::EXTENDED ? last_c1_packet_ : last_cc_packet_;
+    if (base_cache.empty()) {
+        DAIKIN_WARN(TAG, "No %s packet received yet. Cannot send command.",
+                    packet_type_to_string_(spec.base_packet_type).c_str());
         return false;
     }
     if (pending_restore_.active || restore_ui_sync_.active) {
@@ -3498,7 +3831,7 @@ bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
         return false;
     }
     if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active) {
-        return defer_single_field_tx_(index, value, bit_position);
+        return defer_single_field_tx_(family, index, value, bit_position);
     }
 
     auto_save_snapshot_if_needed_();
@@ -3513,23 +3846,30 @@ bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
       size_t d2_phase_index = 0;
       const RawFrameEntry *d2_phase_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_phase_index, true);
       const uint32_t since_last_d2 = d2_phase_entry != nullptr ? (now_ms - d2_phase_entry->timestamp_ms) : 0;
+      size_t base_phase_index = 0;
+      const RawFrameEntry *base_phase_entry = find_latest_frame_by_type_(spec.base_packet_type, base_phase_index, true);
+      const uint32_t since_last_base =
+          base_phase_entry != nullptr ? (now_ms - base_phase_entry->timestamp_ms) : 0;
       std::string cycle_types = packet_mask_to_string_(cycle_packet_types_seen_);
       DAIKIN_DBG(TAG,
-                 "TX request phase: index=%u value=0x%02X bit=%u last=%s since_last=%u since_d2=%u since_cc=%u cycle_ms=%u cycle_types=%s uart_active=%u",
-                 index, value, bit_position, last_type.c_str(), since_last_frame, since_last_d2, since_last_cc,
-                 now_ms - cycle_start_ms_, cycle_types.c_str(), uart_active_);
+                 "TX request phase: family=%s index=%u value=0x%02X bit=%u last=%s since_last=%u since_d2=%u since_cc=%u since_base=%u cycle_ms=%u cycle_types=%s uart_active=%u",
+                 spec.label, index, value, bit_position, last_type.c_str(), since_last_frame, since_last_d2,
+                 since_last_cc, since_last_base, now_ms - cycle_start_ms_, cycle_types.c_str(), uart_active_);
     }
     pending_tx_.active = true;
+    pending_tx_.family = family;
     pending_tx_.index = index;
     pending_tx_.value = value;
     pending_tx_.bit_position = bit_position;
     pending_tx_.attempts_sent = 0;
     pending_tx_.last_attempt_d2_seq = 0;
     tx_ui_sync_.active = false;
+    tx_ui_sync_.family = family;
     tx_ui_sync_.cycles_waited = 0;
 
     queued_tx_.active = true;
     queued_tx_.scheduled = false;
+    queued_tx_.family = family;
     queued_tx_.index = index;
     queued_tx_.value = value;
     queued_tx_.bit_position = bit_position;
@@ -3554,8 +3894,8 @@ bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value, ui
       }
     }
 
-    DAIKIN_DBG(TAG, "TX scheduling: waiting_for_next_d2 index=%u value=0x%02X bit=%u",
-               index, value, bit_position);
+    DAIKIN_DBG(TAG, "TX scheduling: family=%s waiting_for_next_d2 index=%u value=0x%02X bit=%u",
+               spec.label, index, value, bit_position);
     return true;
 }
 

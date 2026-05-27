@@ -25,8 +25,9 @@ web_server:
 
 external_components:
   - source:
-      type: local
-      path: C:\Users\jeroe\git\esphome-daikin-ekhhe/components
+      type: git
+      url: https://github.com/jcappaert/esphome-daikin-ekhhe
+      ref: main
     components: [daikin_ekhhe]
 
 uart:
@@ -177,6 +178,44 @@ number:
       name: "P51: Evaporator blower high speed set"
     evaporator_blower_low_speed_set:
       name: "P52: Evaporator blower low speed set"
+    evaporator_fan_defrost_speed_setpoint:
+      name: "P53: Evaporator fan defrost speed setpoint"
+    low_pressure_switch_bypass_time:
+      name: "P54: Low pressure switch bypass time"
+    evaporator_band1_proportional_regulation:
+      name: "P55: Evaporator band 1 proportional"
+    evaporator_max_speed_activation_delta:
+      name: "P56: Evaporator max activation delta"
+    evaporator_max_speed_deactivation_delta:
+      name: "P57: Evaporator max deactivation delta"
+    evaporator_fan_speed_compressor_off:
+      name: "P59: Evaporator fan off speed"
+    evaporation_air_delta1_setpoint_calc:
+      name: "P60: Evaporator air delta 1"
+    evaporation_air_delta2_setpoint_calc:
+      name: "P61: Evaporator air delta 2"
+    evaporation_air_delta3_setpoint_calc:
+      name: "P62: Evaporator air delta 3"
+    evaporation_air_delta4_setpoint_calc:
+      name: "P63: Evaporator air delta 4"
+    evaporation_air_delta5_setpoint_calc:
+      name: "P64: Evaporator air delta 5"
+    evaporation_air_delta6_setpoint_calc:
+      name: "P65: Evaporator air delta 6"
+    evaporator_band2_proportional_regulation:
+      name: "P66: Evaporator band 2 proportional"
+    evaporator_band3_proportional_regulation:
+      name: "P67: Evaporator band 3 proportional"
+    evaporator_band4_proportional_regulation:
+      name: "P68: Evaporator band 4 proportional"
+    evaporator_band5_proportional_regulation:
+      name: "P69: Evaporator band 5 proportional"
+    evaporator_band6_proportional_regulation:
+      name: "P70: Evaporator band 6 proportional"
+    ec_fan_silent_mode_speed_reduction:
+      name: "P71: EC fan silent mode reduction"
+    ec_fan_speed_regulator_gain:
+      name: "P72: EC fan speed regulator gain"
     auto_target_temperature:
       name: "Auto mode target temperature"
     eco_target_temperature:
@@ -218,6 +257,8 @@ select:
       name: "P33: EEV control"
     eev_control_mode:
       name: "P39: EEV control mode"
+    evaporator_fan_compressor_off_mode:
+      name: "P58: Evaporator fan compressor off mode"
     daikin_debug_packet:
       name: "Daikin Debug Packet"
 
@@ -239,6 +280,10 @@ text_sensor:
   - platform: daikin_ekhhe
     current_time:
       name: "Current Time UTC"
+    power_board_firmware_version:
+      name: "J: Power board firmware version"
+    ui_firmware_version:
+      name: "L: UI firmware version"
     daikin_raw_frame_hex:
       name: "Daikin Raw Frame Hex"
     daikin_raw_frame_meta:

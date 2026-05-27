@@ -91,6 +91,26 @@ static const std::string P50_ANTIFREEZE_SET      = "antifreeze_low_water_temp_se
 
 static const std::string P51_EVA_HIGH_SET        = "evaporator_blower_high_speed_set";
 static const std::string P52_EVA_LOW_SET         = "evaporator_blower_low_speed_set";
+static const std::string P53_EVA_FAN_DEFR_SPEED  = "evaporator_fan_defrost_speed_setpoint";
+static const std::string P54_LOW_PRESS_BYPASS    = "low_pressure_switch_bypass_time";
+static const std::string P55_EVA_BAND1_PROP      = "evaporator_band1_proportional_regulation";
+static const std::string P56_EVA_MAX_ACT_DELTA   = "evaporator_max_speed_activation_delta";
+static const std::string P57_EVA_MAX_DEACT_DELTA = "evaporator_max_speed_deactivation_delta";
+static const std::string P58_EVA_FAN_COMP_OFF    = "evaporator_fan_compressor_off_mode";
+static const std::string P59_EVA_FAN_OFF_SPEED   = "evaporator_fan_speed_compressor_off";
+static const std::string P60_EVA_AIR_DELTA1      = "evaporation_air_delta1_setpoint_calc";
+static const std::string P61_EVA_AIR_DELTA2      = "evaporation_air_delta2_setpoint_calc";
+static const std::string P62_EVA_AIR_DELTA3      = "evaporation_air_delta3_setpoint_calc";
+static const std::string P63_EVA_AIR_DELTA4      = "evaporation_air_delta4_setpoint_calc";
+static const std::string P64_EVA_AIR_DELTA5      = "evaporation_air_delta5_setpoint_calc";
+static const std::string P65_EVA_AIR_DELTA6      = "evaporation_air_delta6_setpoint_calc";
+static const std::string P66_EVA_BAND2_PROP      = "evaporator_band2_proportional_regulation";
+static const std::string P67_EVA_BAND3_PROP      = "evaporator_band3_proportional_regulation";
+static const std::string P68_EVA_BAND4_PROP      = "evaporator_band4_proportional_regulation";
+static const std::string P69_EVA_BAND5_PROP      = "evaporator_band5_proportional_regulation";
+static const std::string P70_EVA_BAND6_PROP      = "evaporator_band6_proportional_regulation";
+static const std::string P71_EC_FAN_SILENT_RED   = "ec_fan_silent_mode_speed_reduction";
+static const std::string P72_EC_FAN_REG_GAIN     = "ec_fan_speed_regulator_gain";
 
 }  // namespace daikin_ekhhe
 }  // namespace esphome

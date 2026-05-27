@@ -1,6 +1,6 @@
 # Daikin EKHHE Protocol Notes
 
-Last updated: 2026-04-24
+Last updated: 2026-05-26
 
 This note summarizes the current reverse-engineering findings from live UART/RS485 captures in `mode: debug`.
 It is meant as a working protocol reference, not a final spec.
@@ -118,4 +118,77 @@ Best current protocol model:
 * UI repeats one `CD` per cycle until the requested value comes back in readback state
 * bus then falls back to normal `CC`
 
+## Extended-block `C2` write behavior
 
+Targeted protocol-lab captures later confirmed a second UI-side write packet:
+
+* `C2` has start byte `0xC2`, length `51`, and the same checksum model as the
+  other known packets.
+* `C2` uses the same payload schema as `C1`.
+* `C2` appears when the display/UI changes extended-block parameters that are
+  read back in `D4`.
+* `P53` and `P55-P72` are in this extended `D4`/`C1`/`C2` family.
+* `P54` is the exception in that numeric range: it belongs to the main
+  `D2`/`CC`/`CD` family.
+
+The current write-family model is:
+
+| Family | Control/readback packet | Idle UI packet | UI write packet | Payload size |
+| --- | --- | --- | --- | ---: |
+| Main block | `D2` | `CC` | `CD` | 71 |
+| Extended block | `D4` | `C1` | `C2` | 51 |
+
+## Firmware version fields
+
+Manual UI readout showed firmware values `J = U14` and `L = U20`. Current best
+matches from stable captured bytes are:
+
+| UI field | Meaning | Packet byte | Published value |
+| --- | --- | --- | --- |
+| `J` | Power-board firmware version | `DD[39]` | `U<DD[39]>` |
+| `L` | UI firmware version | `CC[66]` | `U<CC[66]>` |
+
+These are stable identity-style fields rather than controllable parameters, so
+cross-device captures remain useful for extra confirmation.
+
+Observed targeted `C2` evidence:
+
+* During a P53/P55 display edit, checksum-valid `C2` frames appeared.
+* `C2[1]` tracked P53 and `C2[13]` tracked P55.
+* The following `D4` echoed the changed extended values.
+* Main-block `CD` frames can appear during the same edit window, but they do
+  not carry the changed extended value.
+
+## CD vs C2 timing baseline
+
+The bus cycle is not perfectly fixed, and both of these idle orders have been
+observed in clean captures:
+
+* `D4 -> DD -> CC -> D2 -> C1`
+* `D4 -> DD -> C1 -> D2 -> CC`
+
+For implementation, the safer abstraction is therefore not "hard-code one
+global packet order", but "replace/respond with the UI-side packet for the
+field's packet family and confirm against the matching control-board packet".
+
+Useful timing anchors from captures and ESPHome TX logs:
+
+* Full cycle length is typically about `1.49-1.50 s`.
+* The UI-side response slot after the relevant control packet is typically on
+  the order of `138-155 ms`.
+* Current ESPHome TX scheduling is D2-anchored and has been seen sending around
+  `150 ms` after `D2` when the event loop fires cleanly.
+* For current `CD` writes, confirmation is expected on a later `D2`, typically
+  about one cycle after the send (`~1.4 s` in logs).
+* For future `C2` writes, confirmation should be checked against `D4`; depending
+  on the observed order, the first useful `D4` can arrive much sooner after the
+  send than the next `D2`.
+
+Implementation implication:
+
+* Keep the existing D2-anchored send calibration for the first `C2` PR.
+* Do not assume `CD` and `C2` share the same readback packet.
+* Store the intended packet family in pending TX state so `CD` confirms against
+  `D2` and `C2` confirms against `D4`.
+* If hardware testing shows that `C2` needs a materially different send delay,
+  add a separate extended TX calibration as a follow-up rather than guessing now.
