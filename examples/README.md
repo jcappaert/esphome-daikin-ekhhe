@@ -1,0 +1,9 @@
+# Examples
+
+The example configurations in this directory are intended as starting points:
+
+- `minimal.yaml`: small everyday setup with key readings and controls.
+- `production.yaml`: broader normal-user setup exposing most supported entities.
+- `debug.yaml`: diagnostic and reverse-engineering setup.
+
+Use the examples as references, then copy only the entities you want into your own ESPHome node.
