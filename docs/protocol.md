@@ -119,13 +119,3 @@ The component treats writes as temporary UI-side responses:
 7. Retry on later cycles until readback matches or the retry limit is reached.
 
 For now, both `CD` and `C2` writes use the same `tx_send_calibration` timing option. If future captures show that the extended family needs materially different timing, a separate calibration should be added rather than guessed.
-
-## Implementation Implications
-
-- Do not treat successful UART transmit as successful setting application.
-- Confirm main writes against `D2`.
-- Confirm extended writes against `D4`.
-- Keep the packet family in pending TX state.
-- Keep RX active during pending writes and short UI-sync windows.
-- Avoid writing unrelated bytes from stale base packets.
-- Treat fault/protection/status decoding as separate reverse-engineering work.
