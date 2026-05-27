@@ -16,6 +16,8 @@ This project is experimental and reverse engineered. It has been tested primaril
 
 Writes can change installer parameters on the heat pump. Incorrect settings, protocol bugs, bad wiring, or timing issues may misconfigure or damage your device. Use this component only if you are comfortable validating settings on the physical unit and recovering from a bad configuration.
 
+This project is provided as-is; you use it at your own risk, and the maintainers are not responsible for damage to your equipment, property, or installation.
+
 Recommended safety steps:
 
 - Start from [`examples/minimal.yaml`](examples/minimal.yaml).
