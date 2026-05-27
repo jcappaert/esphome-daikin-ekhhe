@@ -4,22 +4,34 @@ This page covers behavior that matters once the component is installed: polling,
 
 ## Polling
 
-When idle, the component listens according to `update_interval`. A normal read cycle collects the known packet set and then publishes configured entities.
+When idle, the component listens according to `update_interval`. A normal read cycle collects the known bus state and then publishes configured entities.
 
 During writes, the component temporarily keeps RX active even if `continuous_rx` is disabled. This lets it observe readback confirmation and then wait briefly for the display-originated packet to catch up, reducing Home Assistant UI churn.
 
 ## Writes
 
-Writes are confirmed from controller readback, not from transmit success alone. A setting write is considered applied only when the matching control-board packet reports the requested value.
+Writes are confirmed from controller readback, not from transmit success alone. A setting write is considered applied only when the heat pump reports the requested value back.
 
-The component uses two known write families:
+The bus cycle is roughly 1.5 seconds. In normal conditions a write should usually be confirmed within one cycle, so expect a setting to settle in about 1 to 3 seconds. The component keeps listening during this window, even if the normal idle `update_interval` is longer.
 
-| Setting family | Base packet | Transmit packet | Readback packet |
-| --- | --- | --- | --- |
-| Main settings | `CC` | `CD` | `D2` |
-| Extended settings | `C1` | `C2` | `D4` |
+If the first attempt is not reflected in readback, the component retries on later cycles. The current retry limit is 5 attempts, so a write failure may take roughly 7 to 10 seconds to become final. A successful write that needed more than one attempt logs a warning; a write that never applies logs `TX not applied`.
 
-The component schedules writes relative to the observed bus cycle and retries later cycles when readback does not match. The maximum retry count is currently 5 attempts. If a write succeeds only after more than one attempt, a warning is logged so timing or state-validation issues remain visible.
+After controller readback confirms the new value, Home Assistant may still briefly show the old value until the display-side state catches up. The component keeps RX active for a short UI-sync window to suppress most of that churn. Treat the value as truly settled once it remains stable after the next visible refresh, or after roughly another 1 to 2 seconds.
+
+## Multiple Writes And Automations
+
+The component is designed around one active write at a time. If Home Assistant sends several changes at once, the first write starts and later writes may be ignored or delayed depending on timing. This can happen when an automation updates operating mode and target temperature together, or when a dashboard sends several entity changes in quick succession.
+
+Recommended Home Assistant patterns:
+
+- Prefer changing one heat-pump entity at a time.
+- In scripts or automations, add a short delay between writes.
+- Use at least 2 to 3 seconds between ordinary setting changes.
+- Use 8 to 10 seconds between changes when testing timing-sensitive settings or after a retry warning.
+- Avoid periodic automations that rewrite unchanged values.
+- If an automation controls multiple values, check current state first and write only values that actually need changing.
+
+If you need a robust multi-step automation, make it state-driven: send one change, wait until the entity reports the requested state, then send the next change.
 
 ## Recovery Profiles
 
@@ -51,7 +63,7 @@ Current restore-defaults scope:
 
 Runtime fields outside that scope, such as current operating mode, power state, clock values, and vacation days, are preserved from the latest base packet.
 
-Extended settings `P53` and `P55-P72` are writable individually through the extended packet family, but they are not part of the current restore-defaults batch. `P54` is a main-family setting but is also outside the current restore-defaults batch because the documented batch scope is `P1-P52` plus target temperatures.
+Extended settings `P53` and `P55-P72` are writable individually, but they are not part of the current restore-defaults batch. `P54` is also outside the current restore-defaults batch because the documented batch scope is `P1-P52` plus target temperatures.
 
 Only press the restore-defaults button when you intend to rewrite many installer parameters at once.
 
@@ -78,6 +90,7 @@ Only press the restore-defaults button when you intend to rewrite many installer
 
 - Confirm the device is in a state where that setting is allowed to change.
 - Confirm Home Assistant automations are not rapidly writing multiple settings.
+- Increase automation delays and try again.
 - Expose `tx_send_calibration` temporarily and test nearby timing values.
 - Use debug mode and check for `TX not applied` warnings.
 - Start from the minimal example if the current YAML exposes many writable entities.
