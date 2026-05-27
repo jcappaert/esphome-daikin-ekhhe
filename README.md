@@ -1,164 +1,124 @@
-# Daikin EKHHE esphome external component
-This is an esphome external component for the Daikin EKHHE series of domestic hot water heat pumps, also known as the Altherma M HW. 
+# ESPHome Daikin EKHHE
 
-The component exposes all of the known sensors and settings to the user. 
+[![CI](https://github.com/jcappaert/esphome-daikin-ekhhe/actions/workflows/ci.yml/badge.svg)](https://github.com/jcappaert/esphome-daikin-ekhhe/actions/workflows/ci.yml)
+[![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
+[![ESPHome external component](https://img.shields.io/badge/ESPHome-external_component-00B9D8.svg)](https://esphome.io/components/external_components/)
 
-So far, it's been tested only with an EKHHE260PCV37 model. 
+ESPHome external component for Daikin EKHHE domestic hot water heat pumps, also known as Altherma M HW.
 
-This component has some basic functionality now but still needs to be further developed to be fully functional. 
+The component exposes known heat-pump readings, operating controls, installer parameters, target temperatures, recovery buttons, and debug tools through ESPHome and Home Assistant.
 
-**!! WARNING !!**: Use at your own risk, has the potential to change the properties of your device and might even damage it if inappropriate settings are applied. 
+## Status And Safety
 
-## YAML setup
-In the YAML you can enter which sensors/numbers/selects etc. you want to use. In the example yaml, all available entities are listed, you can remove what you don't need. 
+This project is experimental and reverse engineered. It has been tested primarily with an `EKHHE260PCV37`.
 
+Writes can change installer parameters on the heat pump. Incorrect settings, protocol bugs, bad wiring, or timing issues may misconfigure or damage your device. Use this component only if you are comfortable validating settings on the physical unit and recovering from a bad configuration.
 
-Other than this, the only customization available for the module is:
-* update_interval
-* mode (production or debug)
-* continuous_rx (debug only)
-* tx_send_calibration
+Recommended safety steps:
 
-`update_interval` sets the normal polling interval in seconds when the component is idle.
+- Start from [`examples/minimal.yaml`](examples/minimal.yaml).
+- Confirm read-only sensors are stable before enabling many writable entities.
+- Save a known-good profile before making changes.
+- Keep the original Daikin display connected and available for verification.
+- Read [operations and recovery](docs/operations.md) before using restore buttons or broad parameter writes.
 
-`mode: debug` enables extra raw-frame logging and optional debug entities.
+## Features
 
-`continuous_rx: true` is an additional debug-only option that keeps RX running continuously after each parsed cycle for
-reverse engineering. By default it is `false`, so even in debug mode `update_interval` is respected unless a write is
-in flight.
+- Temperature and runtime sensors for the known EKHHE probe values.
+- Binary status indicators for digital inputs, heat-pump activity, and electric-heater activity.
+- Select entities for power state, operating mode, and known menu-style parameters.
+- Number entities for known numeric installer parameters, target temperatures, and TX timing calibration.
+- Persistent known-good and automatic recovery snapshots for managed settings.
+- Restore-defaults button for documented default values in the supported main settings block.
+- Debug mode with raw packet capture, frame metadata, packet diffs, and bus health counters.
+- Support for both known write packet families:
+  - Main settings: `CC` base, `CD` write, `D2` readback.
+  - Extended settings: `C1` base, `C2` write, `D4` readback.
 
-`tx_send_calibration` adjusts the delay, in milliseconds, used when sending write packets on the bus. The default is
-`75`. Most users should not need to change it, but it can help tune write reliability on units with slightly different
-bus timing. The same timing is used for both supported write packet families (`CD` and `C2`). The optional
-`tx_send_calibration` number entity can be enabled while testing; changes apply immediately but are not persisted unless
-the value is also written into YAML.
+## Hardware
 
-## Debug / Reverse Engineering
-There is a debug mode that enables internal raw UART capture and optional Home Assistant entities for inspection. These
-entities are only active when `mode: debug` is set on the component.
+You need an ESP32 with a UART connected through an RS485 transceiver to the display bus. The original display must remain connected.
 
-### Debug entities (optional)
-Text sensors:
-* daikin_raw_frame_hex
-* daikin_raw_frame_meta
-* daikin_unknown_fields
-* daikin_frame_diff
+Typical wiring uses:
 
-Sensors:
-* frames_captured_total
-* frames_dropped_total
-* frames_truncated_total
-* crc_errors_total
-* framing_errors_total
-* bytes_captured_total
-* cycle_parse_time_ms
-* cycle_total_time_ms
-* cycle_over_budget_total
+- RS485 `A`, `B`, and `GND` tapped from the display bus connector.
+- ESP32 UART RX/TX connected to the RS485 transceiver.
+- A suitable 5 V or 3.3 V power arrangement for your ESP32 board.
 
-Controls:
-* daikin_debug_packet (select: latest, DD, D2, D4, C1, C2, CC, CD)
-* daikin_debug_freeze (switch)
+See [hardware](docs/hardware.md) for wiring notes and safety cautions.
 
-Normal maintenance button:
-* daikin_restore_default_settings (button)
-* daikin_save_known_good_profile (button)
-* daikin_restore_known_good_profile (button)
-* daikin_restore_auto_snapshot (button)
+## Quick Start
 
-Diagnostic text sensors:
-* power_board_firmware_version
-* ui_firmware_version
-* daikin_known_good_profile_status
-* daikin_auto_snapshot_status
+Add this repository as an ESPHome external component:
 
-### Example YAML files
-See `examples/production.yaml`, `examples/minimal.yaml`, and `examples/debug.yaml`.
+```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/jcappaert/esphome-daikin-ekhhe
+      ref: main
+    components: [daikin_ekhhe]
+```
 
-If all goes well, you should get something like this in the UI (there are a lot of paramters and variables ...):
-![esphome UI example](https://github.com/jcappaert/esphome-daikin-ekhhe/blob/main/images/ekhhe_all.PNG)
+Configure the UART and component:
 
-## Restore Default Settings
-The component exposes a normal button entity named `daikin_restore_default_settings`. Pressing it builds a single `CD`
-packet from the latest valid `CC` frame and overwrites the following settings with documented default values from the
-manual:
+```yaml
+uart:
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+  id: my_uart
 
-* `P1-P52`
-* target temperatures for `ECO`, `AUTO`, `BOOST`, and `ELECTRIC`
+daikin_ekhhe:
+  - id: daikin_component
+    update_interval: 10
+    mode: production
+```
 
-This restore is sent and confirmed as one batch operation, not as a loop of individual writes. Runtime fields outside
-that scope, such as the current operating mode, power state, clock values, and vacation days, are preserved from the
-latest `CC` base packet.
+Then add only the entities you want:
 
-Extended settings `P53` and `P55-P72` are not included in this batch restore yet. They are writable as individual
-settings through the `C2` packet path, but factory-default and profile restore support for the extended packet family is
-planned separately.
+```yaml
+sensor:
+  - platform: daikin_ekhhe
+    low_water_temp_probe:
+      name: "Lower water temperature"
+    upper_water_temp_probe:
+      name: "Upper water temperature"
 
-**!! WARNING !!**: this button rewrites many installer parameters at once. Use it only when you really intend to
-restore those settings to their documented defaults.
+select:
+  - platform: daikin_ekhhe
+    power_status:
+      name: "Power status"
+    operational_mode:
+      name: "Operational mode"
+```
 
-## Hardware 
-You will need the esp32 UART hooked up to a UART/RS485 converter, connected to A/B/GND in CN23. This will need to be spliced in somehow as the display needs to remain connected. You can tap 5V for an esp32 board from CN21 or CN22. Some information also [here](https://github.com/lorbetzki/Daikin-EKHHE) by lorbetzki. 
+For complete starting points, use:
 
-## Reverse Engineering
-A lot of the protocol reverse engineering has been done by lorbetzki [here](https://github.com/lorbetzki/Daikin-EKHHE).
+- [`examples/minimal.yaml`](examples/minimal.yaml): small everyday setup.
+- [`examples/production.yaml`](examples/production.yaml): broader normal-user setup.
+- [`examples/debug.yaml`](examples/debug.yaml): diagnostic and reverse-engineering setup.
 
-## RX/TX behavior
-The component listens on the UART/RS485 bus and processes a repeating read cycle. Each cycle collects a set of packet
-types (DD, D2, D4, C1, CC). Frames are assembled by detecting a start byte and then reading the expected length from
-the packet size table. Packets that require a checksum are validated before they are accepted into the cycle set. A
-`C2` packet may also appear during writes, but it is not required for a normal idle cycle.
+## Documentation
 
-When all required packets are present, parsing runs and sensors are updated. The latest valid CC packet is always
-stored because it is the base for main-block writes. The latest valid C1 packet is also stored as the base for
-extended-block writes.
+- [Hardware](docs/hardware.md): RS485 wiring, display-bus tap, and installation cautions.
+- [Configuration](docs/configuration.md): YAML options, examples, entity groups, debug mode, and TX timing.
+- [Operations](docs/operations.md): writes, retries, profiles, restore defaults, and troubleshooting.
+- [Protocol](docs/protocol.md): reverse-engineered packet families, cycle timing, and write behavior.
+- [Development](docs/development.md): local validation, CI fixtures, and debugging workflow.
 
-When idle, RX follows `update_interval`. A write request bypasses that idle wait: it immediately starts an RX cycle if
-needed and then waits for the next observed D2 packet.
+## Screenshots
 
-For TX, individual settings now use one of two fixed packet families:
+Current screenshots are being refreshed.
 
-* Main family: `CC` is the base packet, `CD` is transmitted, and success is confirmed from `D2`.
-* Extended family: `C1` is the base packet, `C2` is transmitted, and success is confirmed from `D4`.
+Planned image slots:
 
-`P1-P52`, target temperatures, vacation days, and `P54` use the main family. `P53` and `P55-P72` use the extended
-family. For either family, the component changes a single byte/bit, rewrites the checksum, and schedules the write
-relative to the observed D2 packet rather than sending immediately.
+- Home Assistant overview with the minimal entity set.
+- Production entity set with grouped settings.
+- Debug mode packet inspection entities.
 
-Writes are confirmed from controller readback, not from the transmit itself. For normal writes, the component checks the
-requested field in `D2` or `D4` depending on packet family. For restore-defaults and profile restores, it still checks
-the whole managed main-family field batch together. If the request is not yet present in readback, the component retries
-on later cycles, up to a small fixed maximum. If the value or restore batch still does not apply, it logs a warning. If
-it eventually applies after retries, it also logs a warning so that non-first-try writes are visible in the logs.
+## Credits
 
-Before normal single-field writes, the component can also store an automatic recovery snapshot in non-volatile storage.
-That auto-save is rate-limited and only occurs when the current managed fields differ from the stored auto snapshot.
-
-While a write is pending, and for a short UI-sync phase immediately after readback confirms success, the component keeps
-RX alive even when `continuous_rx` is disabled. During that UI-sync phase, stale UI-originated updates for the target
-field are suppressed until `CC` or `C1` also reflects the applied value, so Home Assistant does not briefly jump back to
-the old value. If the UI packet does not catch up after a few cycles, the UI-sync phase times out and normal polling
-resumes.
-
-## Persistent Profiles
-The component now supports two persistent profile slots stored in flash:
-
-* `known_good_profile`
-  - saved only when `daikin_save_known_good_profile` is pressed
-  - intended as the trusted recovery point
-* `auto_snapshot`
-  - saved automatically before normal writes, subject to a cooldown and diff check
-  - intended as an undo/recovery point
-
-Both profile restore buttons currently send one managed `CD` packet built from the current `CC` base packet plus the
-stored managed fields, rather than replaying stale runtime bytes such as the old clock value. Extended-family
-parameters (`P53`, `P55-P72`) are not included in persistent profiles yet.
-
-The diagnostic sensors `daikin_known_good_profile_status` and `daikin_auto_snapshot_status` report whether each slot is
-empty or valid.
-
-## TODO
-Some main TODOs to get to full functionality are:
-
-* Find where in the packets the following items are:
-  - Protection and fault codes
-  - Silent mode  
+Protocol reverse engineering builds on earlier work by [lorbetzki/Daikin-EKHHE](https://github.com/lorbetzki/Daikin-EKHHE) plus live captures and testing from this project.
