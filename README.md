@@ -97,7 +97,7 @@ select:
 For complete starting points, use:
 
 - [`examples/minimal.yaml`](examples/minimal.yaml): small everyday setup.
-- [`examples/production.yaml`](examples/production.yaml): broader normal-user setup.
+- [`examples/full.yaml`](examples/full.yaml): broader normal-user setup.
 - [`examples/debug.yaml`](examples/debug.yaml): diagnostic and reverse-engineering setup.
 
 ## Documentation

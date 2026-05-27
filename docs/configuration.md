@@ -5,7 +5,7 @@ All entities are optional. Start with a small config, confirm stable reads, then
 ## Examples
 
 - [`examples/minimal.yaml`](../examples/minimal.yaml): recommended starting point with core readings and operating controls.
-- [`examples/production.yaml`](../examples/production.yaml): broader normal-user setup exposing most supported entities.
+- [`examples/full.yaml`](../examples/full.yaml): broader normal-user setup exposing most supported entities.
 - [`examples/debug.yaml`](../examples/debug.yaml): diagnostic setup with raw packet and bus-health entities.
 
 ## Component Setup
@@ -165,4 +165,4 @@ For normal use:
 - Use `mode: production`.
 - Leave `continuous_rx` unset.
 - Leave `tx_send_calibration` at its default unless write confirmation is unreliable.
-- Prefer the minimal example first, then add entities from the production example as needed.
+- Prefer the minimal example first, then add entities from the full example as needed.
