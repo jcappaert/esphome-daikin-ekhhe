@@ -446,11 +446,68 @@ static const ManagedFieldSpec PROFILE_MANAGED_FIELDS[] = {
      DaikinEkhheComponent::D2_PACKET_VAC_DAYS, BIT_POSITION_NO_BITMASK, 0},
 };
 
-constexpr size_t PROFILE_MANAGED_FIELD_COUNT =
-    sizeof(PROFILE_MANAGED_FIELDS) / sizeof(PROFILE_MANAGED_FIELDS[0]);
+static const ManagedFieldSpec PROFILE_MANAGED_EXTENDED_FIELDS[] = {
+    {"P53", DaikinEkhheComponent::EXT_PACKET_P53_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P53_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P55", DaikinEkhheComponent::EXT_PACKET_P55_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P55_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P56", DaikinEkhheComponent::EXT_PACKET_P56_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P56_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P57", DaikinEkhheComponent::EXT_PACKET_P57_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P57_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P58", DaikinEkhheComponent::EXT_PACKET_P58_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P58_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P59", DaikinEkhheComponent::EXT_PACKET_P59_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P59_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P60", DaikinEkhheComponent::EXT_PACKET_P60_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P60_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P61", DaikinEkhheComponent::EXT_PACKET_P61_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P61_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P62", DaikinEkhheComponent::EXT_PACKET_P62_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P62_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P63", DaikinEkhheComponent::EXT_PACKET_P63_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P63_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P64", DaikinEkhheComponent::EXT_PACKET_P64_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P64_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P65", DaikinEkhheComponent::EXT_PACKET_P65_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P65_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P66", DaikinEkhheComponent::EXT_PACKET_P66_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P66_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P67", DaikinEkhheComponent::EXT_PACKET_P67_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P67_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P68", DaikinEkhheComponent::EXT_PACKET_P68_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P68_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P69", DaikinEkhheComponent::EXT_PACKET_P69_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P69_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P70", DaikinEkhheComponent::EXT_PACKET_P70_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P70_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P71", DaikinEkhheComponent::EXT_PACKET_P71_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P71_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"P72", DaikinEkhheComponent::EXT_PACKET_P72_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P72_IDX, BIT_POSITION_NO_BITMASK, 0},
+};
 
-bool is_profile_managed_field(uint8_t cc_index, uint8_t bit_position) {
-  for (const auto &field : PROFILE_MANAGED_FIELDS) {
+constexpr size_t PROFILE_MANAGED_MAIN_FIELD_COUNT =
+    sizeof(PROFILE_MANAGED_FIELDS) / sizeof(PROFILE_MANAGED_FIELDS[0]);
+constexpr size_t PROFILE_MANAGED_EXTENDED_FIELD_COUNT =
+    sizeof(PROFILE_MANAGED_EXTENDED_FIELDS) / sizeof(PROFILE_MANAGED_EXTENDED_FIELDS[0]);
+constexpr size_t PROFILE_MANAGED_FIELD_COUNT =
+    PROFILE_MANAGED_MAIN_FIELD_COUNT + PROFILE_MANAGED_EXTENDED_FIELD_COUNT;
+
+const ManagedFieldSpec *profile_managed_fields(bool extended, size_t &count) {
+  if (extended) {
+    count = PROFILE_MANAGED_EXTENDED_FIELD_COUNT;
+    return PROFILE_MANAGED_EXTENDED_FIELDS;
+  }
+  count = PROFILE_MANAGED_MAIN_FIELD_COUNT;
+  return PROFILE_MANAGED_FIELDS;
+}
+
+bool is_profile_managed_field(bool extended, uint8_t cc_index, uint8_t bit_position) {
+  size_t count = 0;
+  const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const ManagedFieldSpec &field = fields[i];
     if (field.cc_index == cc_index && field.cc_bit_position == bit_position) {
       return true;
     }
@@ -474,7 +531,7 @@ const ManagedFieldSpec *find_managed_field_by_cc(uint8_t cc_index, uint8_t bit_p
 }
 
 constexpr uint32_t PROFILE_MAGIC = 0x454b4850U;
-constexpr uint8_t PROFILE_VERSION = 1;
+constexpr uint8_t PROFILE_VERSION = 2;
 constexpr uint32_t KNOWN_GOOD_PROFILE_PREF_KEY = 0x444b4d31U;
 constexpr uint32_t AUTO_SNAPSHOT_PREF_KEY = 0x444b4d32U;
 
@@ -570,9 +627,12 @@ uint32_t profile_data_hash(const uint8_t *data, size_t length) {
   return hash;
 }
 
-bool profile_matches_packet(const uint8_t *profile_data, size_t profile_len,
+bool profile_matches_packet(bool extended, const uint8_t *profile_data, size_t profile_len,
                             const std::vector<uint8_t> &buffer, bool use_d2_indices) {
-  for (const auto &field : PROFILE_MANAGED_FIELDS) {
+  size_t count = 0;
+  const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const ManagedFieldSpec &field = fields[i];
     const uint8_t expected = extract_field_value(profile_data, profile_len, field.cc_index,
                                                  field.cc_bit_position, field.cc_bit_width);
     const uint8_t actual = use_d2_indices
@@ -587,10 +647,14 @@ bool profile_matches_packet(const uint8_t *profile_data, size_t profile_len,
   return true;
 }
 
-const ManagedFieldSpec *first_profile_mismatch(const uint8_t *profile_data, size_t profile_len,
+const ManagedFieldSpec *first_profile_mismatch(bool extended,
+                                               const uint8_t *profile_data, size_t profile_len,
                                                const std::vector<uint8_t> &buffer, bool use_d2_indices,
                                                uint8_t &expected_value, uint8_t &current_value) {
-  for (const auto &field : PROFILE_MANAGED_FIELDS) {
+  size_t count = 0;
+  const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const ManagedFieldSpec &field = fields[i];
     expected_value = extract_field_value(profile_data, profile_len, field.cc_index,
                                          field.cc_bit_position, field.cc_bit_width);
     current_value = use_d2_indices
@@ -607,18 +671,24 @@ const ManagedFieldSpec *first_profile_mismatch(const uint8_t *profile_data, size
   return nullptr;
 }
 
-void merge_profile_managed_fields(std::vector<uint8_t> &packet, const uint8_t *profile_data,
+void merge_profile_managed_fields(bool extended, std::vector<uint8_t> &packet, const uint8_t *profile_data,
                                   size_t profile_len) {
-  for (const auto &field : PROFILE_MANAGED_FIELDS) {
+  size_t count = 0;
+  const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const ManagedFieldSpec &field = fields[i];
     const uint8_t value = extract_field_value(profile_data, profile_len, field.cc_index,
                                               field.cc_bit_position, field.cc_bit_width);
     apply_field_value(packet, field.cc_index, field.cc_bit_position, field.cc_bit_width, value);
   }
 }
 
-bool managed_fields_equal_between_packets(const uint8_t *lhs, size_t lhs_len,
+bool managed_fields_equal_between_packets(bool extended, const uint8_t *lhs, size_t lhs_len,
                                           const uint8_t *rhs, size_t rhs_len) {
-  for (const auto &field : PROFILE_MANAGED_FIELDS) {
+  size_t count = 0;
+  const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const ManagedFieldSpec &field = fields[i];
     if (extract_field_value(lhs, lhs_len, field.cc_index, field.cc_bit_position, field.cc_bit_width) !=
         extract_field_value(rhs, rhs_len, field.cc_index, field.cc_bit_position, field.cc_bit_width)) {
       return false;
@@ -737,6 +807,8 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     tx_readback_type = tx_packet_family_spec_(pending_tx_.family).readback_packet_type;
   } else if (pending_restore_.active) {
     tx_readback_type = tx_packet_family_spec_(pending_restore_.family).readback_packet_type;
+  } else if (pending_profile_restore_.active) {
+    tx_readback_type = tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type;
   }
   if (tx_operation_active_() && tx_waiting_for_first_cc_ && byte == tx_readback_type) {
     DAIKIN_DBG(TAG, "TX timing: first_readback_after_tx type=%s dt=%u",
@@ -756,7 +828,8 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
       byte == tx_packet_family_spec_(pending_restore_.family).readback_packet_type) {
     check_pending_restore_(packet);
   }
-  if (byte == D2_PACKET_START_BYTE && pending_profile_restore_.active) {
+  if (pending_profile_restore_.active &&
+      byte == tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type) {
     check_pending_profile_restore_(packet);
   }
   if (pending_tx_.active && byte == tx_packet_family_spec_(pending_tx_.family).readback_packet_type) {
@@ -1119,6 +1192,11 @@ void DaikinEkhheComponent::reset_queued_restore_() {
 void DaikinEkhheComponent::reset_pending_profile_restore_() {
   pending_profile_restore_.active = false;
   pending_profile_restore_.known_good = false;
+  pending_profile_restore_.family = TxPacketFamily::MAIN;
+  pending_profile_restore_.main_applied = false;
+  pending_profile_restore_.extended_applied = false;
+  pending_profile_restore_.main_write_sent = false;
+  pending_profile_restore_.extended_write_sent = false;
   pending_profile_restore_.attempts_sent = 0;
   pending_profile_restore_.last_attempt_d2_seq = 0;
 }
@@ -1127,6 +1205,7 @@ void DaikinEkhheComponent::reset_queued_profile_restore_() {
   queued_profile_restore_.active = false;
   queued_profile_restore_.scheduled = false;
   queued_profile_restore_.known_good = false;
+  queued_profile_restore_.family = TxPacketFamily::MAIN;
   queued_profile_restore_.anchor_ms = 0;
   queued_profile_restore_.anchor_seq = 0;
 }
@@ -1337,16 +1416,19 @@ void DaikinEkhheComponent::schedule_queued_profile_restore_from_d2_(const RawFra
   const uint32_t delay_ms =
       d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
   const uint32_t generation = queued_profile_restore_.generation;
+  const TxPacketFamily family = pending_profile_restore_.family;
+  const auto &spec = tx_packet_family_spec_(family);
 
   queued_profile_restore_.active = true;
   queued_profile_restore_.scheduled = true;
   queued_profile_restore_.known_good = pending_profile_restore_.known_good;
+  queued_profile_restore_.family = family;
   queued_profile_restore_.anchor_ms = d2_entry.timestamp_ms;
   queued_profile_restore_.anchor_seq = d2_entry.seq;
 
-  DAIKIN_DBG(TAG, "%s restore scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
+  DAIKIN_DBG(TAG, "%s restore scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
              queued_profile_restore_.known_good ? "Known-good profile" : "Auto snapshot",
-             d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_profile_restore_.request_ms);
+             spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_profile_restore_.request_ms);
 
   set_timeout(delay_ms, [this, generation]() {
     if (!queued_profile_restore_.active || queued_profile_restore_.generation != generation) {
@@ -1354,36 +1436,53 @@ void DaikinEkhheComponent::schedule_queued_profile_restore_from_d2_(const RawFra
     }
 
     const bool known_good = queued_profile_restore_.known_good;
+    const TxPacketFamily family = queued_profile_restore_.family;
+    const auto &spec = tx_packet_family_spec_(family);
+    const bool extended = family == TxPacketFamily::EXTENDED;
     const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
     const uint32_t anchor_seq = queued_profile_restore_.anchor_seq;
     const uint32_t anchor_ms = queued_profile_restore_.anchor_ms;
     queued_profile_restore_.active = false;
     queued_profile_restore_.scheduled = false;
 
-    if (!profile.valid || profile.length == 0) {
+    const uint8_t profile_length = extended ? profile.extended_length : profile.main_length;
+    const uint8_t *profile_data = extended ? profile.extended_data : profile.main_data;
+    if (!profile.valid || profile_length == 0) {
       DAIKIN_WARN(TAG, "%s restore aborted: stored profile became unavailable.",
                   known_good ? "Known-good profile" : "Auto snapshot");
       reset_pending_profile_restore_();
       return;
     }
 
-    std::vector<uint8_t> base_packet = last_cc_packet_;
-    auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
-    if (latest_cc != latest_packets_.end()) {
-      base_packet = latest_cc->second;
+    std::vector<uint8_t> base_packet = extended ? last_c1_packet_ : last_cc_packet_;
+    auto latest_base = latest_packets_.find(spec.base_packet_type);
+    if (latest_base != latest_packets_.end()) {
+      base_packet = latest_base->second;
+    }
+    if (base_packet.empty()) {
+      DAIKIN_WARN(TAG, "%s restore aborted: no %s base packet is available.",
+                  known_good ? "Known-good profile" : "Auto snapshot", spec.label);
+      reset_pending_profile_restore_();
+      reset_queued_profile_restore_();
+      return;
     }
 
     std::vector<uint8_t> packet = base_packet;
-    merge_profile_managed_fields(packet, profile.data, profile.length);
+    merge_profile_managed_fields(extended, packet, profile_data, profile_length);
     pending_profile_restore_.attempts_sent++;
+    if (extended) {
+      pending_profile_restore_.extended_write_sent = true;
+    } else {
+      pending_profile_restore_.main_write_sent = true;
+    }
     pending_profile_restore_.last_attempt_d2_seq = anchor_seq;
 
     DAIKIN_DBG(TAG,
-               "%s restore scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
-               known_good ? "Known-good profile" : "Auto snapshot",
+               "%s restore scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
+               known_good ? "Known-good profile" : "Auto snapshot", spec.label,
                anchor_seq, millis() - anchor_ms, pending_profile_restore_.attempts_sent, kTxMaxRepeats,
-               latest_cc != latest_packets_.end());
-    send_profile_restore_packet_(base_packet, packet, known_good);
+               latest_base != latest_packets_.end());
+    send_profile_restore_packet_(family, base_packet, packet, known_good);
   });
 }
 
@@ -1461,7 +1560,7 @@ void DaikinEkhheComponent::publish_profile_status_(bool known_good) {
 
 std::string DaikinEkhheComponent::format_profile_status_(bool known_good) const {
   const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
-  if (!profile.valid || profile.length == 0) {
+  if (!profile.valid || profile.main_length == 0 || profile.extended_length == 0) {
     return "EMPTY";
   }
 
@@ -1470,15 +1569,18 @@ std::string DaikinEkhheComponent::format_profile_status_(bool known_good) const 
     time_t saved = static_cast<time_t>(profile.saved_at_epoch);
     struct tm *utc = gmtime(&saved);
     if (utc != nullptr && strftime(ts_buf, sizeof(ts_buf), "%Y-%m-%dT%H:%M:%SZ", utc) > 0) {
-      char msg[96];
-      snprintf(msg, sizeof(msg), "VALID len=%u saved=%s",
-               static_cast<unsigned>(profile.length), ts_buf);
+      char msg[128];
+      snprintf(msg, sizeof(msg), "VALID main=%u extended=%u saved=%s",
+               static_cast<unsigned>(profile.main_length),
+               static_cast<unsigned>(profile.extended_length), ts_buf);
       return msg;
     }
   }
 
-  char msg[64];
-  snprintf(msg, sizeof(msg), "VALID len=%u", static_cast<unsigned>(profile.length));
+  char msg[96];
+  snprintf(msg, sizeof(msg), "VALID main=%u extended=%u",
+           static_cast<unsigned>(profile.main_length),
+           static_cast<unsigned>(profile.extended_length));
   return msg;
 }
 
@@ -1492,26 +1594,33 @@ void DaikinEkhheComponent::load_persistent_profiles_() {
     if (!pref.load(&blob)) {
       return;
     }
-    if (blob.magic != PROFILE_MAGIC || blob.version != PROFILE_VERSION || blob.length == 0 ||
-        blob.length > kRawFrameMaxLen) {
+    if (blob.magic != PROFILE_MAGIC || blob.version != PROFILE_VERSION || blob.main_length == 0 ||
+        blob.main_length > kRawFrameMaxLen || blob.extended_length == 0 ||
+        blob.extended_length > kRawFrameMaxLen) {
       return;
     }
-    if (blob.data[0] != CC_PACKET_START_BYTE) {
+    if (blob.main_data[0] != CC_PACKET_START_BYTE || blob.extended_data[0] != C1_PACKET_START_BYTE) {
       return;
     }
-    std::vector<uint8_t> packet(blob.data, blob.data + blob.length);
-    if (packet.empty() || ekhhe_checksum(packet) != packet.back()) {
+    std::vector<uint8_t> main_packet(blob.main_data, blob.main_data + blob.main_length);
+    std::vector<uint8_t> extended_packet(blob.extended_data, blob.extended_data + blob.extended_length);
+    if (main_packet.empty() || ekhhe_checksum(main_packet) != main_packet.back() ||
+        extended_packet.empty() || ekhhe_checksum(extended_packet) != extended_packet.back()) {
       return;
     }
-    if (profile_data_hash(blob.data, blob.length) != blob.data_hash) {
+    if (profile_data_hash(blob.main_data, blob.main_length) != blob.main_data_hash ||
+        profile_data_hash(blob.extended_data, blob.extended_length) != blob.extended_data_hash) {
       return;
     }
 
     profile.valid = true;
-    profile.length = blob.length;
+    profile.main_length = blob.main_length;
+    profile.extended_length = blob.extended_length;
     profile.saved_at_epoch = blob.saved_at_epoch;
-    profile.data_hash = blob.data_hash;
-    std::memcpy(profile.data, blob.data, blob.length);
+    profile.main_data_hash = blob.main_data_hash;
+    profile.extended_data_hash = blob.extended_data_hash;
+    std::memcpy(profile.main_data, blob.main_data, blob.main_length);
+    std::memcpy(profile.extended_data, blob.extended_data, blob.extended_length);
   };
 
   load_slot(true);
@@ -1519,13 +1628,15 @@ void DaikinEkhheComponent::load_persistent_profiles_() {
   publish_profile_statuses_();
 }
 
-bool DaikinEkhheComponent::capture_current_cc_packet_(std::vector<uint8_t> &packet) const {
-  if (!last_cc_packet_.empty()) {
-    packet = last_cc_packet_;
+bool DaikinEkhheComponent::capture_current_packet_(uint8_t packet_type,
+                                                   const std::vector<uint8_t> &cache,
+                                                   std::vector<uint8_t> &packet) const {
+  if (!cache.empty()) {
+    packet = cache;
     return true;
   }
   size_t index = 0;
-  const RawFrameEntry *entry = find_latest_frame_by_type_(CC_PACKET_START_BYTE, index, true);
+  const RawFrameEntry *entry = find_latest_frame_by_type_(packet_type, index, true);
   if (entry == nullptr || entry->length == 0) {
     packet.clear();
     return false;
@@ -1534,9 +1645,29 @@ bool DaikinEkhheComponent::capture_current_cc_packet_(std::vector<uint8_t> &pack
   return true;
 }
 
-bool DaikinEkhheComponent::save_profile_(bool known_good, const std::vector<uint8_t> &packet) {
-  if (packet.empty() || packet.size() > kRawFrameMaxLen || packet[0] != CC_PACKET_START_BYTE) {
+bool DaikinEkhheComponent::capture_current_profile_packets_(std::vector<uint8_t> &main_packet,
+                                                            std::vector<uint8_t> &extended_packet) const {
+  if (!capture_current_packet_(CC_PACKET_START_BYTE, last_cc_packet_, main_packet)) {
+    return false;
+  }
+  if (!capture_current_packet_(C1_PACKET_START_BYTE, last_c1_packet_, extended_packet)) {
+    main_packet.clear();
+    return false;
+  }
+  return true;
+}
+
+bool DaikinEkhheComponent::save_profile_(bool known_good, const std::vector<uint8_t> &main_packet,
+                                         const std::vector<uint8_t> &extended_packet) {
+  if (main_packet.empty() || main_packet.size() > kRawFrameMaxLen ||
+      main_packet[0] != CC_PACKET_START_BYTE) {
     DAIKIN_WARN(TAG, "%s save aborted: invalid CC packet",
+                known_good ? "Known-good profile" : "Auto snapshot");
+    return false;
+  }
+  if (extended_packet.empty() || extended_packet.size() > kRawFrameMaxLen ||
+      extended_packet[0] != C1_PACKET_START_BYTE) {
+    DAIKIN_WARN(TAG, "%s save aborted: invalid C1 packet",
                 known_good ? "Known-good profile" : "Auto snapshot");
     return false;
   }
@@ -1544,15 +1675,18 @@ bool DaikinEkhheComponent::save_profile_(bool known_good, const std::vector<uint
   StoredProfileBlob blob{};
   blob.magic = PROFILE_MAGIC;
   blob.version = PROFILE_VERSION;
-  blob.length = static_cast<uint8_t>(packet.size());
+  blob.main_length = static_cast<uint8_t>(main_packet.size());
+  blob.extended_length = static_cast<uint8_t>(extended_packet.size());
   if (this->clock != nullptr) {
     ESPTime now = this->clock->utcnow();
     if (now.is_valid() && now.timestamp > 0) {
       blob.saved_at_epoch = static_cast<uint32_t>(now.timestamp);
     }
   }
-  std::memcpy(blob.data, packet.data(), packet.size());
-  blob.data_hash = profile_data_hash(blob.data, blob.length);
+  std::memcpy(blob.main_data, main_packet.data(), main_packet.size());
+  std::memcpy(blob.extended_data, extended_packet.data(), extended_packet.size());
+  blob.main_data_hash = profile_data_hash(blob.main_data, blob.main_length);
+  blob.extended_data_hash = profile_data_hash(blob.extended_data, blob.extended_length);
 
   ESPPreferenceObject &pref = known_good ? known_good_profile_pref_ : auto_snapshot_pref_;
   if (!pref.save(&blob) || !global_preferences->sync()) {
@@ -1562,30 +1696,37 @@ bool DaikinEkhheComponent::save_profile_(bool known_good, const std::vector<uint
 
   ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
   profile.valid = true;
-  profile.length = blob.length;
+  profile.main_length = blob.main_length;
+  profile.extended_length = blob.extended_length;
   profile.saved_at_epoch = blob.saved_at_epoch;
-  profile.data_hash = blob.data_hash;
-  std::memcpy(profile.data, blob.data, blob.length);
+  profile.main_data_hash = blob.main_data_hash;
+  profile.extended_data_hash = blob.extended_data_hash;
+  std::memcpy(profile.main_data, blob.main_data, blob.main_length);
+  std::memcpy(profile.extended_data, blob.extended_data, blob.extended_length);
   if (!known_good) {
     auto_snapshot_last_write_ms_ = millis();
   }
   publish_profile_statuses_();
 
-  DAIKIN_WARN(TAG, "%s saved: len=%u",
+  DAIKIN_WARN(TAG, "%s saved: main=%u extended=%u",
               known_good ? "Known-good profile" : "Auto snapshot",
-              static_cast<unsigned>(profile.length));
+              static_cast<unsigned>(profile.main_length),
+              static_cast<unsigned>(profile.extended_length));
   return true;
 }
 
 bool DaikinEkhheComponent::auto_save_snapshot_if_needed_() {
-  std::vector<uint8_t> packet;
-  if (!capture_current_cc_packet_(packet)) {
-    DAIKIN_WARN(TAG, "Auto snapshot skipped: no valid CC packet available.");
+  std::vector<uint8_t> main_packet;
+  std::vector<uint8_t> extended_packet;
+  if (!capture_current_profile_packets_(main_packet, extended_packet)) {
+    DAIKIN_WARN(TAG, "Auto snapshot skipped: no valid CC/C1 packet pair available.");
     return false;
   }
   if (auto_snapshot_.valid &&
-      managed_fields_equal_between_packets(auto_snapshot_.data, auto_snapshot_.length,
-                                           packet.data(), packet.size())) {
+      managed_fields_equal_between_packets(false, auto_snapshot_.main_data, auto_snapshot_.main_length,
+                                           main_packet.data(), main_packet.size()) &&
+      managed_fields_equal_between_packets(true, auto_snapshot_.extended_data, auto_snapshot_.extended_length,
+                                           extended_packet.data(), extended_packet.size())) {
     DAIKIN_DBG(TAG, "Auto snapshot skipped: managed fields unchanged.");
     return false;
   }
@@ -1597,18 +1738,23 @@ bool DaikinEkhheComponent::auto_save_snapshot_if_needed_() {
                kAutoSnapshotCooldownMs - (now_ms - auto_snapshot_last_write_ms_));
     return false;
   }
-  return save_profile_(false, packet);
+  return save_profile_(false, main_packet, extended_packet);
 }
 
 void DaikinEkhheComponent::restore_profile_(bool known_good) {
   const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
-  if (!profile.valid || profile.length == 0) {
+  if (!profile.valid || profile.main_length == 0 || profile.extended_length == 0) {
     DAIKIN_WARN(TAG, "%s restore requested but no profile is stored.",
                 known_good ? "Known-good profile" : "Auto snapshot");
     return;
   }
   if (last_cc_packet_.empty()) {
     DAIKIN_WARN(TAG, "%s restore requested before any CC packet was captured.",
+                known_good ? "Known-good profile" : "Auto snapshot");
+    return;
+  }
+  if (last_c1_packet_.empty()) {
+    DAIKIN_WARN(TAG, "%s restore requested before any C1 packet was captured.",
                 known_good ? "Known-good profile" : "Auto snapshot");
     return;
   }
@@ -1626,25 +1772,35 @@ void DaikinEkhheComponent::restore_profile_(bool known_good) {
   tx_request_ms_ = millis();
   pending_profile_restore_.active = true;
   pending_profile_restore_.known_good = known_good;
+  pending_profile_restore_.family = TxPacketFamily::MAIN;
+  pending_profile_restore_.main_applied = false;
+  pending_profile_restore_.extended_applied = false;
+  pending_profile_restore_.main_write_sent = false;
+  pending_profile_restore_.extended_write_sent = false;
   pending_profile_restore_.attempts_sent = 0;
   pending_profile_restore_.last_attempt_d2_seq = 0;
   profile_ui_sync_.active = false;
   profile_ui_sync_.known_good = known_good;
+  profile_ui_sync_.main_synced = false;
+  profile_ui_sync_.extended_synced = false;
   profile_ui_sync_.cycles_waited = 0;
 
   reset_queued_profile_restore_();
   queued_profile_restore_.active = true;
   queued_profile_restore_.scheduled = false;
   queued_profile_restore_.known_good = known_good;
+  queued_profile_restore_.family = TxPacketFamily::MAIN;
   queued_profile_restore_.generation++;
   queued_profile_restore_.request_ms = tx_request_ms_;
 
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
 
-  DAIKIN_WARN(TAG, "%s restore requested: managed_fields=%u",
+  DAIKIN_WARN(TAG, "%s restore requested: managed_fields=%u main=%u extended=%u",
               known_good ? "Known-good profile" : "Auto snapshot",
-              static_cast<unsigned>(PROFILE_MANAGED_FIELD_COUNT));
+              static_cast<unsigned>(PROFILE_MANAGED_FIELD_COUNT),
+              static_cast<unsigned>(PROFILE_MANAGED_MAIN_FIELD_COUNT),
+              static_cast<unsigned>(PROFILE_MANAGED_EXTENDED_FIELD_COUNT));
 
   if (!uart_active_ && !uart_tx_active_) {
     start_uart_cycle();
@@ -1884,6 +2040,14 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
 }
 
 void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
+  const ProfileState &profile_sync_profile =
+      profile_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
+  const bool profile_d4_sync_matched =
+      profile_ui_sync_.active && profile_sync_profile.valid &&
+      profile_matches_packet(true, profile_sync_profile.extended_data,
+                             profile_sync_profile.extended_length, buffer, true);
+  const bool pending_profile_active = pending_profile_restore_.active;
+
   for (const auto &entry : U_NUMBER_EXTENDED_PARAM_INDEX) {
     const std::string &param_name = entry.first;
     uint8_t param_index = entry.second;
@@ -1893,6 +2057,10 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
     if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::EXTENDED &&
          pending_tx_.index == param_index && pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
         has_deferred_user_tx_(TxPacketFamily::EXTENDED, param_index, BIT_POSITION_NO_BITMASK)) {
+      continue;
+    }
+    if ((pending_profile_active || (profile_ui_sync_.active && !profile_d4_sync_matched)) &&
+        is_profile_managed_field(true, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     set_number_value(param_name, buffer[param_index]);
@@ -1906,6 +2074,10 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
     if ((pending_tx_.active && pending_tx_.family == TxPacketFamily::EXTENDED &&
          pending_tx_.index == param_index && pending_tx_.bit_position == BIT_POSITION_NO_BITMASK) ||
         has_deferred_user_tx_(TxPacketFamily::EXTENDED, param_index, BIT_POSITION_NO_BITMASK)) {
+      continue;
+    }
+    if ((pending_profile_active || (profile_ui_sync_.active && !profile_d4_sync_matched)) &&
+        is_profile_managed_field(true, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     set_select_value(param_name, buffer[param_index]);
@@ -1923,6 +2095,25 @@ void DaikinEkhheComponent::parse_c1_packet(std::vector<uint8_t> buffer) {
       restore_ui_sync_.main_synced = false;
       restore_ui_sync_.extended_synced = false;
       restore_ui_sync_.cycles_waited = 0;
+    }
+  }
+
+  if (profile_ui_sync_.active) {
+    const ProfileState &profile_sync_profile =
+        profile_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
+    if (profile_sync_profile.valid &&
+        profile_matches_packet(true, profile_sync_profile.extended_data,
+                               profile_sync_profile.extended_length, buffer, false)) {
+      profile_ui_sync_.extended_synced = true;
+      if (profile_ui_sync_.main_synced) {
+        DAIKIN_DBG(TAG, "%s UI synced: cc_c1_cycles=%u",
+                   profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
+                   profile_ui_sync_.cycles_waited + 1);
+        profile_ui_sync_.active = false;
+        profile_ui_sync_.main_synced = false;
+        profile_ui_sync_.extended_synced = false;
+        profile_ui_sync_.cycles_waited = 0;
+      }
     }
   }
 
@@ -1963,7 +2154,8 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       profile_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
   const bool profile_cc_sync_matched =
       profile_ui_sync_.active && profile_sync_profile.valid &&
-      profile_matches_packet(profile_sync_profile.data, profile_sync_profile.length, buffer, false);
+      profile_matches_packet(false, profile_sync_profile.main_data,
+                             profile_sync_profile.main_length, buffer, false);
   const bool pending_profile_active = pending_profile_restore_.active;
 
   // update numbers, unsigned and signed separately
@@ -1984,7 +2176,7 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       continue;
     }
     if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
-        is_profile_managed_field(param_index, BIT_POSITION_NO_BITMASK)) {
+        is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     uint8_t value = buffer[param_index];
@@ -2008,7 +2200,7 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       continue;
     }
     if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
-        is_profile_managed_field(param_index, BIT_POSITION_NO_BITMASK)) {
+        is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     int8_t value = static_cast<int8_t>(buffer[param_index]);  // cast as signed
@@ -2033,7 +2225,7 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       continue;
     }
     if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
-        is_profile_managed_field(param_index, BIT_POSITION_NO_BITMASK)) {
+        is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
     uint8_t value = buffer[param_index];
@@ -2061,7 +2253,7 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       continue;
     }
     if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
-        is_profile_managed_field(param_index, bit_position)) {
+        is_profile_managed_field(false, param_index, bit_position)) {
       continue;
     }
     uint8_t value = extract_field_value(buffer, param_index, bit_position,
@@ -2083,7 +2275,7 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         tx_ui_sync_.bit_position == SILENT_MODE_BIT_POSITION && !cc_sync_matched;
     const bool waiting_for_silent_profile_sync =
         (pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
-        is_profile_managed_field(CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION);
+        is_profile_managed_field(false, CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION);
     if (!pending_silent_write && !deferred_silent_write && !waiting_for_silent_ui_sync &&
         !waiting_for_silent_profile_sync) {
       set_switch_value(SILENT_MODE,
@@ -2154,30 +2346,45 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
 
   if (profile_ui_sync_.active) {
     if (profile_cc_sync_matched) {
-      DAIKIN_DBG(TAG, "%s UI synced: cc_cycles=%u",
+      profile_ui_sync_.main_synced = true;
+    }
+    if (profile_ui_sync_.main_synced && profile_ui_sync_.extended_synced) {
+      DAIKIN_DBG(TAG, "%s UI synced: cc_c1_cycles=%u",
                  profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
                  profile_ui_sync_.cycles_waited + 1);
       profile_ui_sync_.active = false;
+      profile_ui_sync_.main_synced = false;
+      profile_ui_sync_.extended_synced = false;
       profile_ui_sync_.cycles_waited = 0;
     } else {
       profile_ui_sync_.cycles_waited++;
       if (profile_ui_sync_.cycles_waited >= kProfileUiSyncMaxCycles) {
         uint8_t expected_value = 0;
         uint8_t current_value = 0;
+        const bool extended_pending = profile_ui_sync_.main_synced && !profile_ui_sync_.extended_synced;
+        const std::vector<uint8_t> &sync_buffer = extended_pending ? last_c1_packet_ : buffer;
+        const uint8_t *profile_data = extended_pending ? profile_sync_profile.extended_data
+                                                       : profile_sync_profile.main_data;
+        const size_t profile_length = extended_pending ? profile_sync_profile.extended_length
+                                                       : profile_sync_profile.main_length;
         const ManagedFieldSpec *field = first_profile_mismatch(
-            profile_sync_profile.data, profile_sync_profile.length, buffer, false,
+            extended_pending, profile_data, profile_length, sync_buffer, false,
             expected_value, current_value);
         if (field != nullptr) {
           DAIKIN_WARN(TAG,
-                      "%s UI sync timeout: first_mismatch=%s expected=0x%02X current=0x%02X cc_cycles=%u",
+                      "%s UI sync timeout: family=%s first_mismatch=%s expected=0x%02X current=0x%02X cc_c1_cycles=%u",
                       profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
+                      extended_pending ? "extended" : "main",
                       field->name, expected_value, current_value, profile_ui_sync_.cycles_waited);
         } else {
-          DAIKIN_WARN(TAG, "%s UI sync timeout: cc_cycles=%u",
+          DAIKIN_WARN(TAG, "%s UI sync timeout: main_synced=%u extended_synced=%u cc_c1_cycles=%u",
                       profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
+                      profile_ui_sync_.main_synced, profile_ui_sync_.extended_synced,
                       profile_ui_sync_.cycles_waited);
         }
         profile_ui_sync_.active = false;
+        profile_ui_sync_.main_synced = false;
+        profile_ui_sync_.extended_synced = false;
         profile_ui_sync_.cycles_waited = 0;
       }
     }
@@ -2526,12 +2733,13 @@ void DaikinEkhheComponent::set_tx_delay_after_d2_ms(uint32_t delay_ms) {
 }
 
 void DaikinEkhheComponent::save_known_good_profile() {
-  std::vector<uint8_t> packet;
-  if (!capture_current_cc_packet_(packet)) {
-    DAIKIN_WARN(TAG, "Known-good profile save requested before any valid CC packet was captured.");
+  std::vector<uint8_t> main_packet;
+  std::vector<uint8_t> extended_packet;
+  if (!capture_current_profile_packets_(main_packet, extended_packet)) {
+    DAIKIN_WARN(TAG, "Known-good profile save requested before any valid CC/C1 packet pair was captured.");
     return;
   }
-  save_profile_(true, packet);
+  save_profile_(true, main_packet, extended_packet);
 }
 
 void DaikinEkhheComponent::restore_known_good_profile() {
@@ -2824,8 +3032,11 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(TxPacketFamily family, const
     DAIKIN_DBG(TAG, "TX timing: request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else if (kind == TxPacketKind::PROFILE_RESTORE) {
-    ESP_LOGI(TAG, "TX profile restore sent: len=%u attempt=%u/%u",
-             static_cast<unsigned>(command.size()), attempts_sent, kTxMaxRepeats);
+    const unsigned field_count = family == TxPacketFamily::EXTENDED
+                                     ? static_cast<unsigned>(PROFILE_MANAGED_EXTENDED_FIELD_COUNT)
+                                     : static_cast<unsigned>(PROFILE_MANAGED_MAIN_FIELD_COUNT);
+    ESP_LOGI(TAG, "TX profile restore sent: family=%s fields=%u len=%u attempt=%u/%u",
+             spec.label, field_count, static_cast<unsigned>(command.size()), attempts_sent, kTxMaxRepeats);
     DAIKIN_DBG(TAG, "TX timing: profile_restore_request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else if (kind == TxPacketKind::RESTORE_DEFAULTS) {
@@ -3054,28 +3265,38 @@ void DaikinEkhheComponent::send_restore_defaults_packet_(TxPacketFamily family,
                            0, pending_restore_.attempts_sent);
 }
 
-void DaikinEkhheComponent::send_profile_restore_packet_(const std::vector<uint8_t> &base_packet,
+void DaikinEkhheComponent::send_profile_restore_packet_(TxPacketFamily family,
+                                                        const std::vector<uint8_t> &base_packet,
                                                         const std::vector<uint8_t> &packet,
                                                         bool known_good) {
+  const auto &spec = tx_packet_family_spec_(family);
+  const bool extended = family == TxPacketFamily::EXTENDED;
+  const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
+  const uint8_t profile_length = extended ? profile.extended_length : profile.main_length;
+  const uint8_t *profile_data = extended ? profile.extended_data : profile.main_data;
   std::vector<uint8_t> command = packet;
   if (!command.empty()) {
-    command[0] = CD_PACKET_START_BYTE;
+    command[0] = spec.write_packet_type;
     command.back() = ekhhe_checksum(command);
   }
 
-  std::vector<uint8_t> expected = packet;
+  std::vector<uint8_t> expected = base_packet;
   if (!expected.empty()) {
-    expected[0] = CD_PACKET_START_BYTE;
+    expected[0] = spec.write_packet_type;
+    merge_profile_managed_fields(extended, expected, profile_data, profile_length);
     expected.back() = ekhhe_checksum(expected);
   }
-  if (command != expected) {
-    DAIKIN_WARN(TAG, "%s TX blocked by packet diff guard: prebuilt command mismatch",
-                known_good ? "Known-good profile restore" : "Auto snapshot restore");
+  if (!profile.valid || profile_length == 0 || command != expected) {
+    DAIKIN_WARN(TAG, "%s TX blocked by packet diff guard: family=%s prebuilt command mismatch",
+                known_good ? "Known-good profile restore" : "Auto snapshot restore",
+                spec.label);
     tx_waiting_for_first_rx_ = false;
     tx_waiting_for_first_cc_ = false;
     reset_pending_profile_restore_();
     reset_queued_profile_restore_();
     profile_ui_sync_.active = false;
+    profile_ui_sync_.main_synced = false;
+    profile_ui_sync_.extended_synced = false;
     profile_ui_sync_.cycles_waited = 0;
     if (!uart_active_ && !uart_tx_active_) {
       start_uart_cycle();
@@ -3083,15 +3304,20 @@ void DaikinEkhheComponent::send_profile_restore_packet_(const std::vector<uint8_
     return;
   }
 
-  if (base_packet.size() != packet.size()) {
-    DAIKIN_WARN(TAG, "%s TX blocked: base/packet size mismatch base=%u packet=%u",
+  if (base_packet.size() != packet.size() || command.size() != spec.packet_size ||
+      base_packet.empty() || base_packet[0] != spec.base_packet_type ||
+      command.empty() || command[0] != spec.write_packet_type) {
+    DAIKIN_WARN(TAG, "%s TX blocked: family=%s invalid base/packet base=%u packet=%u",
                 known_good ? "Known-good profile restore" : "Auto snapshot restore",
+                spec.label,
                 static_cast<unsigned>(base_packet.size()), static_cast<unsigned>(packet.size()));
     tx_waiting_for_first_rx_ = false;
     tx_waiting_for_first_cc_ = false;
     reset_pending_profile_restore_();
     reset_queued_profile_restore_();
     profile_ui_sync_.active = false;
+    profile_ui_sync_.main_synced = false;
+    profile_ui_sync_.extended_synced = false;
     profile_ui_sync_.cycles_waited = 0;
     if (!uart_active_ && !uart_tx_active_) {
       start_uart_cycle();
@@ -3099,8 +3325,8 @@ void DaikinEkhheComponent::send_profile_restore_packet_(const std::vector<uint8_
     return;
   }
 
-  send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::PROFILE_RESTORE, 0, 0,
-                           BIT_POSITION_NO_BITMASK, 0, pending_profile_restore_.attempts_sent);
+  send_prebuilt_cd_packet_(family, command, TxPacketKind::PROFILE_RESTORE, 0, 0, BIT_POSITION_NO_BITMASK,
+                           0, pending_profile_restore_.attempts_sent);
 }
 
 void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer) {
@@ -3376,7 +3602,12 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
 
   const ProfileState &profile =
       pending_profile_restore_.known_good ? known_good_profile_ : auto_snapshot_;
-  if (!profile.valid || profile.length == 0) {
+  const TxPacketFamily family = pending_profile_restore_.family;
+  const auto &spec = tx_packet_family_spec_(family);
+  const bool extended = family == TxPacketFamily::EXTENDED;
+  const uint8_t profile_length = extended ? profile.extended_length : profile.main_length;
+  const uint8_t *profile_data = extended ? profile.extended_data : profile.main_data;
+  if (!profile.valid || profile_length == 0) {
     DAIKIN_WARN(TAG, "%s restore aborted: stored profile missing during confirmation.",
                 pending_profile_restore_.known_good ? "Known-good profile" : "Auto snapshot");
     tx_waiting_for_first_rx_ = false;
@@ -3386,14 +3617,59 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
     return;
   }
 
-  const bool matched = profile_matches_packet(profile.data, profile.length, buffer, true);
+  const bool matched = profile_matches_packet(extended, profile_data, profile_length, buffer, true);
   if (matched) {
-    if (pending_profile_restore_.attempts_sent == 0) {
-      DAIKIN_DBG(TAG, "%s already current.",
+    if (family == TxPacketFamily::MAIN) {
+      pending_profile_restore_.main_applied = true;
+      if (pending_profile_restore_.attempts_sent > 1) {
+        DAIKIN_WARN(TAG, "%s main block applied after retries: attempts=%u",
+                    pending_profile_restore_.known_good ? "Known-good profile restore"
+                                                        : "Auto snapshot restore",
+                    pending_profile_restore_.attempts_sent);
+      } else if (pending_profile_restore_.attempts_sent > 0) {
+        ESP_LOGI(TAG, "%s main block applied.",
+                 pending_profile_restore_.known_good ? "Known-good profile restore"
+                                                     : "Auto snapshot restore");
+      } else {
+        DAIKIN_DBG(TAG, "%s main block already current.",
+                   pending_profile_restore_.known_good ? "Known-good profile" : "Auto snapshot");
+      }
+      if (pending_profile_restore_.attempts_sent > 0) {
+        DAIKIN_DBG(TAG, "TX timing: profile_restore_main_applied_after=%u attempts=%u",
+                   millis() - tx_sent_ms_, pending_profile_restore_.attempts_sent);
+      }
+      pending_profile_restore_.family = TxPacketFamily::EXTENDED;
+      pending_profile_restore_.attempts_sent = 0;
+      pending_profile_restore_.last_attempt_d2_seq = 0;
+      reset_queued_profile_restore_();
+      queued_profile_restore_.active = true;
+      queued_profile_restore_.scheduled = false;
+      queued_profile_restore_.known_good = pending_profile_restore_.known_good;
+      queued_profile_restore_.family = TxPacketFamily::EXTENDED;
+      queued_profile_restore_.generation++;
+      queued_profile_restore_.request_ms = tx_request_ms_;
+      tx_waiting_for_first_rx_ = false;
+      tx_waiting_for_first_cc_ = false;
+      DAIKIN_DBG(TAG, "%s restore scheduling: main complete, waiting_for_next_d2 for extended",
                  pending_profile_restore_.known_good ? "Known-good profile" : "Auto snapshot");
+      return;
+    }
+
+    pending_profile_restore_.extended_applied = true;
+    const bool wrote_any = pending_profile_restore_.main_write_sent ||
+                           pending_profile_restore_.extended_write_sent;
+    if (pending_profile_restore_.attempts_sent == 0) {
+      if (wrote_any) {
+        ESP_LOGI(TAG, "%s applied.",
+                 pending_profile_restore_.known_good ? "Known-good profile restore"
+                                                     : "Auto snapshot restore");
+      } else {
+        DAIKIN_DBG(TAG, "%s already current.",
+                   pending_profile_restore_.known_good ? "Known-good profile" : "Auto snapshot");
+      }
     } else {
       if (pending_profile_restore_.attempts_sent > 1) {
-        DAIKIN_WARN(TAG, "%s applied after retries: attempts=%u",
+        DAIKIN_WARN(TAG, "%s extended block applied after retries: attempts=%u",
                     pending_profile_restore_.known_good ? "Known-good profile restore"
                                                         : "Auto snapshot restore",
                     pending_profile_restore_.attempts_sent);
@@ -3402,10 +3678,14 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
                  pending_profile_restore_.known_good ? "Known-good profile restore"
                                                      : "Auto snapshot restore");
       }
-      DAIKIN_DBG(TAG, "TX timing: profile_restore_applied_after=%u attempts=%u",
+      DAIKIN_DBG(TAG, "TX timing: profile_restore_extended_applied_after=%u attempts=%u",
                  millis() - tx_sent_ms_, pending_profile_restore_.attempts_sent);
+    }
+    if (wrote_any) {
       profile_ui_sync_.active = true;
       profile_ui_sync_.known_good = pending_profile_restore_.known_good;
+      profile_ui_sync_.main_synced = false;
+      profile_ui_sync_.extended_synced = false;
       profile_ui_sync_.cycles_waited = 0;
     }
     tx_waiting_for_first_rx_ = false;
@@ -3420,31 +3700,35 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
   }
 
   if (pending_profile_restore_.attempts_sent < kTxMaxRepeats) {
-    DAIKIN_DBG(TAG, "%s retry pending: attempt=%u/%u",
+    DAIKIN_DBG(TAG, "%s retry pending: family=%s readback=%s attempt=%u/%u",
                pending_profile_restore_.known_good ? "Known-good profile restore"
                                                    : "Auto snapshot restore",
+               spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
                pending_profile_restore_.attempts_sent, kTxMaxRepeats);
     return;
   }
 
   uint8_t expected_value = 0;
   uint8_t current_value = 0;
-  const ManagedFieldSpec *field = first_profile_mismatch(profile.data, profile.length, buffer, true,
+  const ManagedFieldSpec *field = first_profile_mismatch(extended, profile_data, profile_length, buffer, true,
                                                          expected_value, current_value);
   if (field != nullptr) {
     DAIKIN_WARN(TAG,
-                "%s not applied: first_mismatch=%s expected=0x%02X current=0x%02X attempts=%u",
+                "%s not applied: family=%s readback=%s first_mismatch=%s expected=0x%02X current=0x%02X attempts=%u partial_main=%u partial_extended=%u",
                 pending_profile_restore_.known_good ? "Known-good profile restore"
                                                     : "Auto snapshot restore",
-                field->name, expected_value, current_value, pending_profile_restore_.attempts_sent);
+                spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                field->name, expected_value, current_value, pending_profile_restore_.attempts_sent,
+                pending_profile_restore_.main_applied, pending_profile_restore_.extended_applied);
   } else {
-    DAIKIN_WARN(TAG, "%s not applied: attempts=%u",
+    DAIKIN_WARN(TAG, "%s not applied: family=%s attempts=%u partial_main=%u partial_extended=%u",
                 pending_profile_restore_.known_good ? "Known-good profile restore"
                                                     : "Auto snapshot restore",
-                pending_profile_restore_.attempts_sent);
+                spec.label, pending_profile_restore_.attempts_sent,
+                pending_profile_restore_.main_applied, pending_profile_restore_.extended_applied);
   }
-  DAIKIN_DBG(TAG, "TX timing: profile_restore_failed_after=%u attempts=%u",
-             millis() - tx_sent_ms_, pending_profile_restore_.attempts_sent);
+  DAIKIN_DBG(TAG, "TX timing: profile_restore_failed_after=%u family=%s attempts=%u",
+             millis() - tx_sent_ms_, spec.label, pending_profile_restore_.attempts_sent);
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
   reset_pending_profile_restore_();

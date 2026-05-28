@@ -425,8 +425,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void publish_profile_status_(bool known_good);
   std::string format_profile_status_(bool known_good) const;
   void load_persistent_profiles_();
-  bool capture_current_cc_packet_(std::vector<uint8_t> &packet) const;
-  bool save_profile_(bool known_good, const std::vector<uint8_t> &packet);
+  bool capture_current_packet_(uint8_t packet_type, const std::vector<uint8_t> &cache,
+                               std::vector<uint8_t> &packet) const;
+  bool capture_current_profile_packets_(std::vector<uint8_t> &main_packet,
+                                        std::vector<uint8_t> &extended_packet) const;
+  bool save_profile_(bool known_good, const std::vector<uint8_t> &main_packet,
+                     const std::vector<uint8_t> &extended_packet);
   bool auto_save_snapshot_if_needed_();
   void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
@@ -481,7 +485,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
   void send_restore_defaults_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                      const std::vector<uint8_t> &packet);
-  void send_profile_restore_packet_(const std::vector<uint8_t> &base_packet,
+  void send_profile_restore_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                     const std::vector<uint8_t> &packet, bool known_good);
   void check_pending_restore_(const std::vector<uint8_t> &buffer);
   void schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry);
@@ -529,18 +533,24 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct StoredProfileBlob {
     uint32_t magic = 0;
     uint8_t version = 0;
-    uint8_t length = 0;
-    uint16_t reserved = 0;
+    uint8_t main_length = 0;
+    uint8_t extended_length = 0;
+    uint8_t reserved = 0;
     uint32_t saved_at_epoch = 0;
-    uint32_t data_hash = 0;
-    uint8_t data[kRawFrameMaxLen] = {};
+    uint32_t main_data_hash = 0;
+    uint32_t extended_data_hash = 0;
+    uint8_t main_data[kRawFrameMaxLen] = {};
+    uint8_t extended_data[kRawFrameMaxLen] = {};
   };
   struct ProfileState {
     bool valid = false;
-    uint8_t length = 0;
+    uint8_t main_length = 0;
+    uint8_t extended_length = 0;
     uint32_t saved_at_epoch = 0;
-    uint32_t data_hash = 0;
-    uint8_t data[kRawFrameMaxLen] = {};
+    uint32_t main_data_hash = 0;
+    uint32_t extended_data_hash = 0;
+    uint8_t main_data[kRawFrameMaxLen] = {};
+    uint8_t extended_data[kRawFrameMaxLen] = {};
   };
   ESPPreferenceObject known_good_profile_pref_;
   ESPPreferenceObject auto_snapshot_pref_;
@@ -573,6 +583,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct PendingProfileRestore {
     bool active = false;
     bool known_good = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    bool main_applied = false;
+    bool extended_applied = false;
+    bool main_write_sent = false;
+    bool extended_write_sent = false;
     uint8_t attempts_sent = 0;
     uint32_t last_attempt_d2_seq = 0;
   };
@@ -597,6 +612,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct ProfileUiSync {
     bool active = false;
     bool known_good = false;
+    bool main_synced = false;
+    bool extended_synced = false;
     uint8_t cycles_waited = 0;
   };
   ProfileUiSync profile_ui_sync_;
@@ -636,6 +653,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     bool active = false;
     bool scheduled = false;
     bool known_good = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint32_t generation = 0;
     uint32_t request_ms = 0;
     uint32_t anchor_ms = 0;
