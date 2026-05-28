@@ -119,3 +119,17 @@ The component treats writes as temporary UI-side responses:
 7. Retry on later cycles until readback matches or the retry limit is reached.
 
 For now, both `CD` and `C2` writes use the same `tx_send_calibration` timing option. If future captures show that the extended family needs materially different timing, a separate calibration should be added rather than guessed.
+
+## Bulk Defaults And Profiles
+
+Restore-defaults, known-good profile restore, and auto-snapshot restore are exposed as one logical operation to users, but they apply both writable packet families internally.
+
+Current behavior:
+
+- The main settings block is restored first with `CD` and confirmed against `D2`.
+- The extended settings block is restored second with `C2` and confirmed against `D4`.
+- The operation succeeds only after both readback packets match the requested values.
+- If the main block applies but the extended block fails, the log reports a partial failure.
+- Stored profiles contain one `CC` snapshot and one `C1` snapshot.
+
+This keeps the external recovery model simple while preserving the packet ownership model observed on the bus.

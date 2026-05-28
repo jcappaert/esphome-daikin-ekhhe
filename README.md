@@ -34,7 +34,7 @@ Recommended safety steps:
 - Select entities for power state, operating mode, and known menu-style parameters.
 - Number entities for known numeric installer parameters, target temperatures, and TX timing calibration.
 - Persistent known-good and automatic recovery snapshots for managed settings.
-- Restore-defaults button for documented default values in the supported main settings block.
+- Restore-defaults button for documented default values in supported writable settings.
 - Optional continuous receive mode for installations that need bus capture during normal polling.
 
 ## Hardware
