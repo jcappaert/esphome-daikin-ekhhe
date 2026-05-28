@@ -165,6 +165,8 @@ static const RestoreFieldSpec RESTORE_DEFAULT_FIELDS[] = {
      DaikinEkhheComponent::D2_PACKET_P51_IDX, BIT_POSITION_NO_BITMASK, 0, 90},
     {"P52", DaikinEkhheComponent::CC_PACKET_P52_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_P52_IDX, BIT_POSITION_NO_BITMASK, 0, 50},
+    {"P54", DaikinEkhheComponent::CC_PACKET_P54_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::D2_PACKET_P54_IDX, BIT_POSITION_NO_BITMASK, 0, 1},
     {"ECO_TARGET", DaikinEkhheComponent::CC_PACKET_ECO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_ECO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0, 55},
     {"AUTO_TARGET", DaikinEkhheComponent::CC_PACKET_AUTO_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0,
@@ -175,8 +177,62 @@ static const RestoreFieldSpec RESTORE_DEFAULT_FIELDS[] = {
      DaikinEkhheComponent::D2_PACKET_ELECTRIC_TTARGET_IDX, BIT_POSITION_NO_BITMASK, 0, 55},
 };
 
-constexpr size_t RESTORE_DEFAULT_FIELD_COUNT =
+static const RestoreFieldSpec RESTORE_DEFAULT_EXTENDED_FIELDS[] = {
+    {"P53", DaikinEkhheComponent::EXT_PACKET_P53_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P53_IDX, BIT_POSITION_NO_BITMASK, 0, 50},
+    {"P55", DaikinEkhheComponent::EXT_PACKET_P55_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P55_IDX, BIT_POSITION_NO_BITMASK, 0, 4},
+    {"P56", DaikinEkhheComponent::EXT_PACKET_P56_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P56_IDX, BIT_POSITION_NO_BITMASK, 0, 2},
+    {"P57", DaikinEkhheComponent::EXT_PACKET_P57_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P57_IDX, BIT_POSITION_NO_BITMASK, 0, 1},
+    {"P58", DaikinEkhheComponent::EXT_PACKET_P58_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P58_IDX, BIT_POSITION_NO_BITMASK, 0, 0},
+    {"P59", DaikinEkhheComponent::EXT_PACKET_P59_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P59_IDX, BIT_POSITION_NO_BITMASK, 0, 40},
+    {"P60", DaikinEkhheComponent::EXT_PACKET_P60_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P60_IDX, BIT_POSITION_NO_BITMASK, 0, 4},
+    {"P61", DaikinEkhheComponent::EXT_PACKET_P61_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P61_IDX, BIT_POSITION_NO_BITMASK, 0, 2},
+    {"P62", DaikinEkhheComponent::EXT_PACKET_P62_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P62_IDX, BIT_POSITION_NO_BITMASK, 0, 6},
+    {"P63", DaikinEkhheComponent::EXT_PACKET_P63_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P63_IDX, BIT_POSITION_NO_BITMASK, 0, 3},
+    {"P64", DaikinEkhheComponent::EXT_PACKET_P64_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P64_IDX, BIT_POSITION_NO_BITMASK, 0, 10},
+    {"P65", DaikinEkhheComponent::EXT_PACKET_P65_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P65_IDX, BIT_POSITION_NO_BITMASK, 0, 18},
+    {"P66", DaikinEkhheComponent::EXT_PACKET_P66_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P66_IDX, BIT_POSITION_NO_BITMASK, 0, 2},
+    {"P67", DaikinEkhheComponent::EXT_PACKET_P67_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P67_IDX, BIT_POSITION_NO_BITMASK, 0, 9},
+    {"P68", DaikinEkhheComponent::EXT_PACKET_P68_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P68_IDX, BIT_POSITION_NO_BITMASK, 0, 5},
+    {"P69", DaikinEkhheComponent::EXT_PACKET_P69_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P69_IDX, BIT_POSITION_NO_BITMASK, 0, 10},
+    {"P70", DaikinEkhheComponent::EXT_PACKET_P70_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P70_IDX, BIT_POSITION_NO_BITMASK, 0, 5},
+    {"P71", DaikinEkhheComponent::EXT_PACKET_P71_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P71_IDX, BIT_POSITION_NO_BITMASK, 0, 15},
+    {"P72", DaikinEkhheComponent::EXT_PACKET_P72_IDX, BIT_POSITION_NO_BITMASK, 0,
+     DaikinEkhheComponent::EXT_PACKET_P72_IDX, BIT_POSITION_NO_BITMASK, 0, 5},
+};
+
+constexpr size_t RESTORE_DEFAULT_MAIN_FIELD_COUNT =
     sizeof(RESTORE_DEFAULT_FIELDS) / sizeof(RESTORE_DEFAULT_FIELDS[0]);
+constexpr size_t RESTORE_DEFAULT_EXTENDED_FIELD_COUNT =
+    sizeof(RESTORE_DEFAULT_EXTENDED_FIELDS) / sizeof(RESTORE_DEFAULT_EXTENDED_FIELDS[0]);
+constexpr size_t RESTORE_DEFAULT_FIELD_COUNT =
+    RESTORE_DEFAULT_MAIN_FIELD_COUNT + RESTORE_DEFAULT_EXTENDED_FIELD_COUNT;
+
+const RestoreFieldSpec *restore_default_fields(bool extended, size_t &count) {
+  if (extended) {
+    count = RESTORE_DEFAULT_EXTENDED_FIELD_COUNT;
+    return RESTORE_DEFAULT_EXTENDED_FIELDS;
+  }
+  count = RESTORE_DEFAULT_MAIN_FIELD_COUNT;
+  return RESTORE_DEFAULT_FIELDS;
+}
 
 bool restore_scope_field_matches(const RestoreFieldSpec &field, const std::vector<uint8_t> &buffer,
                                  bool use_d2_indices) {
@@ -193,8 +249,11 @@ bool restore_scope_field_matches(const RestoreFieldSpec &field, const std::vecto
          (field.value & field_value_mask(index, bit_position, bit_width));
 }
 
-void apply_restore_defaults_to_packet(std::vector<uint8_t> &packet) {
-  for (const auto &field : RESTORE_DEFAULT_FIELDS) {
+void apply_restore_defaults_to_packet(std::vector<uint8_t> &packet, bool extended = false) {
+  size_t count = 0;
+  const RestoreFieldSpec *fields = restore_default_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const RestoreFieldSpec &field = fields[i];
     if (field.cc_index >= packet.size()) {
       continue;
     }
@@ -202,8 +261,12 @@ void apply_restore_defaults_to_packet(std::vector<uint8_t> &packet) {
   }
 }
 
-bool restore_defaults_match_packet(const std::vector<uint8_t> &buffer, bool use_d2_indices) {
-  for (const auto &field : RESTORE_DEFAULT_FIELDS) {
+bool restore_defaults_match_packet(const std::vector<uint8_t> &buffer, bool use_d2_indices,
+                                   bool extended = false) {
+  size_t count = 0;
+  const RestoreFieldSpec *fields = restore_default_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const RestoreFieldSpec &field = fields[i];
     if (!restore_scope_field_matches(field, buffer, use_d2_indices)) {
       return false;
     }
@@ -212,8 +275,11 @@ bool restore_defaults_match_packet(const std::vector<uint8_t> &buffer, bool use_
 }
 
 const RestoreFieldSpec *first_restore_mismatch(const std::vector<uint8_t> &buffer, bool use_d2_indices,
-                                               uint8_t &current_value) {
-  for (const auto &field : RESTORE_DEFAULT_FIELDS) {
+                                               uint8_t &current_value, bool extended = false) {
+  size_t count = 0;
+  const RestoreFieldSpec *fields = restore_default_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const RestoreFieldSpec &field = fields[i];
     if (restore_scope_field_matches(field, buffer, use_d2_indices)) {
       continue;
     }
@@ -233,8 +299,11 @@ const RestoreFieldSpec *first_restore_mismatch(const std::vector<uint8_t> &buffe
   return nullptr;
 }
 
-bool is_restore_scope_field(uint8_t cc_index, uint8_t bit_position) {
-  for (const auto &field : RESTORE_DEFAULT_FIELDS) {
+bool is_restore_scope_field(uint8_t cc_index, uint8_t bit_position, bool extended = false) {
+  size_t count = 0;
+  const RestoreFieldSpec *fields = restore_default_fields(extended, count);
+  for (size_t i = 0; i < count; ++i) {
+    const RestoreFieldSpec &field = fields[i];
     if (field.cc_index == cc_index && field.cc_bit_position == bit_position) {
       return true;
     }
@@ -666,6 +735,8 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   uint8_t tx_readback_type = D2_PACKET_START_BYTE;
   if (pending_tx_.active) {
     tx_readback_type = tx_packet_family_spec_(pending_tx_.family).readback_packet_type;
+  } else if (pending_restore_.active) {
+    tx_readback_type = tx_packet_family_spec_(pending_restore_.family).readback_packet_type;
   }
   if (tx_operation_active_() && tx_waiting_for_first_cc_ && byte == tx_readback_type) {
     DAIKIN_DBG(TAG, "TX timing: first_readback_after_tx type=%s dt=%u",
@@ -681,7 +752,8 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   if (byte == C2_PACKET_START_BYTE) {
     last_c2_packet_ = packet;
   }
-  if (byte == D2_PACKET_START_BYTE && pending_restore_.active) {
+  if (pending_restore_.active &&
+      byte == tx_packet_family_spec_(pending_restore_.family).readback_packet_type) {
     check_pending_restore_(packet);
   }
   if (byte == D2_PACKET_START_BYTE && pending_profile_restore_.active) {
@@ -1027,6 +1099,11 @@ bool DaikinEkhheComponent::tx_operation_active_() const {
 
 void DaikinEkhheComponent::reset_pending_restore_() {
   pending_restore_.active = false;
+  pending_restore_.family = TxPacketFamily::MAIN;
+  pending_restore_.main_applied = false;
+  pending_restore_.extended_applied = false;
+  pending_restore_.main_write_sent = false;
+  pending_restore_.extended_write_sent = false;
   pending_restore_.attempts_sent = 0;
   pending_restore_.last_attempt_d2_seq = 0;
 }
@@ -1034,6 +1111,7 @@ void DaikinEkhheComponent::reset_pending_restore_() {
 void DaikinEkhheComponent::reset_queued_restore_() {
   queued_restore_.active = false;
   queued_restore_.scheduled = false;
+  queued_restore_.family = TxPacketFamily::MAIN;
   queued_restore_.anchor_ms = 0;
   queued_restore_.anchor_seq = 0;
 }
@@ -1194,41 +1272,58 @@ void DaikinEkhheComponent::schedule_queued_restore_from_d2_(const RawFrameEntry 
   const uint32_t delay_ms =
       d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
   const uint32_t generation = queued_restore_.generation;
+  const TxPacketFamily family = pending_restore_.family;
+  const auto &spec = tx_packet_family_spec_(family);
 
   queued_restore_.active = true;
   queued_restore_.scheduled = true;
+  queued_restore_.family = family;
   queued_restore_.anchor_ms = d2_entry.timestamp_ms;
   queued_restore_.anchor_seq = d2_entry.seq;
 
-  DAIKIN_DBG(TAG, "Restore defaults scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
-             d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_restore_.request_ms);
+  DAIKIN_DBG(TAG, "Restore defaults scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
+             spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_restore_.request_ms);
 
   set_timeout(delay_ms, [this, generation]() {
     if (!queued_restore_.active || queued_restore_.generation != generation) {
       return;
     }
 
+    const TxPacketFamily family = queued_restore_.family;
+    const auto &spec = tx_packet_family_spec_(family);
+    const bool extended = family == TxPacketFamily::EXTENDED;
     const uint32_t anchor_seq = queued_restore_.anchor_seq;
     const uint32_t anchor_ms = queued_restore_.anchor_ms;
     queued_restore_.active = false;
     queued_restore_.scheduled = false;
 
-    std::vector<uint8_t> base_packet = last_cc_packet_;
-    auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
-    if (latest_cc != latest_packets_.end()) {
-      base_packet = latest_cc->second;
+    std::vector<uint8_t> base_packet = extended ? last_c1_packet_ : last_cc_packet_;
+    auto latest_base = latest_packets_.find(spec.base_packet_type);
+    if (latest_base != latest_packets_.end()) {
+      base_packet = latest_base->second;
+    }
+    if (base_packet.empty()) {
+      DAIKIN_WARN(TAG, "Restore defaults aborted: no %s base packet is available.", spec.label);
+      reset_pending_restore_();
+      reset_queued_restore_();
+      return;
     }
 
     std::vector<uint8_t> packet = base_packet;
-    apply_restore_defaults_to_packet(packet);
+    apply_restore_defaults_to_packet(packet, extended);
     pending_restore_.attempts_sent++;
+    if (extended) {
+      pending_restore_.extended_write_sent = true;
+    } else {
+      pending_restore_.main_write_sent = true;
+    }
     pending_restore_.last_attempt_d2_seq = anchor_seq;
 
     DAIKIN_DBG(TAG,
-               "Restore defaults scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
-               anchor_seq, millis() - anchor_ms, pending_restore_.attempts_sent, kTxMaxRepeats,
-               latest_cc != latest_packets_.end());
-    send_restore_defaults_packet_(base_packet, packet);
+               "Restore defaults scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
+               spec.label, anchor_seq, millis() - anchor_ms, pending_restore_.attempts_sent, kTxMaxRepeats,
+               latest_base != latest_packets_.end());
+    send_restore_defaults_packet_(family, base_packet, packet);
   });
 }
 
@@ -1818,6 +1913,19 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
 }
 
 void DaikinEkhheComponent::parse_c1_packet(std::vector<uint8_t> buffer) {
+  if (restore_ui_sync_.active &&
+      restore_defaults_match_packet(buffer, false, true)) {
+    restore_ui_sync_.extended_synced = true;
+    if (restore_ui_sync_.main_synced) {
+      DAIKIN_DBG(TAG, "Restore defaults UI synced: cc_c1_cycles=%u",
+                 restore_ui_sync_.cycles_waited + 1);
+      restore_ui_sync_.active = false;
+      restore_ui_sync_.main_synced = false;
+      restore_ui_sync_.extended_synced = false;
+      restore_ui_sync_.cycles_waited = 0;
+    }
+  }
+
   if (!tx_ui_sync_.active || tx_ui_sync_.family != TxPacketFamily::EXTENDED) {
     return;
   }
@@ -1850,7 +1958,7 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       field_matches_target_(buffer, tx_ui_sync_.index, tx_ui_sync_.value,
                             tx_ui_sync_.bit_position, tx_ui_sync_.bit_width);
   const bool restore_cc_sync_matched =
-      restore_ui_sync_.active && restore_defaults_match_packet(buffer, false);
+      restore_ui_sync_.active && restore_defaults_match_packet(buffer, false, false);
   const ProfileState &profile_sync_profile =
       profile_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
   const bool profile_cc_sync_matched =
@@ -2009,23 +2117,36 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
 
   if (restore_ui_sync_.active) {
     if (restore_cc_sync_matched) {
-      DAIKIN_DBG(TAG, "Restore defaults UI synced: cc_cycles=%u", restore_ui_sync_.cycles_waited + 1);
+      restore_ui_sync_.main_synced = true;
+    }
+    if (restore_ui_sync_.main_synced && restore_ui_sync_.extended_synced) {
+      DAIKIN_DBG(TAG, "Restore defaults UI synced: cc_c1_cycles=%u", restore_ui_sync_.cycles_waited + 1);
       restore_ui_sync_.active = false;
+      restore_ui_sync_.main_synced = false;
+      restore_ui_sync_.extended_synced = false;
       restore_ui_sync_.cycles_waited = 0;
     } else {
       restore_ui_sync_.cycles_waited++;
       if (restore_ui_sync_.cycles_waited >= kRestoreUiSyncMaxCycles) {
         uint8_t current_value = 0;
-        const RestoreFieldSpec *field = first_restore_mismatch(buffer, false, current_value);
+        const bool extended_pending = restore_ui_sync_.main_synced && !restore_ui_sync_.extended_synced;
+        const std::vector<uint8_t> &sync_buffer = extended_pending ? last_c1_packet_ : buffer;
+        const RestoreFieldSpec *field = first_restore_mismatch(sync_buffer, false, current_value,
+                                                               extended_pending);
         if (field != nullptr) {
           DAIKIN_WARN(TAG,
-                      "Restore defaults UI sync timeout: first_mismatch=%s expected=0x%02X current=0x%02X cc_cycles=%u",
+                      "Restore defaults UI sync timeout: family=%s first_mismatch=%s expected=0x%02X current=0x%02X cc_c1_cycles=%u",
+                      extended_pending ? "extended" : "main",
                       field->name, field->value, current_value, restore_ui_sync_.cycles_waited);
         } else {
-          DAIKIN_WARN(TAG, "Restore defaults UI sync timeout: cc_cycles=%u",
+          DAIKIN_WARN(TAG,
+                      "Restore defaults UI sync timeout: main_synced=%u extended_synced=%u cc_c1_cycles=%u",
+                      restore_ui_sync_.main_synced, restore_ui_sync_.extended_synced,
                       restore_ui_sync_.cycles_waited);
         }
         restore_ui_sync_.active = false;
+        restore_ui_sync_.main_synced = false;
+        restore_ui_sync_.extended_synced = false;
         restore_ui_sync_.cycles_waited = 0;
       }
     }
@@ -2426,6 +2547,10 @@ void DaikinEkhheComponent::restore_default_settings() {
     DAIKIN_WARN(TAG, "Restore defaults requested before any CC packet was captured.");
     return;
   }
+  if (last_c1_packet_.empty()) {
+    DAIKIN_WARN(TAG, "Restore defaults requested before any C1 packet was captured.");
+    return;
+  }
   if (pending_profile_restore_.active || profile_ui_sync_.active) {
     DAIKIN_WARN(TAG, "Restore defaults blocked: a profile restore is currently active.");
     return;
@@ -2441,21 +2566,32 @@ void DaikinEkhheComponent::restore_default_settings() {
 
   tx_request_ms_ = millis();
   pending_restore_.active = true;
+  pending_restore_.family = TxPacketFamily::MAIN;
+  pending_restore_.main_applied = false;
+  pending_restore_.extended_applied = false;
+  pending_restore_.main_write_sent = false;
+  pending_restore_.extended_write_sent = false;
   pending_restore_.attempts_sent = 0;
   pending_restore_.last_attempt_d2_seq = 0;
   restore_ui_sync_.active = false;
+  restore_ui_sync_.main_synced = false;
+  restore_ui_sync_.extended_synced = false;
   restore_ui_sync_.cycles_waited = 0;
 
   reset_queued_restore_();
   queued_restore_.active = true;
   queued_restore_.scheduled = false;
+  queued_restore_.family = TxPacketFamily::MAIN;
   queued_restore_.generation++;
   queued_restore_.request_ms = tx_request_ms_;
 
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
 
-  DAIKIN_WARN(TAG, "Restore defaults requested: fields=%u", static_cast<unsigned>(RESTORE_DEFAULT_FIELD_COUNT));
+  DAIKIN_WARN(TAG, "Restore defaults requested: fields=%u main=%u extended=%u",
+              static_cast<unsigned>(RESTORE_DEFAULT_FIELD_COUNT),
+              static_cast<unsigned>(RESTORE_DEFAULT_MAIN_FIELD_COUNT),
+              static_cast<unsigned>(RESTORE_DEFAULT_EXTENDED_FIELD_COUNT));
 
   if (!uart_active_ && !uart_tx_active_) {
     start_uart_cycle();
@@ -2693,8 +2829,11 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(TxPacketFamily family, const
     DAIKIN_DBG(TAG, "TX timing: profile_restore_request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else if (kind == TxPacketKind::RESTORE_DEFAULTS) {
-    ESP_LOGI(TAG, "TX restore defaults sent: fields=%u attempt=%u/%u len=%u",
-             static_cast<unsigned>(RESTORE_DEFAULT_FIELD_COUNT), attempts_sent, kTxMaxRepeats,
+    const unsigned field_count = family == TxPacketFamily::EXTENDED
+                                     ? static_cast<unsigned>(RESTORE_DEFAULT_EXTENDED_FIELD_COUNT)
+                                     : static_cast<unsigned>(RESTORE_DEFAULT_MAIN_FIELD_COUNT);
+    ESP_LOGI(TAG, "TX restore defaults sent: family=%s fields=%u attempt=%u/%u len=%u",
+             spec.label, field_count, attempts_sent, kTxMaxRepeats,
              static_cast<unsigned>(command.size()));
     DAIKIN_DBG(TAG, "TX timing: restore_request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
@@ -2780,7 +2919,7 @@ bool DaikinEkhheComponent::validate_outbound_cd_packet_(TxPacketFamily family,
       expected[index] = value;
     }
   } else if (kind == TxPacketKind::RESTORE_DEFAULTS) {
-    apply_restore_defaults_to_packet(expected);
+    apply_restore_defaults_to_packet(expected, family == TxPacketFamily::EXTENDED);
   }
 
   expected.back() = ekhhe_checksum(expected);
@@ -2882,24 +3021,28 @@ void DaikinEkhheComponent::send_uart_cc_packet_(const std::vector<uint8_t> &base
   send_uart_tx_packet_(TxPacketFamily::MAIN, base_packet, apply_change, index, value, bit_position, bit_width);
 }
 
-void DaikinEkhheComponent::send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
+void DaikinEkhheComponent::send_restore_defaults_packet_(TxPacketFamily family,
+                                                         const std::vector<uint8_t> &base_packet,
                                                          const std::vector<uint8_t> &packet) {
+  const auto &spec = tx_packet_family_spec_(family);
   std::vector<uint8_t> command = packet;
   if (!command.empty()) {
-    command[0] = CD_PACKET_START_BYTE;
+    command[0] = spec.write_packet_type;
     command.back() = ekhhe_checksum(command);
   }
 
   std::string validation_error;
-  if (!validate_outbound_cd_packet_(TxPacketFamily::MAIN, base_packet, command, TxPacketKind::RESTORE_DEFAULTS,
+  if (!validate_outbound_cd_packet_(family, base_packet, command, TxPacketKind::RESTORE_DEFAULTS,
                                     0, 0, BIT_POSITION_NO_BITMASK, 0, validation_error)) {
-    DAIKIN_WARN(TAG, "Restore defaults TX blocked by packet diff guard: %s",
-                validation_error.c_str());
+    DAIKIN_WARN(TAG, "Restore defaults TX blocked by packet diff guard: family=%s %s",
+                spec.label, validation_error.c_str());
     tx_waiting_for_first_rx_ = false;
     tx_waiting_for_first_cc_ = false;
     reset_pending_restore_();
     reset_queued_restore_();
     restore_ui_sync_.active = false;
+    restore_ui_sync_.main_synced = false;
+    restore_ui_sync_.extended_synced = false;
     restore_ui_sync_.cycles_waited = 0;
     if (!uart_active_ && !uart_tx_active_) {
       start_uart_cycle();
@@ -2907,8 +3050,8 @@ void DaikinEkhheComponent::send_restore_defaults_packet_(const std::vector<uint8
     return;
   }
 
-  send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::RESTORE_DEFAULTS, 0, 0,
-                           BIT_POSITION_NO_BITMASK, 0, pending_restore_.attempts_sent);
+  send_prebuilt_cd_packet_(family, command, TxPacketKind::RESTORE_DEFAULTS, 0, 0, BIT_POSITION_NO_BITMASK,
+                           0, pending_restore_.attempts_sent);
 }
 
 void DaikinEkhheComponent::send_profile_restore_packet_(const std::vector<uint8_t> &base_packet,
@@ -3129,20 +3272,62 @@ void DaikinEkhheComponent::check_pending_restore_(const std::vector<uint8_t> &bu
     return;
   }
 
-  const bool matched = restore_defaults_match_packet(buffer, true);
+  const TxPacketFamily family = pending_restore_.family;
+  const auto &spec = tx_packet_family_spec_(family);
+  const bool extended = family == TxPacketFamily::EXTENDED;
+  const bool matched = restore_defaults_match_packet(buffer, true, extended);
   if (matched) {
+    if (family == TxPacketFamily::MAIN) {
+      pending_restore_.main_applied = true;
+      if (pending_restore_.attempts_sent > 1) {
+        DAIKIN_WARN(TAG, "Restore defaults main block applied after retries: attempts=%u",
+                    pending_restore_.attempts_sent);
+      } else if (pending_restore_.attempts_sent > 0) {
+        ESP_LOGI(TAG, "Restore defaults main block applied.");
+      } else {
+        DAIKIN_DBG(TAG, "Restore defaults main block already current.");
+      }
+      if (pending_restore_.attempts_sent > 0) {
+        DAIKIN_DBG(TAG, "TX timing: restore_main_applied_after=%u attempts=%u",
+                   millis() - tx_sent_ms_, pending_restore_.attempts_sent);
+      }
+      pending_restore_.family = TxPacketFamily::EXTENDED;
+      pending_restore_.attempts_sent = 0;
+      pending_restore_.last_attempt_d2_seq = 0;
+      reset_queued_restore_();
+      queued_restore_.active = true;
+      queued_restore_.scheduled = false;
+      queued_restore_.family = TxPacketFamily::EXTENDED;
+      queued_restore_.generation++;
+      queued_restore_.request_ms = tx_request_ms_;
+      tx_waiting_for_first_rx_ = false;
+      tx_waiting_for_first_cc_ = false;
+      DAIKIN_DBG(TAG, "Restore defaults scheduling: main complete, waiting_for_next_d2 for extended");
+      return;
+    }
+
+    pending_restore_.extended_applied = true;
+    const bool wrote_any = pending_restore_.main_write_sent || pending_restore_.extended_write_sent;
     if (pending_restore_.attempts_sent == 0) {
-      DAIKIN_DBG(TAG, "Restore defaults already current.");
+      if (wrote_any) {
+        ESP_LOGI(TAG, "Restore defaults applied.");
+      } else {
+        DAIKIN_DBG(TAG, "Restore defaults already current.");
+      }
     } else {
       if (pending_restore_.attempts_sent > 1) {
-        DAIKIN_WARN(TAG, "Restore defaults applied after retries: attempts=%u",
+        DAIKIN_WARN(TAG, "Restore defaults extended block applied after retries: attempts=%u",
                     pending_restore_.attempts_sent);
       } else {
         ESP_LOGI(TAG, "Restore defaults applied.");
       }
-      DAIKIN_DBG(TAG, "TX timing: restore_applied_after=%u attempts=%u",
+      DAIKIN_DBG(TAG, "TX timing: restore_extended_applied_after=%u attempts=%u",
                  millis() - tx_sent_ms_, pending_restore_.attempts_sent);
+    }
+    if (wrote_any) {
       restore_ui_sync_.active = true;
+      restore_ui_sync_.main_synced = false;
+      restore_ui_sync_.extended_synced = false;
       restore_ui_sync_.cycles_waited = 0;
     }
     tx_waiting_for_first_rx_ = false;
@@ -3157,22 +3342,27 @@ void DaikinEkhheComponent::check_pending_restore_(const std::vector<uint8_t> &bu
   }
 
   if (pending_restore_.attempts_sent < kTxMaxRepeats) {
-    DAIKIN_DBG(TAG, "Restore defaults retry pending: attempt=%u/%u",
+    DAIKIN_DBG(TAG, "Restore defaults retry pending: family=%s readback=%s attempt=%u/%u",
+               spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
                pending_restore_.attempts_sent, kTxMaxRepeats);
     return;
   }
 
   uint8_t current_value = 0;
-  const RestoreFieldSpec *field = first_restore_mismatch(buffer, true, current_value);
+  const RestoreFieldSpec *field = first_restore_mismatch(buffer, true, current_value, extended);
   if (field != nullptr) {
     DAIKIN_WARN(TAG,
-                "Restore defaults not applied: first_mismatch=%s expected=0x%02X current=0x%02X attempts=%u",
-                field->name, field->value, current_value, pending_restore_.attempts_sent);
+                "Restore defaults not applied: family=%s readback=%s first_mismatch=%s expected=0x%02X current=0x%02X attempts=%u partial_main=%u partial_extended=%u",
+                spec.label, packet_type_to_string_(spec.readback_packet_type).c_str(),
+                field->name, field->value, current_value, pending_restore_.attempts_sent,
+                pending_restore_.main_applied, pending_restore_.extended_applied);
   } else {
-    DAIKIN_WARN(TAG, "Restore defaults not applied: attempts=%u", pending_restore_.attempts_sent);
+    DAIKIN_WARN(TAG, "Restore defaults not applied: family=%s attempts=%u partial_main=%u partial_extended=%u",
+                spec.label, pending_restore_.attempts_sent,
+                pending_restore_.main_applied, pending_restore_.extended_applied);
   }
-  DAIKIN_DBG(TAG, "TX timing: restore_failed_after=%u attempts=%u",
-             millis() - tx_sent_ms_, pending_restore_.attempts_sent);
+  DAIKIN_DBG(TAG, "TX timing: restore_failed_after=%u family=%s attempts=%u",
+             millis() - tx_sent_ms_, spec.label, pending_restore_.attempts_sent);
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
   reset_pending_restore_();

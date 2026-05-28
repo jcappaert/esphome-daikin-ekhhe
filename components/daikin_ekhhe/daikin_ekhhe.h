@@ -479,7 +479,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool has_deferred_user_tx_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
-  void send_restore_defaults_packet_(const std::vector<uint8_t> &base_packet,
+  void send_restore_defaults_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                      const std::vector<uint8_t> &packet);
   void send_profile_restore_packet_(const std::vector<uint8_t> &base_packet,
                                     const std::vector<uint8_t> &packet, bool known_good);
@@ -561,6 +561,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   PendingTx pending_tx_;
   struct PendingRestore {
     bool active = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    bool main_applied = false;
+    bool extended_applied = false;
+    bool main_write_sent = false;
+    bool extended_write_sent = false;
     uint8_t attempts_sent = 0;
     uint32_t last_attempt_d2_seq = 0;
   };
@@ -584,6 +589,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   TxUiSync tx_ui_sync_;
   struct RestoreUiSync {
     bool active = false;
+    bool main_synced = false;
+    bool extended_synced = false;
     uint8_t cycles_waited = 0;
   };
   RestoreUiSync restore_ui_sync_;
@@ -618,6 +625,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct QueuedRestore {
     bool active = false;
     bool scheduled = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
     uint32_t generation = 0;
     uint32_t request_ms = 0;
     uint32_t anchor_ms = 0;
