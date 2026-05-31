@@ -383,6 +383,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kMaxTxDelayAfterD2Ms = 250;
   static constexpr uint8_t kTxMaxRepeats = 5;
   static constexpr uint8_t kDeferredTxMax = 8;
+  static constexpr uint8_t kTimeBandUiSyncMaxCycles = 3;
   static constexpr uint8_t kTimeBandApplyFlag = 0xFF;
   static constexpr uint8_t kTimeBandClearFlag = 0xFC;
   static constexpr uint8_t kTimeBandMaxMode = 4;
@@ -514,6 +515,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void send_time_band_packet_(const std::vector<uint8_t> &base_packet);
   void request_time_band_tx_(uint8_t flag, uint8_t start_hour, uint8_t start_minute,
                              uint8_t end_hour, uint8_t end_minute, uint8_t mode);
+  bool time_band_matches_packet_(const std::vector<uint8_t> &buffer, bool d2_packet,
+                                 uint8_t flag, uint8_t start_hour, uint8_t start_minute,
+                                 uint8_t end_hour, uint8_t end_minute, uint8_t mode) const;
   void check_pending_restore_(const std::vector<uint8_t> &buffer);
   void schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry);
   void check_pending_profile_restore_(const std::vector<uint8_t> &buffer);
@@ -671,6 +675,17 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t cycles_waited = 0;
   };
   ProfileUiSync profile_ui_sync_;
+  struct TimeBandUiSync {
+    bool active = false;
+    uint8_t flag = 0;
+    uint8_t start_hour = 0;
+    uint8_t start_minute = 0;
+    uint8_t end_hour = 0;
+    uint8_t end_minute = 0;
+    uint8_t mode = 0;
+    uint8_t cycles_waited = 0;
+  };
+  TimeBandUiSync time_band_ui_sync_;
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;
