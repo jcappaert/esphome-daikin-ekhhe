@@ -64,6 +64,8 @@ sensor:
       name: "H: Solar Collector Temperature probe"
     eev_opening_step:
       name: "I: EEV opening step"
+    fan_speed_rpm:
+      name: "Fan speed RPM"
     frames_captured_total:
       name: "Daikin Frames Captured"
     frames_dropped_total:

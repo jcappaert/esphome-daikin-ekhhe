@@ -46,6 +46,8 @@ sensor:
   - platform: daikin_ekhhe
     low_water_temp_probe:
       name: "CI Debug Low Water Temperature probe"
+    fan_speed_rpm:
+      name: "CI Debug Fan Speed RPM"
     frames_captured_total:
       name: "CI Frames Captured"
 

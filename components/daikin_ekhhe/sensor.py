@@ -30,6 +30,7 @@ TYPES = [
     G_COMP_GAS_T_PROBE,
     H_SOLAR_T_PROBE,
     I_EEV_STEP,
+    FAN_SPEED_RPM,
 ]
 
 DEBUG_TYPES = [
@@ -109,7 +110,13 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=0,
                 #device_class=DEVICE_CLASS_NONE,
                 state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(FAN_SPEED_RPM): sensor.sensor_schema(
+                unit_of_measurement="rpm",
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(FRAMES_CAPTURED_TOTAL): sensor.sensor_schema(
                 unit_of_measurement=UNIT_EMPTY,

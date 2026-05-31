@@ -60,6 +60,7 @@ Useful read-only values for monitoring the heat pump:
 - `compressor_discharge_gas_temp_probe`
 - `solar_collector_temp_probe`
 - `eev_opening_step`
+- `fan_speed_rpm`
 
 ### Basic Operation
 

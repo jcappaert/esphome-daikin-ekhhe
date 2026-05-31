@@ -16,6 +16,7 @@ static const std::string F_EVA_OUTLET_T_PROBE    = "evaporator_outlet_gas_temp_p
 static const std::string G_COMP_GAS_T_PROBE      = "compressor_discharge_gas_temp_probe";
 static const std::string H_SOLAR_T_PROBE         = "solar_collector_temp_probe";
 static const std::string I_EEV_STEP              = "eev_opening_step";
+static const std::string FAN_SPEED_RPM           = "fan_speed_rpm";
 static const std::string J_POWER_FW_VERSION      = "power_board_firmware_version";
 static const std::string L_UI_FW_VERSION         = "ui_firmware_version";
 
