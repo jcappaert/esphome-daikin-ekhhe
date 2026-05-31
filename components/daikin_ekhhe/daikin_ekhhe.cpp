@@ -3220,6 +3220,34 @@ bool DaikinEkhheComponent::validate_outbound_cd_packet_(TxPacketFamily family,
     }
   } else if (kind == TxPacketKind::RESTORE_DEFAULTS) {
     apply_restore_defaults_to_packet(expected, family == TxPacketFamily::EXTENDED);
+  } else if (kind == TxPacketKind::TIME_BAND) {
+    if (family != TxPacketFamily::MAIN) {
+      reason = "time-band commands are only valid for the main packet family";
+      return false;
+    }
+    auto is_allowed_time_band_diff = [&command](size_t offset) -> bool {
+      return offset == CC_PACKET_TIME_BAND_FLAG_IDX ||
+             offset == CC_PACKET_TIME_BAND_START_HOUR_IDX ||
+             offset == CC_PACKET_TIME_BAND_START_MINUTE_IDX ||
+             offset == CC_PACKET_TIME_BAND_END_HOUR_IDX ||
+             offset == CC_PACKET_TIME_BAND_END_MINUTE_IDX ||
+             offset == CC_PACKET_TIME_BAND_MODE_IDX ||
+             offset == command.size() - 1;
+    };
+
+    for (size_t i = 0; i < expected.size(); ++i) {
+      if (expected[i] == command[i]) {
+        continue;
+      }
+      if (!is_allowed_time_band_diff(i)) {
+        char msg[128];
+        snprintf(msg, sizeof(msg), "time-band command changed unexpected byte %u expected=0x%02X actual=0x%02X",
+                 static_cast<unsigned>(i), expected[i], command[i]);
+        reason = msg;
+        return false;
+      }
+    }
+    return true;
   }
 
   expected.back() = ekhhe_checksum(expected);

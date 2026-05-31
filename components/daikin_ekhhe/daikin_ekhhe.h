@@ -469,6 +469,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     SNAPSHOT,
     PROFILE_RESTORE,
     RESTORE_DEFAULTS,
+    TIME_BAND,
   };
   enum class TxPacketFamily : uint8_t {
     MAIN,
