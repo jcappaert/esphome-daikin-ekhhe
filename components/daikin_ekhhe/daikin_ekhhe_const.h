@@ -48,6 +48,13 @@ static const std::string BOOST_T_TEMPERATURE     = "boost_target_temperature";
 static const std::string ELECTRIC_T_TEMPERATURE  = "electric_target_temperature";
 static const std::string VAC_DAYS                = "vacation_days";
 static const std::string TX_SEND_CALIBRATION     = "tx_send_calibration";
+static const std::string TIME_BAND_START_HOUR    = "time_band_start_hour";
+static const std::string TIME_BAND_START_MINUTE  = "time_band_start_minute";
+static const std::string TIME_BAND_END_HOUR      = "time_band_end_hour";
+static const std::string TIME_BAND_END_MINUTE    = "time_band_end_minute";
+static const std::string TIME_BAND_MODE          = "time_band_mode";
+static const std::string DAIKIN_APPLY_TIME_BAND  = "daikin_apply_time_band";
+static const std::string DAIKIN_CLEAR_TIME_BAND  = "daikin_clear_time_band";
 
 static const std::string P1_LOW_WAT_PROBE_HYST   = "low_water_hp_hysteris";
 static const std::string P2_HEAT_ON_DELAY        = "elec_heater_switch_on_delay";
