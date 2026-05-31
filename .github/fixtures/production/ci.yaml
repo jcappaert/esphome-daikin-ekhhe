@@ -45,6 +45,8 @@ sensor:
   - platform: daikin_ekhhe
     low_water_temp_probe:
       name: "CI Low Water Temperature probe"
+    fan_speed_rpm:
+      name: "CI Fan Speed RPM"
 
 binary_sensor:
   - platform: daikin_ekhhe

@@ -1516,6 +1516,8 @@ bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, 
           DD_PACKET_I_IDX,
           DD_PACKET_I_IDX + 1,
           DD_PACKET_DIG_IDX,
+          DD_PACKET_FAN_RPM_IDX,
+          DD_PACKET_FAN_RPM_IDX + 1,
           DD_PACKET_J_FW_IDX,
           DD_PACKET_END,
       };
@@ -2298,6 +2300,7 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
       {G_COMP_GAS_T_PROBE,     buffer[DD_PACKET_G_IDX]},
       {H_SOLAR_T_PROBE,        buffer[DD_PACKET_H_IDX]},
       {I_EEV_STEP,             (float)((buffer[DD_PACKET_I_IDX] << 8) | buffer[DD_PACKET_I_IDX + 1])},
+      {FAN_SPEED_RPM,          (float)((buffer[DD_PACKET_FAN_RPM_IDX] << 8) | buffer[DD_PACKET_FAN_RPM_IDX + 1])},
   };
 
   for (const auto &entry : sensor_values) {

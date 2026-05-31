@@ -63,6 +63,8 @@ sensor:
       name: "H: Solar Collector Temperature probe"
     eev_opening_step:
       name: "I: EEV opening step"
+    fan_speed_rpm:
+      name: "Fan speed RPM"
 
 binary_sensor:
   - platform: daikin_ekhhe

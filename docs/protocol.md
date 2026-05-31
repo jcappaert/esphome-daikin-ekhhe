@@ -24,7 +24,7 @@ Bus observations:
 The following areas still need reverse engineering:
 
 - Detailed status flags.
-- Detailed equipment/component state, such as fan state and other internal actuators.
+- Detailed equipment/component state beyond the currently decoded fan RPM.
 - Fault codes, error codes, and protection codes.
 - Status-only fields in `DD`.
 - Remaining unknown or partially decoded bitmasks.
