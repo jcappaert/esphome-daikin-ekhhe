@@ -232,6 +232,14 @@ number:
       name: "Boost mode target temperature"
     electric_target_temperature:
       name: "Electric mode target temperature"
+    time_band_start_hour:
+      name: "Time band start hour"
+    time_band_start_minute:
+      name: "Time band start minute"
+    time_band_end_hour:
+      name: "Time band end hour"
+    time_band_end_minute:
+      name: "Time band end minute"
 
 select:
   - platform: daikin_ekhhe
@@ -265,11 +273,20 @@ select:
       name: "P39: EEV control mode"
     evaporator_fan_compressor_off_mode:
       name: "P58: Evaporator fan compressor off mode"
+    time_band_mode:
+      name: "Time band mode"
 
 switch:
   - platform: daikin_ekhhe
     silent_mode:
       name: "Silent mode"
+
+button:
+  - platform: daikin_ekhhe
+    daikin_apply_time_band:
+      name: "Apply time band"
+    daikin_clear_time_band:
+      name: "Clear time band"
 
 text_sensor:
   - platform: daikin_ekhhe
