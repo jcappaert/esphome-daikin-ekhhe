@@ -1208,6 +1208,9 @@ bool DaikinEkhheComponent::validate_time_band_request_(uint8_t flag, uint8_t sta
       reason = "overnight time bands crossing midnight are not supported";
       return false;
     }
+  } else if (start_hour != 0 || start_minute != 0 || end_hour != 0 || end_minute != 0) {
+    reason = "clear command must use 00:00 -> 00:00";
+    return false;
   }
 
   return true;
