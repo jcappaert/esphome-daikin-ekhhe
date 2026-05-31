@@ -1146,18 +1146,18 @@ bool DaikinEkhheComponent::time_band_matches_packet_(const std::vector<uint8_t> 
                                                      uint8_t flag, uint8_t start_hour, uint8_t start_minute,
                                                      uint8_t end_hour, uint8_t end_minute,
                                                      uint8_t mode) const {
-  const uint8_t flag_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_FLAG_IDX : CC_PACKET_TIME_BAND_FLAG_IDX;
-  const uint8_t start_hour_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_START_HOUR_IDX : CC_PACKET_TIME_BAND_START_HOUR_IDX;
-  const uint8_t start_minute_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_START_MINUTE_IDX : CC_PACKET_TIME_BAND_START_MINUTE_IDX;
-  const uint8_t end_hour_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_END_HOUR_IDX : CC_PACKET_TIME_BAND_END_HOUR_IDX;
-  const uint8_t end_minute_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_END_MINUTE_IDX : CC_PACKET_TIME_BAND_END_MINUTE_IDX;
-  const uint8_t mode_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_MODE_IDX : CC_PACKET_TIME_BAND_MODE_IDX;
+  const uint8_t flag_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_FLAG_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_FLAG_IDX);
+  const uint8_t start_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_HOUR_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_HOUR_IDX);
+  const uint8_t start_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_MINUTE_IDX)
+                                             : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_MINUTE_IDX);
+  const uint8_t end_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_HOUR_IDX)
+                                         : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_HOUR_IDX);
+  const uint8_t end_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_MINUTE_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_MINUTE_IDX);
+  const uint8_t mode_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_MODE_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_MODE_IDX);
 
   return buffer.size() > mode_idx &&
          buffer[flag_idx] == flag &&
@@ -2084,18 +2084,18 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
 
 void DaikinEkhheComponent::update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer,
                                                             bool d2_packet, bool force) {
-  const uint8_t flag_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_FLAG_IDX : CC_PACKET_TIME_BAND_FLAG_IDX;
-  const uint8_t start_hour_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_START_HOUR_IDX : CC_PACKET_TIME_BAND_START_HOUR_IDX;
-  const uint8_t start_minute_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_START_MINUTE_IDX : CC_PACKET_TIME_BAND_START_MINUTE_IDX;
-  const uint8_t end_hour_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_END_HOUR_IDX : CC_PACKET_TIME_BAND_END_HOUR_IDX;
-  const uint8_t end_minute_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_END_MINUTE_IDX : CC_PACKET_TIME_BAND_END_MINUTE_IDX;
-  const uint8_t mode_idx =
-      d2_packet ? D2_PACKET_TIME_BAND_MODE_IDX : CC_PACKET_TIME_BAND_MODE_IDX;
+  const uint8_t flag_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_FLAG_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_FLAG_IDX);
+  const uint8_t start_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_HOUR_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_HOUR_IDX);
+  const uint8_t start_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_MINUTE_IDX)
+                                             : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_MINUTE_IDX);
+  const uint8_t end_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_HOUR_IDX)
+                                         : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_HOUR_IDX);
+  const uint8_t end_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_MINUTE_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_MINUTE_IDX);
+  const uint8_t mode_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_MODE_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_MODE_IDX);
 
   if (buffer.size() <= mode_idx) {
     return;
