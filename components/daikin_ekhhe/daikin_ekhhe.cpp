@@ -2750,6 +2750,14 @@ void DaikinEkhheComponent::restore_auto_snapshot() {
   restore_profile_(false);
 }
 
+void DaikinEkhheComponent::apply_time_band() {
+  DAIKIN_WARN(TAG, "Time-band apply is configured but not implemented in this build slice.");
+}
+
+void DaikinEkhheComponent::clear_time_band() {
+  DAIKIN_WARN(TAG, "Time-band clear is configured but not implemented in this build slice.");
+}
+
 void DaikinEkhheComponent::restore_default_settings() {
   if (last_cc_packet_.empty()) {
     DAIKIN_WARN(TAG, "Restore defaults requested before any CC packet was captured.");
@@ -2851,6 +2859,10 @@ void DaikinEkhheActionButton::press_action() {
     this->parent_->restore_known_good_profile();
   } else if (this->action_ == Action::RESTORE_AUTO_SNAPSHOT) {
     this->parent_->restore_auto_snapshot();
+  } else if (this->action_ == Action::APPLY_TIME_BAND) {
+    this->parent_->apply_time_band();
+  } else if (this->action_ == Action::CLEAR_TIME_BAND) {
+    this->parent_->clear_time_band();
   }
 }
 #endif

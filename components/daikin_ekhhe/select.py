@@ -1,7 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import select
-from esphome.const import CONF_OPTIONS
+from esphome.const import CONF_OPTIONS, ENTITY_CATEGORY_CONFIG
 
 from . import (
     CONF_EKHHE_ID,
@@ -29,6 +29,7 @@ TYPES = [
     P33_EEV_CONTROL,
     P39_EEV_MODE,
     P58_EVA_FAN_COMP_OFF,
+    TIME_BAND_MODE,
 ]
 
 
@@ -116,6 +117,12 @@ CONFIG_SCHEMA = (
             cv.Optional(P58_EVA_FAN_COMP_OFF): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Disabled', 1: 'Enabled', 2: 'Auto'}): ensure_option_map
+            }),
+            cv.Optional(TIME_BAND_MODE): select.select_schema(
+                DaikinEkhheSelect, entity_category=ENTITY_CATEGORY_CONFIG
+            ).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
+                cv.Optional(CONF_OPTIONS, default={0: 'Auto', 1: 'Eco', 2: 'Boost', 3: 'Electric', 4: 'Fan'}): ensure_option_map
             }),
         }
     )

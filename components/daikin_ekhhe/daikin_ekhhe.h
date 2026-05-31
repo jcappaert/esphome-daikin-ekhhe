@@ -82,6 +82,8 @@ class DaikinEkhheActionButton : public button::Button {
     SAVE_KNOWN_GOOD_PROFILE,
     RESTORE_KNOWN_GOOD_PROFILE,
     RESTORE_AUTO_SNAPSHOT,
+    APPLY_TIME_BAND,
+    CLEAR_TIME_BAND,
   };
 
   explicit DaikinEkhheActionButton(Action action) : action_(action) {}
@@ -150,6 +152,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void save_known_good_profile();
   void restore_known_good_profile();
   void restore_auto_snapshot();
+  void apply_time_band();
+  void clear_time_band();
   void update_number_cache(const std::string &number_name, float value);
   void update_select_cache(const std::string &select_name, const std::string &value);
 #if defined(USE_SWITCH)

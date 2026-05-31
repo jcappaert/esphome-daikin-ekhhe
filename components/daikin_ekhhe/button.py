@@ -9,6 +9,8 @@ from .const import (
     DAIKIN_RESTORE_DEFAULT_SETTINGS,
     DAIKIN_RESTORE_KNOWN_GOOD_PROFILE,
     DAIKIN_SAVE_KNOWN_GOOD_PROFILE,
+    DAIKIN_APPLY_TIME_BAND,
+    DAIKIN_CLEAR_TIME_BAND,
 )
 
 DaikinEkhheActionButton = daikin_ekhhe_ns.class_(
@@ -28,6 +30,12 @@ CONFIG_SCHEMA = cv.Schema(
             DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
         ),
         cv.Optional(DAIKIN_RESTORE_AUTO_SNAPSHOT): button.button_schema(
+            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+        ),
+        cv.Optional(DAIKIN_APPLY_TIME_BAND): button.button_schema(
+            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+        ),
+        cv.Optional(DAIKIN_CLEAR_TIME_BAND): button.button_schema(
             DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
         ),
     }
@@ -69,6 +77,24 @@ async def to_code(config):
         var = cg.new_Pvariable(
             conf[CONF_ID],
             cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::RESTORE_AUTO_SNAPSHOT"),
+        )
+        await button.register_button(var, conf)
+        cg.add(var.set_parent(hub))
+
+    if DAIKIN_APPLY_TIME_BAND in config:
+        conf = config[DAIKIN_APPLY_TIME_BAND]
+        var = cg.new_Pvariable(
+            conf[CONF_ID],
+            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::APPLY_TIME_BAND"),
+        )
+        await button.register_button(var, conf)
+        cg.add(var.set_parent(hub))
+
+    if DAIKIN_CLEAR_TIME_BAND in config:
+        conf = config[DAIKIN_CLEAR_TIME_BAND]
+        var = cg.new_Pvariable(
+            conf[CONF_ID],
+            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::CLEAR_TIME_BAND"),
         )
         await button.register_button(var, conf)
         cg.add(var.set_parent(hub))
