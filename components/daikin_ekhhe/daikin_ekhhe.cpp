@@ -2769,6 +2769,32 @@ void DaikinEkhheComponent::set_tx_delay_after_d2_ms(uint32_t delay_ms) {
     }
 }
 
+bool DaikinEkhheComponent::stage_time_band_number(const std::string &number_name, float value) {
+  const uint8_t staged_value = value <= 0.0f ? 0 : static_cast<uint8_t>(value);
+  if (number_name == TIME_BAND_START_HOUR) {
+    time_band_state_.start_hour = staged_value;
+  } else if (number_name == TIME_BAND_START_MINUTE) {
+    time_band_state_.start_minute = staged_value;
+  } else if (number_name == TIME_BAND_END_HOUR) {
+    time_band_state_.end_hour = staged_value;
+  } else if (number_name == TIME_BAND_END_MINUTE) {
+    time_band_state_.end_minute = staged_value;
+  } else {
+    return false;
+  }
+
+  time_band_state_.initialized = true;
+  DAIKIN_DBG(TAG, "Time-band staged: %s=%u", number_name.c_str(), staged_value);
+  return true;
+}
+
+bool DaikinEkhheComponent::stage_time_band_mode(uint8_t mode) {
+  time_band_state_.mode = mode;
+  time_band_state_.initialized = true;
+  DAIKIN_DBG(TAG, "Time-band staged: mode=%u", mode);
+  return true;
+}
+
 void DaikinEkhheComponent::save_known_good_profile() {
   std::vector<uint8_t> main_packet;
   std::vector<uint8_t> extended_packet;
@@ -2923,6 +2949,12 @@ void DaikinEkhheNumber::control(float value) {
         return;
     }
 
+    if (this->parent_->stage_time_band_number(name, value)) {
+        this->parent_->update_number_cache(name, value);
+        this->publish_state(value);
+        return;
+    }
+
     // Get the CC array index from map, send UART command and update UI state
     auto it_u = U_NUMBER_PARAM_INDEX.find(name);
     auto it_i = I_NUMBER_PARAM_INDEX.find(name);
@@ -2975,7 +3007,15 @@ void DaikinEkhheSelect::control(const std::string &value) {
         return;
     }
     uint8_t uart_value = static_cast<uint8_t>(it->second);
-  
+
+    if (name == TIME_BAND_MODE) {
+        if (this->parent_->stage_time_band_mode(uart_value)) {
+            this->parent_->update_select_cache(name, value);
+            this->publish_state(value);
+        }
+        return;
+    }
+
     bool extended_family = false;
 
     // Look up the packet index for this select entity

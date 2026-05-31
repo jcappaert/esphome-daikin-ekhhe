@@ -156,6 +156,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void clear_time_band();
   void update_number_cache(const std::string &number_name, float value);
   void update_select_cache(const std::string &select_name, const std::string &value);
+  bool stage_time_band_number(const std::string &number_name, float value);
+  bool stage_time_band_mode(uint8_t mode);
 #if defined(USE_SWITCH)
   void update_switch_cache(const std::string &switch_name, bool value);
   bool set_silent_mode(bool enabled);
