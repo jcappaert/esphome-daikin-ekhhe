@@ -3030,6 +3030,8 @@ void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hou
     DAIKIN_WARN(TAG, "Time-band command rejected: %s", validation_error.c_str());
     return;
   }
+  DAIKIN_DBG(TAG, "Time-band command validated: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
+             flag, start_hour, start_minute, end_hour, end_minute, mode);
   if (pending_time_band_tx_.active || queued_time_band_tx_.active || queued_time_band_tx_.scheduled) {
     DAIKIN_WARN(TAG, "Time-band command already in progress.");
     return;
