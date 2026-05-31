@@ -1168,6 +1168,51 @@ bool DaikinEkhheComponent::time_band_matches_packet_(const std::vector<uint8_t> 
          buffer[mode_idx] == mode;
 }
 
+bool DaikinEkhheComponent::validate_time_band_request_(uint8_t flag, uint8_t start_hour,
+                                                       uint8_t start_minute, uint8_t end_hour,
+                                                       uint8_t end_minute, uint8_t mode,
+                                                       std::string &reason) const {
+  if (flag != kTimeBandApplyFlag && flag != kTimeBandClearFlag) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "unsupported flag 0x%02X", flag);
+    reason = msg;
+    return false;
+  }
+  if (start_hour > 23 || end_hour > 23) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "hour out of range start=%u end=%u", start_hour, end_hour);
+    reason = msg;
+    return false;
+  }
+  if (start_minute > 59 || end_minute > 59) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "minute out of range start=%u end=%u", start_minute, end_minute);
+    reason = msg;
+    return false;
+  }
+  if (mode > kTimeBandMaxMode) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "mode %u out of range 0..%u", mode, kTimeBandMaxMode);
+    reason = msg;
+    return false;
+  }
+
+  if (flag == kTimeBandApplyFlag) {
+    const uint16_t start_total = static_cast<uint16_t>(start_hour) * 60 + start_minute;
+    const uint16_t end_total = static_cast<uint16_t>(end_hour) * 60 + end_minute;
+    if (end_total == start_total) {
+      reason = "end time must be after start time; use clear for 00:00 -> 00:00";
+      return false;
+    }
+    if (end_total < start_total) {
+      reason = "overnight time bands crossing midnight are not supported";
+      return false;
+    }
+  }
+
+  return true;
+}
+
 uint8_t DaikinEkhheComponent::tx_readback_index_(TxPacketFamily family, uint8_t write_index,
                                                  uint8_t bit_position) const {
   if (family == TxPacketFamily::EXTENDED) {
@@ -2974,6 +3019,12 @@ void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hou
                                                  uint8_t end_hour, uint8_t end_minute, uint8_t mode) {
   if (last_cc_packet_.empty()) {
     DAIKIN_WARN(TAG, "Time-band command requested before any CC packet was captured.");
+    return;
+  }
+  std::string validation_error;
+  if (!validate_time_band_request_(flag, start_hour, start_minute, end_hour, end_minute, mode,
+                                   validation_error)) {
+    DAIKIN_WARN(TAG, "Time-band command rejected: %s", validation_error.c_str());
     return;
   }
   if (pending_time_band_tx_.active || queued_time_band_tx_.active || queued_time_band_tx_.scheduled) {

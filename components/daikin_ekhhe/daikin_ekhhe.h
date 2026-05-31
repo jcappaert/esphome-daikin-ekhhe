@@ -518,6 +518,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool time_band_matches_packet_(const std::vector<uint8_t> &buffer, bool d2_packet,
                                  uint8_t flag, uint8_t start_hour, uint8_t start_minute,
                                  uint8_t end_hour, uint8_t end_minute, uint8_t mode) const;
+  bool validate_time_band_request_(uint8_t flag, uint8_t start_hour, uint8_t start_minute,
+                                   uint8_t end_hour, uint8_t end_minute, uint8_t mode,
+                                   std::string &reason) const;
   void check_pending_restore_(const std::vector<uint8_t> &buffer);
   void schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry);
   void check_pending_profile_restore_(const std::vector<uint8_t> &buffer);
