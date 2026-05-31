@@ -33,6 +33,23 @@ Recommended Home Assistant patterns:
 
 If you need a robust multi-step automation, make it state-driven: send one change, wait until the entity reports the requested state, then send the next change.
 
+## Time Bands
+
+Time-band controls are staged. Editing `time_band_start_hour`, `time_band_start_minute`, `time_band_end_hour`, `time_band_end_minute`, or `time_band_mode` changes the ESPHome entity state only; it does not immediately write to the heat pump.
+
+Press `daikin_apply_time_band` to send the staged range as one command. Press `daikin_clear_time_band` to write the cleared `00:00 -> 00:00` record. Clear preserves the current or staged mode value.
+
+Runtime validation runs before any time-band command is sent:
+
+- Hours must be `0..23`.
+- Minutes must be `0..59`.
+- Mode must be Auto, Eco, Boost, Electric, or Fan.
+- Apply requires the end time to be after the start time.
+- Overnight ranges that cross midnight are rejected.
+- `00:00 -> 00:00` is accepted only through the clear button.
+
+If validation fails, the component logs a warning and sends no command. After a valid apply or clear, the same write/retry timing expectations apply as for ordinary settings.
+
 ## Recovery Profiles
 
 The component has two persistent profile slots in ESP flash:
@@ -100,6 +117,7 @@ At `WARN` level, pay attention to:
 - `TX not applied`: the device did not report the requested value after all retry attempts.
 - Write applied after more than one attempt: the change worked, but timing or state conditions were not ideal.
 - Restore/profile warnings: the restore was blocked, missing recent source data, missing a stored profile, failed one internal stage, or failed confirmation.
+- Time-band validation warnings: the staged values were rejected before any command was sent.
 
 At `DEBUG` level, expect more operational timing detail:
 

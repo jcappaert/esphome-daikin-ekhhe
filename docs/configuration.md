@@ -109,6 +109,22 @@ Writable target temperatures for the operating modes:
 - `boost_target_temperature`
 - `electric_target_temperature`
 
+### Time Bands
+
+Optional staged controls for the currently observed time-band record:
+
+- `time_band_start_hour`
+- `time_band_start_minute`
+- `time_band_end_hour`
+- `time_band_end_minute`
+- `time_band_mode`
+- `daikin_apply_time_band`
+- `daikin_clear_time_band`
+
+Changing a time-band number or mode only stages the value locally. Press `daikin_apply_time_band` to send the staged range, or `daikin_clear_time_band` to write the cleared `00:00 -> 00:00` record.
+
+The first implementation intentionally controls only the observed active time-band record. It does not expose a full weekly scheduler.
+
 ### Digital Input Configuration
 
 Configuration and status related to the digital inputs:
