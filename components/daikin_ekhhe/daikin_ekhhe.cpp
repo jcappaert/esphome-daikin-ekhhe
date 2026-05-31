@@ -1935,7 +1935,42 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
   return;
 }
 
+void DaikinEkhheComponent::update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer,
+                                                            bool d2_packet) {
+  const uint8_t flag_idx =
+      d2_packet ? D2_PACKET_TIME_BAND_FLAG_IDX : CC_PACKET_TIME_BAND_FLAG_IDX;
+  const uint8_t start_hour_idx =
+      d2_packet ? D2_PACKET_TIME_BAND_START_HOUR_IDX : CC_PACKET_TIME_BAND_START_HOUR_IDX;
+  const uint8_t start_minute_idx =
+      d2_packet ? D2_PACKET_TIME_BAND_START_MINUTE_IDX : CC_PACKET_TIME_BAND_START_MINUTE_IDX;
+  const uint8_t end_hour_idx =
+      d2_packet ? D2_PACKET_TIME_BAND_END_HOUR_IDX : CC_PACKET_TIME_BAND_END_HOUR_IDX;
+  const uint8_t end_minute_idx =
+      d2_packet ? D2_PACKET_TIME_BAND_END_MINUTE_IDX : CC_PACKET_TIME_BAND_END_MINUTE_IDX;
+  const uint8_t mode_idx =
+      d2_packet ? D2_PACKET_TIME_BAND_MODE_IDX : CC_PACKET_TIME_BAND_MODE_IDX;
+
+  if (buffer.size() <= mode_idx) {
+    return;
+  }
+
+  time_band_state_.initialized = true;
+  time_band_state_.flag = buffer[flag_idx];
+  time_band_state_.start_hour = buffer[start_hour_idx];
+  time_band_state_.start_minute = buffer[start_minute_idx];
+  time_band_state_.end_hour = buffer[end_hour_idx];
+  time_band_state_.end_minute = buffer[end_minute_idx];
+  time_band_state_.mode = buffer[mode_idx];
+
+  set_number_value(TIME_BAND_START_HOUR, time_band_state_.start_hour);
+  set_number_value(TIME_BAND_START_MINUTE, time_band_state_.start_minute);
+  set_number_value(TIME_BAND_END_HOUR, time_band_state_.end_hour);
+  set_number_value(TIME_BAND_END_MINUTE, time_band_state_.end_minute);
+  set_select_value(TIME_BAND_MODE, time_band_state_.mode);
+}
+
 void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
+  update_time_band_state_from_bus_(buffer, true);
 
   // update numbers
   std::map<std::string, float> number_values = {
@@ -2157,6 +2192,8 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       profile_matches_packet(false, profile_sync_profile.main_data,
                              profile_sync_profile.main_length, buffer, false);
   const bool pending_profile_active = pending_profile_restore_.active;
+
+  update_time_band_state_from_bus_(buffer, false);
 
   // update numbers, unsigned and signed separately
   for (const auto &entry : U_NUMBER_PARAM_INDEX) {

@@ -449,6 +449,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                      const std::vector<uint8_t> &extended_packet);
   bool auto_save_snapshot_if_needed_();
   void restore_profile_(bool known_good);
+  void update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer, bool d2_packet);
   void update_dd_b1_bit_sensors_();
   void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
@@ -568,10 +569,20 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t main_data[kRawFrameMaxLen] = {};
     uint8_t extended_data[kRawFrameMaxLen] = {};
   };
+  struct TimeBandState {
+    bool initialized = false;
+    uint8_t flag = 0;
+    uint8_t start_hour = 0;
+    uint8_t start_minute = 0;
+    uint8_t end_hour = 0;
+    uint8_t end_minute = 0;
+    uint8_t mode = 0;
+  };
   ESPPreferenceObject known_good_profile_pref_;
   ESPPreferenceObject auto_snapshot_pref_;
   ProfileState known_good_profile_;
   ProfileState auto_snapshot_;
+  TimeBandState time_band_state_;
   uint32_t auto_snapshot_last_write_ms_ = 0;
 
   struct PendingTx {
