@@ -383,6 +383,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kMaxTxDelayAfterD2Ms = 250;
   static constexpr uint8_t kTxMaxRepeats = 5;
   static constexpr uint8_t kDeferredTxMax = 8;
+  static constexpr uint8_t kTimeBandApplyFlag = 0xFF;
+  static constexpr uint8_t kTimeBandClearFlag = 0xFC;
+  static constexpr uint8_t kTimeBandMaxMode = 4;
   static constexpr uint8_t kOperationalModeAuto = 0;
   static constexpr uint8_t kOperationalModeEco = 1;
   static constexpr uint8_t kOperationalModeBoost = 2;
@@ -451,7 +454,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                      const std::vector<uint8_t> &extended_packet);
   bool auto_save_snapshot_if_needed_();
   void restore_profile_(bool known_good);
-  void update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer, bool d2_packet);
+  void update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer, bool d2_packet,
+                                        bool force = false);
   void update_dd_b1_bit_sensors_();
   void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
@@ -507,15 +511,22 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                                      const std::vector<uint8_t> &packet);
   void send_profile_restore_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                     const std::vector<uint8_t> &packet, bool known_good);
+  void send_time_band_packet_(const std::vector<uint8_t> &base_packet);
+  void request_time_band_tx_(uint8_t flag, uint8_t start_hour, uint8_t start_minute,
+                             uint8_t end_hour, uint8_t end_minute, uint8_t mode);
   void check_pending_restore_(const std::vector<uint8_t> &buffer);
   void schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry);
   void check_pending_profile_restore_(const std::vector<uint8_t> &buffer);
   void schedule_queued_profile_restore_from_d2_(const RawFrameEntry &d2_entry);
+  void check_pending_time_band_(const std::vector<uint8_t> &buffer);
+  void schedule_queued_time_band_from_d2_(const RawFrameEntry &d2_entry);
   bool tx_operation_active_() const;
   void reset_pending_restore_();
   void reset_queued_restore_();
   void reset_pending_profile_restore_();
   void reset_queued_profile_restore_();
+  void reset_pending_time_band_();
+  void reset_queued_time_band_();
   uint8_t tx_readback_index_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
   uint8_t tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
   uint8_t tx_readback_bit_width_(TxPacketFamily family, uint8_t write_index,
@@ -574,6 +585,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   };
   struct TimeBandState {
     bool initialized = false;
+    bool staged_dirty = false;
     uint8_t flag = 0;
     uint8_t start_hour = 0;
     uint8_t start_minute = 0;
@@ -622,6 +634,18 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t last_attempt_d2_seq = 0;
   };
   PendingProfileRestore pending_profile_restore_;
+  struct PendingTimeBandTx {
+    bool active = false;
+    uint8_t flag = 0;
+    uint8_t start_hour = 0;
+    uint8_t start_minute = 0;
+    uint8_t end_hour = 0;
+    uint8_t end_minute = 0;
+    uint8_t mode = 0;
+    uint8_t attempts_sent = 0;
+    uint32_t last_attempt_d2_seq = 0;
+  };
+  PendingTimeBandTx pending_time_band_tx_;
   struct TxUiSync {
     bool active = false;
     TxPacketFamily family = TxPacketFamily::MAIN;
@@ -690,6 +714,15 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t anchor_seq = 0;
   };
   QueuedProfileRestore queued_profile_restore_;
+  struct QueuedTimeBandTx {
+    bool active = false;
+    bool scheduled = false;
+    uint32_t generation = 0;
+    uint32_t request_ms = 0;
+    uint32_t anchor_ms = 0;
+    uint32_t anchor_seq = 0;
+  };
+  QueuedTimeBandTx queued_time_band_tx_;
   uint32_t tx_request_ms_ = 0;
   uint32_t tx_sent_ms_ = 0;
   bool tx_waiting_for_first_rx_ = false;
