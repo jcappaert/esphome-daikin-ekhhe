@@ -2904,7 +2904,15 @@ void DaikinEkhheComponent::apply_time_band() {
 }
 
 void DaikinEkhheComponent::clear_time_band() {
-  DAIKIN_WARN(TAG, "Time-band clear is configured but not implemented in this build slice.");
+  if (!time_band_state_.initialized && !last_cc_packet_.empty()) {
+    update_time_band_state_from_bus_(last_cc_packet_, false, true);
+  }
+  if (!time_band_state_.initialized) {
+    DAIKIN_WARN(TAG, "Time-band clear requested before time-band state was initialized from the bus.");
+    return;
+  }
+
+  request_time_band_tx_(kTimeBandClearFlag, 0, 0, 0, 0, time_band_state_.mode);
 }
 
 void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hour, uint8_t start_minute,
