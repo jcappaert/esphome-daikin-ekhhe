@@ -35,4 +35,3 @@ uart:
 daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
-    mode: production

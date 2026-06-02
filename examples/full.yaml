@@ -41,7 +41,6 @@ uart:
 daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
-    mode: production
 
 sensor:
   - platform: daikin_ekhhe
@@ -74,6 +73,8 @@ binary_sensor:
       name: "DIG2 setting"
     dig3_config:
       name: "DIG3 setting"
+    dd_heating_demand:
+      name: "Heating demand"
     hp_active:
       name: "Heat pump active"
     eh_active:
