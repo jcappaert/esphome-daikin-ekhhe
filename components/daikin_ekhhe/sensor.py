@@ -4,11 +4,8 @@ from esphome.components import sensor
 from esphome.const import (
     UNIT_EMPTY,
     UNIT_CELSIUS,
-    UNIT_MILLISECOND,
     DEVICE_CLASS_TEMPERATURE,
-    DEVICE_CLASS_DURATION,
     STATE_CLASS_MEASUREMENT,
-    STATE_CLASS_TOTAL_INCREASING,
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
 
@@ -31,18 +28,6 @@ TYPES = [
     H_SOLAR_T_PROBE,
     I_EEV_STEP,
     FAN_SPEED_RPM,
-]
-
-DEBUG_TYPES = [
-    FRAMES_CAPTURED_TOTAL,
-    FRAMES_DROPPED_TOTAL,
-    FRAMES_TRUNCATED_TOTAL,
-    CRC_ERRORS_TOTAL,
-    FRAMING_ERRORS_TOTAL,
-    BYTES_CAPTURED_TOTAL,
-    CYCLE_PARSE_TIME_MS,
-    CYCLE_TOTAL_TIME_MS,
-    CYCLE_OVER_BUDGET_TOTAL,
 ]
 
 CONFIG_SCHEMA = (
@@ -118,62 +103,6 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_MEASUREMENT,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
-            cv.Optional(FRAMES_CAPTURED_TOTAL): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_TOTAL_INCREASING,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(FRAMES_DROPPED_TOTAL): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_TOTAL_INCREASING,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(FRAMES_TRUNCATED_TOTAL): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_TOTAL_INCREASING,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CRC_ERRORS_TOTAL): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_TOTAL_INCREASING,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(FRAMING_ERRORS_TOTAL): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_TOTAL_INCREASING,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(BYTES_CAPTURED_TOTAL): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_TOTAL_INCREASING,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CYCLE_PARSE_TIME_MS): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLISECOND,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_DURATION,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CYCLE_TOTAL_TIME_MS): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLISECOND,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_DURATION,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CYCLE_OVER_BUDGET_TOTAL): sensor.sensor_schema(
-                unit_of_measurement=UNIT_EMPTY,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_TOTAL_INCREASING,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
         }
     )
 )
@@ -192,8 +121,3 @@ async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
     for key in TYPES:
         await setup_conf(config, key, hub)
-    for key in DEBUG_TYPES:
-        if key in config:
-            conf = config[key]
-            sens = await sensor.new_sensor(conf)
-            cg.add(hub.register_debug_sensor(key, sens))

@@ -39,7 +39,6 @@ uart:
 daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
-    mode: production
 
 sensor:
   - platform: daikin_ekhhe
@@ -52,6 +51,12 @@ binary_sensor:
   - platform: daikin_ekhhe
     dig1_config:
       name: "CI DIG1 setting"
+    heating_demand:
+      name: "CI Heating Demand"
+    hp_active:
+      name: "CI Heat Pump Active"
+    eh_active:
+      name: "CI Electric Heater Active"
     p01_tank_lower_probe_fault:
       name: "CI P01 Tank Lower Probe Fault"
     p02_tank_upper_probe_fault:
@@ -117,8 +122,6 @@ text_sensor:
       name: "CI Power Board Firmware Version"
     ui_firmware_version:
       name: "CI UI Firmware Version"
-    daikin_raw_frame_meta:
-      name: "CI Raw Frame Meta"
     daikin_known_good_profile_status:
       name: "CI Known Good Profile Status"
     daikin_auto_snapshot_status:

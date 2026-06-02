@@ -6,7 +6,6 @@ All entities are optional. Start with a small config, confirm stable reads, then
 
 - [`examples/minimal.yaml`](../examples/minimal.yaml): recommended starting point with core readings and operating controls.
 - [`examples/full.yaml`](../examples/full.yaml): broader normal-user setup exposing most supported entities.
-- [`examples/debug.yaml`](../examples/debug.yaml): diagnostic setup with raw packet and bus-health entities.
 
 ## Component Setup
 
@@ -29,16 +28,15 @@ uart:
 daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
-    mode: production
 ```
 
 ## Component Options
 
 | Option | Default | Description |
 | --- | ---: | --- |
-| `update_interval` | `10` | Idle polling interval in seconds. Higher values can reduce CPU load on mroe constrained ESP variants. Writes temporarily keep RX active until confirmation and UI sync complete. |
-| `mode` | `production` | Use `production` for normal operation or `debug` to enable debug-only entities and logging paths. |
-| `continuous_rx` | `false` | Debug-only option. When true in debug mode, RX keeps running continuously instead of respecting `update_interval`. |
+| `update_interval` | `10` | Idle polling interval in seconds. Higher values can reduce CPU load on more constrained ESP variants. Writes temporarily keep RX active until confirmation and UI sync complete. |
+| `continuous_rx` | `false` | When true, RX starts another cycle immediately after each complete cycle instead of waiting for `update_interval`. Writes and restore/profile actions keep RX active as needed even when this is false. |
+| `mode` | none | Deprecated compatibility shim. Accepted legacy values are ignored at runtime; remove this option from new YAML. |
 | `tx_send_calibration` | `75` | Delay in milliseconds used when scheduling write packets. This might need to be calibrated for your specific ESP32 chip if parameters writes are not working. |
 
 The optional `tx_send_calibration` number entity can expose this timing as a Number. Changes made through the number entity apply immediately but are not persisted unless you also update YAML.
@@ -71,6 +69,7 @@ Common day-to-day controls and state indicators:
 - `silent_mode`
 - `hp_active`
 - `eh_active`
+- `heating_demand`
 - `vacation_days`
 
 `silent_mode` can be enabled only while the unit is in Auto, Eco, or Boost mode. Disabling it is allowed from any mode so the setting can be cleared safely if the operating mode changes.
@@ -180,39 +179,3 @@ Optional timing calibration:
 - `tx_send_calibration`
 
 This can be useful if read values work but writes repeatedly fail on your specific ESP32 or RS485 setup.
-
-### Debug And Reverse Engineering
-
-Debug-only entities:
-
-- `daikin_raw_frame_hex`
-- `daikin_raw_frame_meta`
-- `daikin_unknown_fields`
-- `daikin_frame_diff`
-- `daikin_debug_packet`
-- `daikin_debug_freeze`
-- `dd_heating_demand`
-- `dd_b1_text_sensor`
-- `dd_b5_text_sensor`
-- `frames_captured_total`
-- `frames_dropped_total`
-- `frames_truncated_total`
-- `crc_errors_total`
-- `framing_errors_total`
-- `bytes_captured_total`
-- `cycle_parse_time_ms`
-- `cycle_total_time_ms`
-- `cycle_over_budget_total`
-
-## Debug Mode
-
-Enable debug mode on the component:
-
-```yaml
-daikin_ekhhe:
-  - id: daikin_component
-    update_interval: 10
-    mode: debug
-```
-
-Debug mode enables raw frame inspection entities when they are also declared in YAML. By default `update_interval` is still respected in debug mode. Set `continuous_rx: true` only when you need continuous bus capture for troubleshooting or reverse engineering.

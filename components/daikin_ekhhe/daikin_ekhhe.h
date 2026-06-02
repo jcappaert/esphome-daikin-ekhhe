@@ -1,10 +1,6 @@
 
 #pragma once
 
-#ifndef DAIKIN_EKHHE_DEBUG
-#define DAIKIN_EKHHE_DEBUG 0
-#endif
-
 #include <string>
 #include <map>
 #include <type_traits>
@@ -62,16 +58,7 @@ class DaikinEkhheSelect : public select::Select, public Component {
   private:
    std::map<std::string, int> select_mappings_; 
    DaikinEkhheComponent *parent_;
-   std::string internal_id_;
-};
-
-class DaikinEkhheDebugSelect : public select::Select, public Component {
- public:
-  void control(const std::string &value) override;
-  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
-
- private:
-  DaikinEkhheComponent *parent_;
+  std::string internal_id_;
 };
 
 #if defined(USE_SWITCH)
@@ -84,17 +71,6 @@ class DaikinEkhheSwitch : public switch_::Switch {
  private:
   DaikinEkhheComponent *parent_;
   std::string internal_id_;
-};
-#endif
-
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-class DaikinEkhheDebugSwitch : public switch_::Switch {
- public:
-  void write_state(bool state) override;
-  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
-
- private:
-  DaikinEkhheComponent *parent_;
 };
 #endif
 
@@ -148,20 +124,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_select(const std::string &select_name, select::Select *select);
   void register_text_sensor(const std::string &text_sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
-  void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
-  void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
-  void register_debug_select(DaikinEkhheDebugSelect *select);
 #if defined(USE_SWITCH)
   void register_switch(const std::string &switch_name, switch_::Switch *sw);
 #endif
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-  void register_debug_switch(DaikinEkhheDebugSwitch *sw);
-#endif
   void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
-  void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
-  void set_dd_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b5_text_ = sensor; }
-  void set_dd_heating_demand(binary_sensor::BinarySensor *sensor) { this->dd_heating_demand_ = sensor; }
+  void set_heating_demand(binary_sensor::BinarySensor *sensor) { this->heating_demand_ = sensor; }
   void set_hp_active(binary_sensor::BinarySensor *sensor) { this->hp_active_ = sensor; }
   void set_eh_active(binary_sensor::BinarySensor *sensor) { this->eh_active_ = sensor; }
 
@@ -182,8 +150,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void save_known_good_profile();
   void restore_known_good_profile();
   void restore_auto_snapshot();
-  void set_debug_packet(const std::string &value);
-  void set_debug_freeze(bool enabled);
   void update_number_cache(const std::string &number_name, float value);
   void update_select_cache(const std::string &select_name, const std::string &value);
 #if defined(USE_SWITCH)
@@ -392,16 +358,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kTimestampRefreshMs = 5 * 60 * 1000;
   static constexpr uint32_t kCycleTimeoutMs = 2000;
   static constexpr uint32_t kFrameReadTimeoutMs = 120;
-  static constexpr uint32_t kCycleOverBudgetMs = 2000;
-  static constexpr uint32_t kDebugTextPublishMinIntervalMs = 1000;
-  static constexpr uint32_t kDebugCounterPublishIntervalMs = 30000;
-  static constexpr uint32_t kDebugTimingPublishMinIntervalMs = 1000;
   static constexpr size_t kRawFrameMaxLen = 71;
-  static constexpr size_t kRawFrameBufferSize = DAIKIN_EKHHE_DEBUG ? 64 : 16;
+  static constexpr size_t kRawFrameBufferSize = 16;
   static constexpr uint8_t kBitPositionNoBitmask = 255;
-  static constexpr uint32_t kCdContextLogDelayMs = 4000;
-  static constexpr uint8_t kCdContextFramesBefore = 6;
-  static constexpr uint8_t kCdContextFramesAfter = 8;
   static constexpr uint32_t kDefaultTxDelayAfterD2Ms = 75;
   static constexpr uint32_t kMaxTxDelayAfterD2Ms = 250;
   static constexpr uint8_t kTxMaxRepeats = 5;
@@ -429,17 +388,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #endif
   std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
-  std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
-  std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
-  DaikinEkhheDebugSelect *debug_packet_select_ = nullptr;
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-  DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
-#endif
   text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
   text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
-  text_sensor::TextSensor *dd_b1_text_ = nullptr;
-  text_sensor::TextSensor *dd_b5_text_ = nullptr;
-  binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
+  binary_sensor::BinarySensor *heating_demand_ = nullptr;
   binary_sensor::BinarySensor *hp_active_ = nullptr;
   binary_sensor::BinarySensor *eh_active_ = nullptr;
   esphome::time::RealTimeClock *clock = nullptr;
@@ -465,13 +416,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                              float epsilon, uint32_t refresh_ms);
   bool should_publish_bool_(const std::string &key, bool value, std::map<std::string, bool> &last_values,
                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
- bool should_publish_text_(const std::string &key, const std::string &value,
+  bool should_publish_text_(const std::string &key, const std::string &value,
                             std::map<std::string, std::string> &last_values,
                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
   struct RawFrameEntry;
 
-  bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
-  void publish_debug_outputs_();
   void publish_profile_statuses_();
   void publish_profile_status_(bool known_good);
   std::string format_profile_status_(bool known_good) const;
@@ -482,28 +431,15 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
   void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
-  const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
-  const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
   const RawFrameEntry *find_latest_dd_frame_(size_t &index) const;
-  const RawFrameEntry *find_previous_frame_by_type_(uint8_t packet_type, uint32_t seq, size_t &index,
-                                                    bool require_ok) const;
   bool is_frame_ok_(const RawFrameEntry &entry) const;
-  std::string raw_frame_flags_to_string_(uint8_t flags) const;
-  std::string format_raw_frame_hex_(const RawFrameEntry &entry) const;
-  std::string format_raw_frame_hex_data_(const uint8_t *data, size_t length) const;
-  std::string format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back, uint32_t now_ms) const;
-  void log_frame_context_(uint32_t center_seq, uint8_t before, uint8_t after) const;
 
-  std::string format_unknown_fields_(const RawFrameEntry &entry) const;
-  std::string format_frame_diff_(const RawFrameEntry &entry, const RawFrameEntry *prev) const;
-  bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;
 #if defined(USE_SWITCH)
   bool current_operational_mode_(uint8_t &mode) const;
   bool silent_mode_allowed_mode_(uint8_t mode) const;
   void publish_silent_mode_from_latest_packet_();
 #endif
-  uint8_t packet_type_from_string_(const std::string &value) const;
   std::string packet_type_to_string_(uint8_t packet_type) const;
   enum class TxPacketKind : uint8_t {
     SINGLE_FIELD,
@@ -576,16 +512,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool uart_tx_active_ = false; // used for SW "flow control" to avoid RS485 bus contention
   bool continuous_rx_ = false;
   unsigned long last_rx_time_ = 0;
-  static constexpr bool debug_mode_ = DAIKIN_EKHHE_DEBUG;
   static constexpr uint32_t kAutoSnapshotCooldownMs = 15UL * 60UL * 1000UL;
 
   uint32_t cycle_start_ms_ = 0;
   uint32_t cycle_bytes_read_ = 0;
   uint32_t cycle_packets_seen_ = 0;
-  uint32_t cycle_packets_parsed_ = 0;
-  uint32_t cycle_parse_ms_ = 0;
-  uint32_t cycle_total_ms_ = 0;
-  uint32_t cycle_over_budget_total_ = 0;
   uint32_t cycle_timeouts_ = 0;
   uint32_t cycle_checksum_errors_ = 0;
   uint8_t cycle_checksum_error_mask_ = 0;
@@ -595,9 +526,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool cycle_timeout_logged_ = false;
   bool cycle_publish_allowed_ = true;
   bool cycle_synced_ = false;
-  uint32_t debug_frozen_seq_ = 0;
-  bool debug_freeze_ = false;
-  uint8_t debug_packet_type_ = 0;
   struct StoredProfileBlob {
     uint32_t magic = 0;
     uint8_t version = 0;
@@ -734,13 +662,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   size_t raw_frame_head_ = 0;
   size_t raw_frame_count_ = 0;
   uint32_t raw_frame_seq_ = 0;
-  uint32_t raw_frames_captured_ = 0;
-  uint32_t raw_frames_dropped_ = 0;
-  uint32_t raw_frames_truncated_ = 0;
-  uint32_t raw_frames_error_ = 0;
-  uint32_t raw_bytes_captured_ = 0;
-  uint32_t raw_crc_errors_total_ = 0;
-  uint32_t raw_framing_errors_total_ = 0;
   uint32_t last_frame_profile_ms_ = 0;
   uint8_t last_frame_profile_type_ = 0;
   uint32_t last_cc_profile_ms_ = 0;
@@ -761,16 +682,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, uint32_t> last_published_text_ms_;
   std::string last_published_timestamp_;
   uint32_t last_published_timestamp_ms_ = 0;
-  std::map<std::string, float> debug_last_published_values_;
-  std::map<std::string, uint32_t> debug_last_published_values_ms_;
-  std::map<std::string, std::string> debug_last_published_text_;
-  std::map<std::string, uint32_t> debug_last_published_text_ms_;
-  uint8_t last_dd_b1_ = 0xFF;
-  uint8_t last_dd_b5_ = 0xFF;
-  uint32_t last_dd_b1_publish_ms_ = 0;
-  uint32_t last_dd_b5_publish_ms_ = 0;
-  bool last_dd_b1_valid_ = false;
-  bool last_dd_b5_valid_ = false;
   bool last_dd_demand_ = false;
   bool last_hp_active_ = false;
   bool last_eh_active_ = false;

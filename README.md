@@ -6,7 +6,7 @@
 
 ESPHome external component for Daikin EKHHE domestic hot water heat pumps, also known as Altherma M HW.
 
-The component exposes known heat-pump readings, operating controls, installer parameters, target temperatures, recovery buttons, and debug tools through ESPHome and Home Assistant.
+The component exposes known heat-pump readings, operating controls, installer parameters, target temperatures, and recovery buttons through ESPHome and Home Assistant.
 
 <!-- Screenshot placeholder: add refreshed Home Assistant overview screenshot here before release. -->
 
@@ -35,7 +35,7 @@ Recommended safety steps:
 - Number entities for known numeric installer parameters, target temperatures, and TX timing calibration.
 - Persistent known-good and automatic recovery snapshots for managed settings.
 - Restore-defaults button for documented default values in the supported main settings block.
-- Debug mode with diagnostic logging and bus health counters.
+- Optional continuous receive mode for installations that need bus capture during normal polling.
 
 ## Hardware
 
@@ -76,7 +76,6 @@ uart:
 daikin_ekhhe:
   - id: daikin_component
     update_interval: 10
-    mode: production
 ```
 
 Then add only the entities you want:
@@ -101,17 +100,16 @@ For complete starting points, use:
 
 - [`examples/minimal.yaml`](examples/minimal.yaml): small everyday setup.
 - [`examples/full.yaml`](examples/full.yaml): broader normal-user setup.
-- [`examples/debug.yaml`](examples/debug.yaml): diagnostic and reverse-engineering setup.
 
 ## Documentation
 
 The links below are ordered as the recommended reading path for new users and contributors.
 
 - [Hardware](docs/hardware.md): RS485 wiring, display-bus tap, and installation cautions.
-- [Configuration](docs/configuration.md): YAML options, examples, entity groups, debug mode, and TX timing.
+- [Configuration](docs/configuration.md): YAML options, examples, entity groups, receive behavior, and TX timing.
 - [Operations](docs/operations.md): writes, retries, profiles, restore defaults, and troubleshooting.
 - [Protocol](docs/protocol.md): reverse-engineering notes for contributors.
-- [Development](docs/development.md): local validation, CI fixtures, and debugging workflow.
+- [Development](docs/development.md): local validation, CI fixtures, and contribution workflow.
 
 ## Credits
 

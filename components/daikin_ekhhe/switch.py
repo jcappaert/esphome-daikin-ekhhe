@@ -1,17 +1,13 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import switch
-from esphome.const import ENTITY_CATEGORY_CONFIG, ENTITY_CATEGORY_DIAGNOSTIC
+from esphome.const import ENTITY_CATEGORY_CONFIG
 
 from . import CONF_EKHHE_ID, DaikinEkhhe, daikin_ekhhe_ns
-from .const import DAIKIN_DEBUG_FREEZE, SILENT_MODE
+from .const import SILENT_MODE
 
 DaikinEkhheSwitch = daikin_ekhhe_ns.class_(
     "DaikinEkhheSwitch", switch.Switch, cg.Component
-)
-
-DaikinEkhheDebugSwitch = daikin_ekhhe_ns.class_(
-    "DaikinEkhheDebugSwitch", switch.Switch, cg.Component
 )
 
 CONFIG_SCHEMA = cv.Schema(
@@ -20,23 +16,17 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(SILENT_MODE): switch.switch_schema(
             DaikinEkhheSwitch, entity_category=ENTITY_CATEGORY_CONFIG
         ),
-        cv.Optional(DAIKIN_DEBUG_FREEZE): switch.switch_schema(
-            DaikinEkhheDebugSwitch, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-        ),
     }
 )
 
 
 async def to_code(config):
+    if SILENT_MODE not in config:
+        return
+
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
-    if SILENT_MODE in config:
-        conf = config[SILENT_MODE]
-        sw = await switch.new_switch(conf)
-        cg.add(hub.register_switch(SILENT_MODE, sw))
-        cg.add(sw.set_parent(hub))
-        cg.add(sw.set_internal_id(SILENT_MODE))
-    if DAIKIN_DEBUG_FREEZE in config:
-        conf = config[DAIKIN_DEBUG_FREEZE]
-        sw = await switch.new_switch(conf)
-        cg.add(hub.register_debug_switch(sw))
-        cg.add(sw.set_parent(hub))
+    conf = config[SILENT_MODE]
+    sw = await switch.new_switch(conf)
+    cg.add(hub.register_switch(SILENT_MODE, sw))
+    cg.add(sw.set_parent(hub))
+    cg.add(sw.set_internal_id(SILENT_MODE))
