@@ -7,13 +7,7 @@ from . import CONF_EKHHE_ID, DaikinEkhhe
 from .const import (
     CURRENT_TIME,
     DAIKIN_AUTO_SNAPSHOT_STATUS,
-    DAIKIN_DD_B1_TEXT,
-    DAIKIN_DD_B5_TEXT,
-    DAIKIN_FRAME_DIFF,
     DAIKIN_KNOWN_GOOD_PROFILE_STATUS,
-    DAIKIN_RAW_FRAME_HEX,
-    DAIKIN_RAW_FRAME_META,
-    DAIKIN_UNKNOWN_FIELDS,
     J_POWER_FW_VERSION,
     L_UI_FW_VERSION,
 )
@@ -31,28 +25,10 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(L_UI_FW_VERSION): text_sensor.text_sensor_schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
-        cv.Optional(DAIKIN_RAW_FRAME_HEX): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(DAIKIN_RAW_FRAME_META): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(DAIKIN_UNKNOWN_FIELDS): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(DAIKIN_FRAME_DIFF): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
         cv.Optional(DAIKIN_KNOWN_GOOD_PROFILE_STATUS): text_sensor.text_sensor_schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
         cv.Optional(DAIKIN_AUTO_SNAPSHOT_STATUS): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(DAIKIN_DD_B1_TEXT): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(DAIKIN_DD_B5_TEXT): text_sensor.text_sensor_schema(
             entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
     }

@@ -1,10 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import select
-from esphome.const import (
-    CONF_OPTIONS,
-    ENTITY_CATEGORY_DIAGNOSTIC,
-)
+from esphome.const import CONF_OPTIONS
 
 from . import (
     CONF_EKHHE_ID,
@@ -120,9 +117,6 @@ CONFIG_SCHEMA = (
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
                 cv.Optional(CONF_OPTIONS, default={0: 'Disabled', 1: 'Enabled', 2: 'Auto'}): ensure_option_map
             }),
-            cv.Optional(DAIKIN_DEBUG_PACKET): select.select_schema(
-                select.Select, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
         }
     )
 )

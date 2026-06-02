@@ -1,10 +1,10 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import switch
-from esphome.const import ENTITY_CATEGORY_CONFIG, ENTITY_CATEGORY_DIAGNOSTIC
+from esphome.const import ENTITY_CATEGORY_CONFIG
 
 from . import CONF_EKHHE_ID, DaikinEkhhe, daikin_ekhhe_ns
-from .const import DAIKIN_DEBUG_FREEZE, SILENT_MODE
+from .const import SILENT_MODE
 
 DaikinEkhheSwitch = daikin_ekhhe_ns.class_(
     "DaikinEkhheSwitch", switch.Switch, cg.Component
@@ -15,9 +15,6 @@ CONFIG_SCHEMA = cv.Schema(
         cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
         cv.Optional(SILENT_MODE): switch.switch_schema(
             DaikinEkhheSwitch, entity_category=ENTITY_CATEGORY_CONFIG
-        ),
-        cv.Optional(DAIKIN_DEBUG_FREEZE): switch.switch_schema(
-            switch.Switch, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
         ),
     }
 )
