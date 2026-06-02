@@ -157,8 +157,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void update_timestamp(uint8_t hour, uint8_t minute);
 
   // Allow UART command sending for Number/Select control
-  bool send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position);
-  bool send_uart_c2_command(uint8_t index, uint8_t value, uint8_t bit_position);
+  bool send_uart_cc_command(uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width = 1);
+  bool send_uart_c2_command(uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width = 1);
   void restore_default_settings();
   void save_known_good_profile();
   void restore_known_good_profile();
@@ -488,19 +488,21 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   };
   const TxPacketFamilySpec &tx_packet_family_spec_(TxPacketFamily family) const;
   void send_prebuilt_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &command, TxPacketKind kind,
-                                uint8_t index, uint8_t value, uint8_t bit_position,
+                                uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width,
                                 uint8_t attempts_sent);
   bool validate_outbound_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                     const std::vector<uint8_t> &command, TxPacketKind kind,
-                                    uint8_t index, uint8_t value, uint8_t bit_position,
+                                    uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width,
                                     std::string &reason);
-  bool send_uart_command_(TxPacketFamily family, uint8_t index, uint8_t value, uint8_t bit_position);
+  bool send_uart_command_(TxPacketFamily family, uint8_t index, uint8_t value,
+                          uint8_t bit_position, uint8_t bit_width);
   void send_uart_tx_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet, bool apply_change,
-                            uint8_t index, uint8_t value, uint8_t bit_position);
+                            uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width);
   void send_uart_cc_packet_(const std::vector<uint8_t> &base_packet, bool apply_change,
-                            uint8_t index, uint8_t value, uint8_t bit_position);
+                            uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width);
   void check_pending_tx_(const std::vector<uint8_t> &buffer);
-  bool defer_single_field_tx_(TxPacketFamily family, uint8_t index, uint8_t value, uint8_t bit_position);
+  bool defer_single_field_tx_(TxPacketFamily family, uint8_t index, uint8_t value,
+                              uint8_t bit_position, uint8_t bit_width);
   bool has_deferred_user_tx_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
@@ -519,8 +521,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void reset_queued_profile_restore_();
   uint8_t tx_readback_index_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
   uint8_t tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
+  uint8_t tx_readback_bit_width_(TxPacketFamily family, uint8_t write_index,
+                                 uint8_t bit_position, uint8_t bit_width) const;
   bool field_matches_target_(const std::vector<uint8_t> &buffer, uint8_t index, uint8_t value,
-                             uint8_t bit_position) const;
+                             uint8_t bit_position, uint8_t bit_width) const;
 
   std::vector<uint8_t> last_d2_packet_;
   std::vector<uint8_t> last_dd_packet_;
@@ -585,6 +589,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t bit_width = 1;
     uint8_t attempts_sent = 0;
     uint32_t last_attempt_d2_seq = 0;
   };
@@ -608,6 +613,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t bit_width = 1;
     uint8_t cycles_waited = 0;
   };
   TxUiSync tx_ui_sync_;
@@ -629,6 +635,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t bit_width = 1;
     uint32_t generation = 0;
     uint32_t request_ms = 0;
     uint32_t anchor_ms = 0;
@@ -640,6 +647,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t index = 0;
     uint8_t value = 0;
     uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t bit_width = 1;
   };
   std::vector<DeferredTx> deferred_user_txs_;
   struct QueuedRestore {
@@ -822,15 +830,23 @@ static const std::map<std::string, uint8_t> SELECT_EXTENDED_PARAM_INDEX = {
   {P58_EVA_FAN_COMP_OFF, DaikinEkhheComponent::EXT_PACKET_P58_IDX},
 };
 
-static const std::map<std::string, std::pair<uint8_t, uint8_t>> SELECT_BITMASKS = {
-  {POWER_STATUS,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 0}},
-  {P39_EEV_MODE,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 2}},
-  {P13_HW_CIRC_PUMP_MODE, {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 4}},
-  {P11_DISP_WAT_T_PROBE,  {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 0}},
-  {P15_SAFETY_SW_TYPE,    {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 1}},
-  {P5_DEFROST_MODE,       {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 2}},
-  {P6_EHEATER_DEFROSTING, {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 3}},
-  {P33_EEV_CONTROL,       {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 4}},
+struct SelectBitmaskSpec {
+  uint8_t index;
+  uint8_t bit_position;
+  uint8_t bit_width;
+};
+
+static const uint8_t BIT_WIDTH_P15_STEPPED = 255;
+
+static const std::map<std::string, SelectBitmaskSpec> SELECT_BITMASKS = {
+  {POWER_STATUS,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 0, 1}},
+  {P39_EEV_MODE,          {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 2, 1}},
+  {P13_HW_CIRC_PUMP_MODE, {DaikinEkhheComponent::CC_PACKET_MASK1_IDX, 4, 1}},
+  {P11_DISP_WAT_T_PROBE,  {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 0, 1}},
+  {P15_SAFETY_SW_TYPE,    {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 1, BIT_WIDTH_P15_STEPPED}},
+  {P5_DEFROST_MODE,       {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 2, 1}},
+  {P6_EHEATER_DEFROSTING, {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 3, 1}},
+  {P33_EEV_CONTROL,       {DaikinEkhheComponent::CC_PACKET_MASK2_IDX, 4, 1}},
 };
 
 static const uint8_t BIT_POSITION_NO_BITMASK = 255;

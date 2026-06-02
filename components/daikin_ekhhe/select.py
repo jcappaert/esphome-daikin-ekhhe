@@ -99,7 +99,7 @@ CONFIG_SCHEMA = (
             }),
             cv.Optional(P15_SAFETY_SW_TYPE): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'NC', 1: 'NO'}): ensure_option_map
+                cv.Optional(CONF_OPTIONS, default={0: 'NC', 1: 'NO', 2: 'Low pressure selection switch'}): ensure_option_map
             }),
             cv.Optional(P16_SOLAR_MODE_INT): select.select_schema(DaikinEkhheSelect).extend({
                 cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
