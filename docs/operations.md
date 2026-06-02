@@ -87,7 +87,7 @@ lost.
 
 ## Log Expectations
 
-At the default `INFO` level, normal operation should be fairly quiet. You should see successful write and restore messages, cycle-level summaries when enabled by the component, and Home Assistant state updates from ESPHome itself.
+At the default `INFO` level, normal operation should be fairly quiet. You should see successful write and restore messages, plus Home Assistant state updates from ESPHome itself.
 
 At `WARN` level, pay attention to:
 
@@ -95,14 +95,11 @@ At `WARN` level, pay attention to:
 - Write applied after more than one attempt: the change worked, but timing or state conditions were not ideal.
 - Restore/profile warnings: the restore was blocked, missing a valid base packet, missing a stored profile, or failed confirmation.
 
-At `DEBUG` level, expect much more bus detail:
+At `DEBUG` level, expect more operational timing detail:
 
-- RX timing and cycle timing information.
 - TX scheduling and confirmation timing.
-- Raw frame metadata and packet diffs when the corresponding debug text sensors are enabled.
-- CRC, framing, dropped-frame, and cycle-budget counters when the corresponding debug sensors are enabled.
 
-For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_calibration`, diagnosing write failures, or collecting protocol evidence. Disable high-volume debug entities again after troubleshooting.
+For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_calibration` or diagnosing write failures. Use protocol-lab tooling, not production ESPHome entities, when collecting raw protocol evidence.
 
 ## Recommended Workflow
 
@@ -121,7 +118,7 @@ For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_ca
 - Check common ground.
 - Check UART pins and baud settings.
 - Confirm the original display still works.
-- Try `mode: debug` with raw frame metadata enabled.
+- Temporarily set `continuous_rx: true` if you need to confirm the node can keep up with every bus cycle.
 
 ### Values update but writes fail
 
@@ -129,7 +126,7 @@ For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_ca
 - Confirm Home Assistant automations are not rapidly writing multiple settings.
 - Increase automation delays and try again.
 - Expose `tx_send_calibration` temporarily and test nearby timing values.
-- Use debug mode and check for `TX not applied` warnings.
+- Set the logger to `DEBUG` and check for `TX not applied` warnings.
 - Start from the minimal example if the current YAML exposes many writable entities.
 
 ### Home Assistant briefly jumps back to old values

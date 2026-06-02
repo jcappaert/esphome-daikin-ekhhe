@@ -1,6 +1,6 @@
 # Development
 
-This page documents the repository workflow for component development, validation, and protocol debugging.
+This page documents the repository workflow for component development, validation, and protocol work.
 
 ## Repository Layout
 
@@ -16,11 +16,10 @@ Public examples are designed for humans to copy from. CI fixtures are designed f
 
 ## Local Validation
 
-The GitHub Actions workflow validates and compiles three fixture configurations:
+The GitHub Actions workflow validates and compiles two fixture configurations:
 
 - `.github/fixtures/minimal/ci.yaml`
 - `.github/fixtures/production/ci.yaml`
-- `.github/fixtures/debug/ci.yaml`
 
 Useful local commands:
 
@@ -29,38 +28,15 @@ esphome config .github/fixtures/minimal/ci.yaml
 esphome compile .github/fixtures/minimal/ci.yaml
 esphome config .github/fixtures/production/ci.yaml
 esphome compile .github/fixtures/production/ci.yaml
-esphome config .github/fixtures/debug/ci.yaml
-esphome compile .github/fixtures/debug/ci.yaml
 ```
 
-Run at least the relevant fixture when changing optional entities, schema, packet write logic, or debug-only features.
-
-## Debug Mode
-
-Set the component to debug mode to enable raw packet inspection entities:
-
-```yaml
-daikin_ekhhe:
-  - id: daikin_component
-    update_interval: 10
-    mode: debug
-```
-
-Optional debug entities include:
-
-- `daikin_raw_frame_hex`
-- `daikin_raw_frame_meta`
-- `daikin_unknown_fields`
-- `daikin_frame_diff`
-- `daikin_debug_packet`
-- `daikin_debug_freeze`
-- bus health counters such as `frames_captured_total`, `crc_errors_total`, and `cycle_parse_time_ms`
-
-By default, debug mode still respects `update_interval`. Add `continuous_rx: true` only when you need uninterrupted packet capture.
+Run at least the relevant fixture when changing optional entities, schema, packet write logic, receive-cycle behavior, or recovery/profile features.
 
 ## Protocol Work
 
 Protocol notes live in [protocol](protocol.md). Keep that file focused on durable findings, confidence levels, packet families, and implementation implications.
+
+Use protocol-lab tooling for raw packet capture, unknown-field comparison, and packet diffing. The ESPHome component should only grow decoded, user-facing entities or operational logs that are useful on installed devices.
 
 When adding newly decoded fields:
 
