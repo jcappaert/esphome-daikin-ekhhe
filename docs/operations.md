@@ -99,7 +99,7 @@ At `DEBUG` level, expect more operational timing detail:
 
 - TX scheduling and confirmation timing.
 
-For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_calibration` or diagnosing write failures. Use protocol-lab tooling, not production ESPHome entities, when collecting raw protocol evidence.
+For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_calibration` or diagnosing write failures.
 
 ## Recommended Workflow
 

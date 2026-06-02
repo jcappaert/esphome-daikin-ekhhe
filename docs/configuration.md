@@ -74,8 +74,6 @@ Common day-to-day controls and state indicators:
 
 `silent_mode` can be enabled only while the unit is in Auto, Eco, or Boost mode. Disabling it is allowed from any mode so the setting can be cleared safely if the operating mode changes.
 
-`heating_demand`, `hp_active`, and `eh_active` are semantic status indicators decoded from the runtime status packet; user-facing names should describe heat demand and active equipment rather than packet bytes.
-
 ### Fault And Alarm Indicators
 
 Read-only binary sensors for confirmed display faults and alarms:
@@ -184,4 +182,4 @@ This can be useful if read values work but writes repeatedly fail on your specif
 
 ### Protocol Capture
 
-ESPHome entities are intended for supported runtime state and controls. Raw packet inspection, unknown-field comparison, and packet diffing should be done with protocol-lab tooling outside the production ESPHome component. Use `continuous_rx: true` only when an installed node intentionally needs uninterrupted receive cycles during normal operation.
+ESPHome entities are intended for supported runtime state and controls. Raw packet inspection, unknown-field comparison, and packet diffing should stay outside the production ESPHome component. Use `continuous_rx: true` only when an installed node intentionally needs uninterrupted receive cycles during normal operation.

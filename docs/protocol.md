@@ -2,7 +2,7 @@
 
 This document summarizes the current reverse-engineering model for the Daikin EKHHE / Altherma M HW display bus. It is a working protocol reference, not an official Daikin specification.
 
-Use protocol-lab tooling for raw captures, packet diffs, and unknown-field experiments. The ESPHome component should track stable protocol findings and expose decoded operational entities, not reverse-engineering UI controls.
+The ESPHome component should track stable protocol findings and expose decoded operational entities, not reverse-engineering UI controls.
 
 ## Protocol Overview
 

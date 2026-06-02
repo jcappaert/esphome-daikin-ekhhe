@@ -36,7 +36,7 @@ Run at least the relevant fixture when changing optional entities, schema, packe
 
 Protocol notes live in [protocol](protocol.md). Keep that file focused on durable findings, confidence levels, packet families, and implementation implications.
 
-Use protocol-lab tooling for raw packet capture, unknown-field comparison, and packet diffing. The ESPHome component should only grow decoded, user-facing entities or operational logs that are useful on installed devices.
+Raw packet capture, unknown-field comparison, and packet diffing should stay outside the production ESPHome component. The component should only grow decoded, user-facing entities or operational logs that are useful on installed devices.
 
 When adding newly decoded fields:
 
