@@ -68,6 +68,8 @@ binary_sensor:
       name: "CI P07 Compressor Flow Probe Fault"
     p08_solar_collector_probe_fault:
       name: "CI P08 Solar Collector Probe Fault"
+    e01_high_pressure_protection:
+      name: "CI E01 High Pressure Protection"
     e02_solar_recirculation_alarm:
       name: "CI E02 Solar Recirculation Alarm"
     e03_electronic_fan_fault:

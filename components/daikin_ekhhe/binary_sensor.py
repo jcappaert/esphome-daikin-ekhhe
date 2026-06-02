@@ -24,6 +24,7 @@ TYPES =[
     P06_EVAPORATOR_OUTLET_PROBE_FAULT,
     P07_COMPRESSOR_FLOW_PROBE_FAULT,
     P08_SOLAR_COLLECTOR_PROBE_FAULT,
+    E01_HIGH_PRESSURE_PROTECTION,
     E02_SOLAR_RECIRCULATION_ALARM,
     E03_ELECTRONIC_FAN_FAULT,
     PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM,
@@ -72,6 +73,9 @@ CONFIG_SCHEMA = (
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(P08_SOLAR_COLLECTOR_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(E01_HIGH_PRESSURE_PROTECTION): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(E02_SOLAR_RECIRCULATION_ALARM): binary_sensor.binary_sensor_schema(

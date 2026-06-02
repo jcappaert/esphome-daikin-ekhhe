@@ -84,6 +84,7 @@ Read-only binary sensors for confirmed display faults and alarms:
 - `p06_evaporator_outlet_probe_fault`
 - `p07_compressor_flow_probe_fault`
 - `p08_solar_collector_probe_fault`
+- `e01_high_pressure_protection`
 - `e02_solar_recirculation_alarm`
 - `e03_electronic_fan_fault`
 - `pa_heat_pump_temperature_unsuitable_alarm`

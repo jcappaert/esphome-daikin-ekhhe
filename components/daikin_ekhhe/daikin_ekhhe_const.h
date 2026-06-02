@@ -32,6 +32,7 @@ static const std::string P05_EVAPORATOR_INLET_PROBE_FAULT = "p05_evaporator_inle
 static const std::string P06_EVAPORATOR_OUTLET_PROBE_FAULT = "p06_evaporator_outlet_probe_fault";
 static const std::string P07_COMPRESSOR_FLOW_PROBE_FAULT = "p07_compressor_flow_probe_fault";
 static const std::string P08_SOLAR_COLLECTOR_PROBE_FAULT = "p08_solar_collector_probe_fault";
+static const std::string E01_HIGH_PRESSURE_PROTECTION = "e01_high_pressure_protection";
 static const std::string E02_SOLAR_RECIRCULATION_ALARM = "e02_solar_recirculation_alarm";
 static const std::string E03_ELECTRONIC_FAN_FAULT = "e03_electronic_fan_fault";
 static const std::string PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM = "pa_heat_pump_temperature_unsuitable_alarm";
