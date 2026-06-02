@@ -69,12 +69,12 @@ Common day-to-day controls and state indicators:
 - `silent_mode`
 - `hp_active`
 - `eh_active`
-- `dd_heating_demand`
+- `heating_demand`
 - `vacation_days`
 
 `silent_mode` can be enabled only while the unit is in Auto, Eco, or Boost mode. Disabling it is allowed from any mode so the setting can be cleared safely if the operating mode changes.
 
-`dd_heating_demand`, `hp_active`, and `eh_active` are semantic status indicators decoded from the runtime status packet; user-facing names should describe heat demand and active equipment rather than packet bytes.
+`heating_demand`, `hp_active`, and `eh_active` are semantic status indicators decoded from the runtime status packet; user-facing names should describe heat demand and active equipment rather than packet bytes.
 
 ### Fault And Alarm Indicators
 

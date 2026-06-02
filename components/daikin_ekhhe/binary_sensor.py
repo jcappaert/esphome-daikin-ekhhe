@@ -30,7 +30,7 @@ TYPES =[
 ]
 
 RUNTIME_DD_TYPES = {
-    DD_HEATING_DEMAND: "set_dd_heating_demand",
+    HEATING_DEMAND: "set_heating_demand",
     HP_ACTIVE: "set_hp_active",
     EH_ACTIVE: "set_eh_active",
 }
@@ -87,7 +87,7 @@ CONFIG_SCHEMA = (
             cv.Optional(PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
-            cv.Optional(DD_HEATING_DEMAND): binary_sensor.binary_sensor_schema(
+            cv.Optional(HEATING_DEMAND): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(HP_ACTIVE): binary_sensor.binary_sensor_schema(

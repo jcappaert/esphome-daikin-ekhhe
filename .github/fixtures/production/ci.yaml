@@ -51,7 +51,7 @@ binary_sensor:
   - platform: daikin_ekhhe
     dig1_config:
       name: "CI DIG1 setting"
-    dd_heating_demand:
+    heating_demand:
       name: "CI Heating Demand"
     hp_active:
       name: "CI Heat Pump Active"

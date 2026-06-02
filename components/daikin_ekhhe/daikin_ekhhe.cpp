@@ -1315,7 +1315,7 @@ const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_
 }
 
 void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
-  if (dd_heating_demand_ == nullptr && hp_active_ == nullptr && eh_active_ == nullptr) {
+  if (heating_demand_ == nullptr && hp_active_ == nullptr && eh_active_ == nullptr) {
     return;
   }
   size_t dd_index = 0;
@@ -1329,8 +1329,8 @@ void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
   bool eh_active = (b1 & 0x02) != 0;
 
   if (!have_last_dd_bits_ || demand != last_dd_demand_) {
-    if (dd_heating_demand_ != nullptr) {
-      dd_heating_demand_->publish_state(demand);
+    if (heating_demand_ != nullptr) {
+      heating_demand_->publish_state(demand);
     }
   }
   if (!have_last_dd_bits_ || hp_active != last_hp_active_) {

@@ -73,7 +73,7 @@ binary_sensor:
       name: "DIG2 setting"
     dig3_config:
       name: "DIG3 setting"
-    dd_heating_demand:
+    heating_demand:
       name: "Heating demand"
     hp_active:
       name: "Heat pump active"

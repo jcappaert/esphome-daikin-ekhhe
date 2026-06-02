@@ -129,7 +129,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #endif
   void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
-  void set_dd_heating_demand(binary_sensor::BinarySensor *sensor) { this->dd_heating_demand_ = sensor; }
+  void set_heating_demand(binary_sensor::BinarySensor *sensor) { this->heating_demand_ = sensor; }
   void set_hp_active(binary_sensor::BinarySensor *sensor) { this->hp_active_ = sensor; }
   void set_eh_active(binary_sensor::BinarySensor *sensor) { this->eh_active_ = sensor; }
 
@@ -390,7 +390,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
   text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
   text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
-  binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
+  binary_sensor::BinarySensor *heating_demand_ = nullptr;
   binary_sensor::BinarySensor *hp_active_ = nullptr;
   binary_sensor::BinarySensor *eh_active_ = nullptr;
   esphome::time::RealTimeClock *clock = nullptr;

@@ -120,7 +120,7 @@ P72_EC_FAN_REG_GAIN     = "ec_fan_speed_regulator_gain"
 
 DAIKIN_KNOWN_GOOD_PROFILE_STATUS = "daikin_known_good_profile_status"
 DAIKIN_AUTO_SNAPSHOT_STATUS = "daikin_auto_snapshot_status"
-DD_HEATING_DEMAND = "dd_heating_demand"
+HEATING_DEMAND = "heating_demand"
 HP_ACTIVE = "hp_active"
 EH_ACTIVE = "eh_active"
 TX_SEND_CALIBRATION = "tx_send_calibration"
