@@ -71,6 +71,7 @@ Common day-to-day controls and state indicators:
 - `silent_mode`
 - `hp_active`
 - `eh_active`
+- `dd_heating_demand`
 - `vacation_days`
 
 `silent_mode` can be enabled only while the unit is in Auto, Eco, or Boost mode. Disabling it is allowed from any mode so the setting can be cleared safely if the operating mode changes.
@@ -191,9 +192,6 @@ Debug-only entities:
 - `daikin_frame_diff`
 - `daikin_debug_packet`
 - `daikin_debug_freeze`
-- `dd_heating_demand`
-- `dd_b1_text_sensor`
-- `dd_b5_text_sensor`
 - `frames_captured_total`
 - `frames_dropped_total`
 - `frames_truncated_total`
