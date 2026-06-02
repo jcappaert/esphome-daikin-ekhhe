@@ -24,10 +24,12 @@ CONFIG_SCHEMA = cv.Schema(
 
 
 async def to_code(config):
+    if SILENT_MODE not in config:
+        return
+
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
-    if SILENT_MODE in config:
-        conf = config[SILENT_MODE]
-        sw = await switch.new_switch(conf)
-        cg.add(hub.register_switch(SILENT_MODE, sw))
-        cg.add(sw.set_parent(hub))
-        cg.add(sw.set_internal_id(SILENT_MODE))
+    conf = config[SILENT_MODE]
+    sw = await switch.new_switch(conf)
+    cg.add(hub.register_switch(SILENT_MODE, sw))
+    cg.add(sw.set_parent(hub))
+    cg.add(sw.set_internal_id(SILENT_MODE))

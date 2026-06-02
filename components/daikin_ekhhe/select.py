@@ -38,9 +38,6 @@ TYPES = [
 DaikinEkhheSelect = daikin_ekhhe_ns.class_(
     "DaikinEkhheSelect", select.Select, cg.Component
 )
-DaikinEkhheDebugSelect = daikin_ekhhe_ns.class_(
-    "DaikinEkhheDebugSelect", select.Select, cg.Component
-)
 
 
 # taken from tuya select
@@ -124,7 +121,7 @@ CONFIG_SCHEMA = (
                 cv.Optional(CONF_OPTIONS, default={0: 'Disabled', 1: 'Enabled', 2: 'Auto'}): ensure_option_map
             }),
             cv.Optional(DAIKIN_DEBUG_PACKET): select.select_schema(
-                DaikinEkhheDebugSelect, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+                select.Select, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
         }
     )

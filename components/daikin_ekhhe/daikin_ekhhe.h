@@ -62,16 +62,7 @@ class DaikinEkhheSelect : public select::Select, public Component {
   private:
    std::map<std::string, int> select_mappings_; 
    DaikinEkhheComponent *parent_;
-   std::string internal_id_;
-};
-
-class DaikinEkhheDebugSelect : public select::Select, public Component {
- public:
-  void control(const std::string &value) override;
-  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
-
- private:
-  DaikinEkhheComponent *parent_;
+  std::string internal_id_;
 };
 
 #if defined(USE_SWITCH)
@@ -84,17 +75,6 @@ class DaikinEkhheSwitch : public switch_::Switch {
  private:
   DaikinEkhheComponent *parent_;
   std::string internal_id_;
-};
-#endif
-
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-class DaikinEkhheDebugSwitch : public switch_::Switch {
- public:
-  void write_state(bool state) override;
-  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
-
- private:
-  DaikinEkhheComponent *parent_;
 };
 #endif
 
@@ -150,12 +130,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
-  void register_debug_select(DaikinEkhheDebugSelect *select);
 #if defined(USE_SWITCH)
   void register_switch(const std::string &switch_name, switch_::Switch *sw);
-#endif
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-  void register_debug_switch(DaikinEkhheDebugSwitch *sw);
 #endif
   void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
@@ -182,8 +158,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void save_known_good_profile();
   void restore_known_good_profile();
   void restore_auto_snapshot();
-  void set_debug_packet(const std::string &value);
-  void set_debug_freeze(bool enabled);
   void update_number_cache(const std::string &number_name, float value);
   void update_select_cache(const std::string &select_name, const std::string &value);
 #if defined(USE_SWITCH)
@@ -431,10 +405,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
   std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
   std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
-  DaikinEkhheDebugSelect *debug_packet_select_ = nullptr;
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-  DaikinEkhheDebugSwitch *debug_freeze_switch_ = nullptr;
-#endif
   text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
   text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
   text_sensor::TextSensor *dd_b1_text_ = nullptr;
@@ -595,9 +565,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool cycle_timeout_logged_ = false;
   bool cycle_publish_allowed_ = true;
   bool cycle_synced_ = false;
-  uint32_t debug_frozen_seq_ = 0;
-  bool debug_freeze_ = false;
-  uint8_t debug_packet_type_ = 0;
   struct StoredProfileBlob {
     uint32_t magic = 0;
     uint8_t version = 0;

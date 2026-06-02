@@ -956,17 +956,6 @@ bool DaikinEkhheComponent::should_publish_debug_text_(const std::string &key, co
   return false;
 }
 
-uint8_t DaikinEkhheComponent::packet_type_from_string_(const std::string &value) const {
-  if (value == "DD") return DD_PACKET_START_BYTE;
-  if (value == "D2") return D2_PACKET_START_BYTE;
-  if (value == "D4") return D4_PACKET_START_BYTE;
-  if (value == "C1") return C1_PACKET_START_BYTE;
-  if (value == "C2") return C2_PACKET_START_BYTE;
-  if (value == "CC") return CC_PACKET_START_BYTE;
-  if (value == "CD") return CD_PACKET_START_BYTE;
-  return 0;
-}
-
 std::string DaikinEkhheComponent::packet_type_to_string_(uint8_t packet_type) const {
   switch (packet_type) {
     case DD_PACKET_START_BYTE:
@@ -1411,29 +1400,9 @@ const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::select_raw_fram
     return nullptr;
   }
 
-  if (debug_freeze_ && debug_frozen_seq_ != 0) {
-    const RawFrameEntry *entry = find_raw_frame_by_seq_(debug_frozen_seq_, index);
-    if (entry != nullptr) {
-      size_t newest_index = (raw_frame_head_ + raw_frame_count_ - 1) % kRawFrameBufferSize;
-      back = (newest_index + kRawFrameBufferSize - index) % kRawFrameBufferSize;
-      if (back >= raw_frame_count_) {
-        back = raw_frame_count_ - 1;
-      }
-      return entry;
-    }
-
-    debug_freeze_ = false;
-    debug_frozen_seq_ = 0;
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-    if (debug_freeze_switch_ != nullptr) {
-      debug_freeze_switch_->publish_state(false);
-    }
-#endif
-  }
-
-  const RawFrameEntry *entry = find_latest_frame_by_type_(debug_packet_type_, index, true);
+  const RawFrameEntry *entry = find_latest_frame_by_type_(0, index, true);
   if (entry == nullptr) {
-    entry = find_latest_frame_by_type_(debug_packet_type_, index, false);
+    entry = find_latest_frame_by_type_(0, index, false);
   }
   if (entry == nullptr) {
     return nullptr;
@@ -2835,26 +2804,10 @@ void DaikinEkhheComponent::register_debug_sensor(const std::string &sensor_name,
   }
 }
 
-void DaikinEkhheComponent::register_debug_select(DaikinEkhheDebugSelect *select) {
-  this->debug_packet_select_ = select;
-  if (this->debug_packet_select_ != nullptr) {
-    this->debug_packet_select_->publish_state(packet_type_to_string_(debug_packet_type_));
-  }
-}
-
 #if defined(USE_SWITCH)
 void DaikinEkhheComponent::register_switch(const std::string &switch_name, switch_::Switch *sw) {
   if (sw != nullptr) {
     switches_[switch_name] = sw;
-  }
-}
-#endif
-
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-void DaikinEkhheComponent::register_debug_switch(DaikinEkhheDebugSwitch *sw) {
-  this->debug_freeze_switch_ = sw;
-  if (this->debug_freeze_switch_ != nullptr) {
-    this->debug_freeze_switch_->publish_state(debug_freeze_);
   }
 }
 #endif
@@ -3152,30 +3105,6 @@ void DaikinEkhheComponent::set_tx_delay_after_d2_ms(uint32_t delay_ms) {
     }
 }
 
-void DaikinEkhheComponent::set_debug_packet(const std::string &value) {
-  debug_packet_type_ = packet_type_from_string_(value);
-  if (debug_packet_select_ != nullptr) {
-    debug_packet_select_->publish_state(packet_type_to_string_(debug_packet_type_));
-  }
-}
-
-void DaikinEkhheComponent::set_debug_freeze(bool enabled) {
-  debug_freeze_ = enabled;
-  if (debug_freeze_) {
-    size_t index = 0;
-    size_t back = 0;
-    const RawFrameEntry *entry = select_raw_frame_(index, back);
-    debug_frozen_seq_ = entry != nullptr ? entry->seq : 0;
-  } else {
-    debug_frozen_seq_ = 0;
-  }
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-  if (debug_freeze_switch_ != nullptr) {
-    debug_freeze_switch_->publish_state(debug_freeze_);
-  }
-#endif
-}
-
 void DaikinEkhheComponent::save_known_good_profile() {
   std::vector<uint8_t> packet;
   if (!capture_current_cc_packet_(packet)) {
@@ -3243,24 +3172,8 @@ void DaikinEkhheComponent::restore_default_settings() {
     }
   }
 
-  DAIKIN_DBG(TAG, "Restore defaults scheduling: waiting_for_next_d2");
+DAIKIN_DBG(TAG, "Restore defaults scheduling: waiting_for_next_d2");
 }
-
-void DaikinEkhheDebugSelect::control(const std::string &value) {
-  if (this->parent_ == nullptr) {
-    return;
-  }
-  this->parent_->set_debug_packet(value);
-}
-
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
-void DaikinEkhheDebugSwitch::write_state(bool state) {
-  if (this->parent_ == nullptr) {
-    return;
-  }
-  this->parent_->set_debug_freeze(state);
-}
-#endif
 
 #if defined(USE_SWITCH)
 void DaikinEkhheSwitch::write_state(bool state) {
