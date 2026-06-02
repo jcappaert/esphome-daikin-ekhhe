@@ -15,7 +15,19 @@ from .const import *
 TYPES =[
     DIG1_CONFIG,
     DIG2_CONFIG,
-    DIG3_CONFIG
+    DIG3_CONFIG,
+    P01_TANK_LOWER_PROBE_FAULT,
+    P02_TANK_UPPER_PROBE_FAULT,
+    P03_DEFROST_PROBE_FAULT,
+    P04_INLET_AIR_PROBE_FAULT,
+    P05_EVAPORATOR_INLET_PROBE_FAULT,
+    P06_EVAPORATOR_OUTLET_PROBE_FAULT,
+    P07_COMPRESSOR_FLOW_PROBE_FAULT,
+    P08_SOLAR_COLLECTOR_PROBE_FAULT,
+    E01_HIGH_PRESSURE_PROTECTION,
+    E02_SOLAR_RECIRCULATION_ALARM,
+    E03_ELECTRONIC_FAN_FAULT,
+    PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM,
 ]
 
 RUNTIME_DD_TYPES = {
@@ -38,6 +50,42 @@ CONFIG_SCHEMA = (
             cv.Optional(DIG3_CONFIG): binary_sensor.binary_sensor_schema(
                 #device_class=DEVICE_CLASS_NONE,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
+            ),
+            cv.Optional(P01_TANK_LOWER_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P02_TANK_UPPER_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P03_DEFROST_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P04_INLET_AIR_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P05_EVAPORATOR_INLET_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P06_EVAPORATOR_OUTLET_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P07_COMPRESSOR_FLOW_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P08_SOLAR_COLLECTOR_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(E01_HIGH_PRESSURE_PROTECTION): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(E02_SOLAR_RECIRCULATION_ALARM): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(E03_ELECTRONIC_FAN_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(DD_HEATING_DEMAND): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,

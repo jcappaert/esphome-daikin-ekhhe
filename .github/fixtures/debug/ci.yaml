@@ -55,6 +55,30 @@ binary_sensor:
   - platform: daikin_ekhhe
     dig1_config:
       name: "CI Debug DIG1 setting"
+    p01_tank_lower_probe_fault:
+      name: "CI Debug P01 Tank Lower Probe Fault"
+    p02_tank_upper_probe_fault:
+      name: "CI Debug P02 Tank Upper Probe Fault"
+    p03_defrost_probe_fault:
+      name: "CI Debug P03 Defrost Probe Fault"
+    p04_inlet_air_probe_fault:
+      name: "CI Debug P04 Inlet Air Probe Fault"
+    p05_evaporator_inlet_probe_fault:
+      name: "CI Debug P05 Evaporator Inlet Probe Fault"
+    p06_evaporator_outlet_probe_fault:
+      name: "CI Debug P06 Evaporator Outlet Probe Fault"
+    p07_compressor_flow_probe_fault:
+      name: "CI Debug P07 Compressor Flow Probe Fault"
+    p08_solar_collector_probe_fault:
+      name: "CI Debug P08 Solar Collector Probe Fault"
+    e01_high_pressure_protection:
+      name: "CI Debug E01 High Pressure Protection"
+    e02_solar_recirculation_alarm:
+      name: "CI Debug E02 Solar Recirculation Alarm"
+    e03_electronic_fan_fault:
+      name: "CI Debug E03 Electronic Fan Fault"
+    pa_heat_pump_temperature_unsuitable_alarm:
+      name: "CI Debug PA Heat Pump Temperature Unsuitable"
 
 number:
   - platform: daikin_ekhhe

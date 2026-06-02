@@ -30,6 +30,7 @@ Recommended safety steps:
 
 - Temperature and runtime sensors for the known EKHHE probe values.
 - Binary status indicators for digital inputs, heat-pump activity, and electric-heater activity.
+- Read-only indicators for confirmed display faults and alarms.
 - Select entities for power state, operating mode, and known menu-style parameters.
 - Number entities for known numeric installer parameters, target temperatures, and TX timing calibration.
 - Persistent known-good and automatic recovery snapshots for managed settings.
