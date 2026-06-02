@@ -179,7 +179,3 @@ Optional timing calibration:
 - `tx_send_calibration`
 
 This can be useful if read values work but writes repeatedly fail on your specific ESP32 or RS485 setup.
-
-### Protocol Capture
-
-ESPHome entities are intended for supported runtime state and controls. Raw packet inspection, unknown-field comparison, and packet diffing should stay outside the production ESPHome component. Use `continuous_rx: true` only when an installed node intentionally needs uninterrupted receive cycles during normal operation.

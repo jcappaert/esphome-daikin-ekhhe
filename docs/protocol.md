@@ -2,8 +2,6 @@
 
 This document summarizes the current reverse-engineering model for the Daikin EKHHE / Altherma M HW display bus. It is a working protocol reference, not an official Daikin specification.
 
-The ESPHome component should track stable protocol findings and expose decoded operational entities, not reverse-engineering UI controls.
-
 ## Protocol Overview
 
 The bus appears to be a structured conversation between the display/UI board and the main control board. The control board publishes state and readback packets, and the UI normally answers with packets that mirror or acknowledge that state. When a setting changes, the UI-side packet in that part of the cycle is replaced by a write packet until the main control board reports the changed value back.
