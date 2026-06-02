@@ -2378,6 +2378,11 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
       {DIG1_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x01)},
       {DIG2_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x02)},
       {DIG3_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x04)},
+      {P01_TANK_LOWER_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x04)},
+      {P02_TANK_UPPER_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x02)},
+      {P03_DEFROST_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x01)},
+      {P04_INLET_AIR_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x08)},
+      {PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM, (bool)(buffer[DD_PACKET_ALARM_IDX] & 0x10)},
   };
 
   for (const auto &entry : binary_sensor_values) {

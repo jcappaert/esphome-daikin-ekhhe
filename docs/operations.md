@@ -67,6 +67,18 @@ Extended settings `P53` and `P55-P72` are writable individually, but they are no
 
 Only press the restore-defaults button when you intend to rewrite many installer parameters at once.
 
+## Fault Indicators
+
+The optional fault/alarm binary sensors are read-only indicators decoded from
+the unit status frames. They are intended to make Home Assistant dashboards and
+automations aware of confirmed display states; they do not replace the Daikin
+display, installer manual, or normal troubleshooting procedure.
+
+Confirmed indicators currently include `P01`, `P02`, `P03`, `P04`, and `PA`.
+During inlet-air probe failures, the unit may briefly show `PA` before settling
+into `P04`; exposing both sensors lets Home Assistant show that transition
+instead of hiding it.
+
 ## Log Expectations
 
 At the default `INFO` level, normal operation should be fairly quiet. You should see successful write and restore messages, cycle-level summaries when enabled by the component, and Home Assistant state updates from ESPHome itself.

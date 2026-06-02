@@ -97,6 +97,16 @@ binary_sensor:
       name: "HP active (DD b1 0x01)"
     eh_active:
       name: "EH active (DD b1 0x02)"
+    p01_tank_lower_probe_fault:
+      name: "P01: Tank lower probe fault"
+    p02_tank_upper_probe_fault:
+      name: "P02: Tank upper probe fault"
+    p03_defrost_probe_fault:
+      name: "P03: Defrost probe fault"
+    p04_inlet_air_probe_fault:
+      name: "P04: Inlet air probe fault"
+    pa_heat_pump_temperature_unsuitable_alarm:
+      name: "PA: Heat pump temperature unsuitable"
 
 number:
   - platform: daikin_ekhhe

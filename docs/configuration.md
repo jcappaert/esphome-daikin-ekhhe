@@ -72,6 +72,19 @@ Common day-to-day controls and state indicators:
 - `eh_active`
 - `vacation_days`
 
+### Fault And Alarm Indicators
+
+Read-only binary sensors for confirmed display faults and alarms:
+
+- `p01_tank_lower_probe_fault`
+- `p02_tank_upper_probe_fault`
+- `p03_defrost_probe_fault`
+- `p04_inlet_air_probe_fault`
+- `pa_heat_pump_temperature_unsuitable_alarm`
+
+These indicators mirror observed display states. Use the Daikin display and
+manual as the primary diagnostic reference when a fault is active.
+
 ### Target Temperatures
 
 Writable target temperatures for the operating modes:

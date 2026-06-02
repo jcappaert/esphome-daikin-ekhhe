@@ -15,7 +15,12 @@ from .const import *
 TYPES =[
     DIG1_CONFIG,
     DIG2_CONFIG,
-    DIG3_CONFIG
+    DIG3_CONFIG,
+    P01_TANK_LOWER_PROBE_FAULT,
+    P02_TANK_UPPER_PROBE_FAULT,
+    P03_DEFROST_PROBE_FAULT,
+    P04_INLET_AIR_PROBE_FAULT,
+    PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM,
 ]
 
 RUNTIME_DD_TYPES = {
@@ -38,6 +43,21 @@ CONFIG_SCHEMA = (
             cv.Optional(DIG3_CONFIG): binary_sensor.binary_sensor_schema(
                 #device_class=DEVICE_CLASS_NONE,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
+            ),
+            cv.Optional(P01_TANK_LOWER_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P02_TANK_UPPER_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P03_DEFROST_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(P04_INLET_AIR_PROBE_FAULT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(DD_HEATING_DEMAND): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
