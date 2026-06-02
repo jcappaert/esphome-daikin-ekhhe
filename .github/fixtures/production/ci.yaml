@@ -60,6 +60,18 @@ binary_sensor:
       name: "CI P03 Defrost Probe Fault"
     p04_inlet_air_probe_fault:
       name: "CI P04 Inlet Air Probe Fault"
+    p05_evaporator_inlet_probe_fault:
+      name: "CI P05 Evaporator Inlet Probe Fault"
+    p06_evaporator_outlet_probe_fault:
+      name: "CI P06 Evaporator Outlet Probe Fault"
+    p07_compressor_flow_probe_fault:
+      name: "CI P07 Compressor Flow Probe Fault"
+    p08_solar_collector_probe_fault:
+      name: "CI P08 Solar Collector Probe Fault"
+    e02_solar_recirculation_alarm:
+      name: "CI E02 Solar Recirculation Alarm"
+    e03_electronic_fan_fault:
+      name: "CI E03 Electronic Fan Fault"
     pa_heat_pump_temperature_unsuitable_alarm:
       name: "CI PA Heat Pump Temperature Unsuitable"
 

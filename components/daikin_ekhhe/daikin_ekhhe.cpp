@@ -2382,6 +2382,12 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
       {P02_TANK_UPPER_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x02)},
       {P03_DEFROST_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x01)},
       {P04_INLET_AIR_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x08)},
+      {P05_EVAPORATOR_INLET_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x80)},
+      {P06_EVAPORATOR_OUTLET_PROBE_FAULT, (bool)(buffer[DD_PACKET_ALARM_IDX] & 0x01)},
+      {P07_COMPRESSOR_FLOW_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x10)},
+      {P08_SOLAR_COLLECTOR_PROBE_FAULT, (bool)(buffer[DD_PACKET_ALARM2_IDX] & 0x01)},
+      {E02_SOLAR_RECIRCULATION_ALARM, (bool)(buffer[DD_PACKET_ALARM_IDX] & 0x02)},
+      {E03_ELECTRONIC_FAN_FAULT, (bool)(buffer[DD_PACKET_ALARM2_IDX] & 0x08)},
       {PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM, (bool)(buffer[DD_PACKET_ALARM_IDX] & 0x10)},
   };
 

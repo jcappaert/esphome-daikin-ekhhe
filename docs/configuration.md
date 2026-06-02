@@ -80,6 +80,12 @@ Read-only binary sensors for confirmed display faults and alarms:
 - `p02_tank_upper_probe_fault`
 - `p03_defrost_probe_fault`
 - `p04_inlet_air_probe_fault`
+- `p05_evaporator_inlet_probe_fault`
+- `p06_evaporator_outlet_probe_fault`
+- `p07_compressor_flow_probe_fault`
+- `p08_solar_collector_probe_fault`
+- `e02_solar_recirculation_alarm`
+- `e03_electronic_fan_fault`
 - `pa_heat_pump_temperature_unsuitable_alarm`
 
 These indicators mirror observed display states. Use the Daikin display and

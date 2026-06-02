@@ -86,6 +86,18 @@ binary_sensor:
       name: "P03: Defrost probe fault"
     p04_inlet_air_probe_fault:
       name: "P04: Inlet air probe fault"
+    p05_evaporator_inlet_probe_fault:
+      name: "P05: Evaporator inlet probe fault"
+    p06_evaporator_outlet_probe_fault:
+      name: "P06: Evaporator outlet probe fault"
+    p07_compressor_flow_probe_fault:
+      name: "P07: Compressor flow probe fault"
+    p08_solar_collector_probe_fault:
+      name: "P08: Solar collector probe fault"
+    e02_solar_recirculation_alarm:
+      name: "E02: Solar/recirculation alarm"
+    e03_electronic_fan_fault:
+      name: "E03: Electronic fan fault"
     pa_heat_pump_temperature_unsuitable_alarm:
       name: "PA: Heat pump temperature unsuitable"
 

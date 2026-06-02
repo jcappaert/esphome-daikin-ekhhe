@@ -173,6 +173,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     DD_PACKET_START_IDX = 0,
     DD_PACKET_PROBE_FAULT_IDX = 3,
     DD_PACKET_ALARM_IDX = 4,
+    DD_PACKET_ALARM2_IDX = 5,
     DD_PACKET_B_IDX     = 6,
     DD_PACKET_A_IDX     = 7,
     DD_PACKET_C_IDX     = 8,

@@ -74,10 +74,10 @@ the unit status frames. They are intended to make Home Assistant dashboards and
 automations aware of confirmed display states; they do not replace the Daikin
 display, installer manual, or normal troubleshooting procedure.
 
-Confirmed indicators currently include `P01`, `P02`, `P03`, `P04`, and `PA`.
-During inlet-air probe failures, the unit may briefly show `PA` before settling
-into `P04`; exposing both sensors lets Home Assistant show that transition
-instead of hiding it.
+Confirmed indicators currently include `P01` through `P08`, `E02`, `E03`, and
+`PA`. During inlet-air probe failures, the unit may briefly show `PA` before
+settling into `P04`; exposing both sensors lets Home Assistant show that
+transition instead of hiding it.
 
 ## Log Expectations
 
