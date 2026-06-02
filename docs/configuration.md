@@ -92,6 +92,12 @@ Read-only binary sensors for confirmed display faults and alarms:
 These indicators mirror observed display states. Use the Daikin display and
 manual as the primary diagnostic reference when a fault is active.
 
+`E04` and `E08` are not exposed yet. They are intentionally omitted because
+they have not been reproducibly observed on this unit in a bus-visible form:
+`E04` may not be present on all manual/hardware variants, and `E08` appears to
+be display-local or otherwise not reported as a confirmed status bit on the
+captured display bus.
+
 ### Target Temperatures
 
 Writable target temperatures for the operating modes:

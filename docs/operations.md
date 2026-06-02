@@ -79,6 +79,12 @@ Confirmed indicators currently include `P01` through `P08`, `E01`, `E02`,
 `PA` before settling into `P04`; exposing both sensors lets Home Assistant show
 that transition instead of hiding it.
 
+`E04` and `E08` are intentionally not included at this time. They are not just
+missing from the entity list; they have not been reproduced with a reliable
+bus-visible status bit. In particular, `E04` may depend on hardware/manual
+variant behavior, and `E08` may be local to the display when communication is
+lost.
+
 ## Log Expectations
 
 At the default `INFO` level, normal operation should be fairly quiet. You should see successful write and restore messages, cycle-level summaries when enabled by the component, and Home Assistant state updates from ESPHome itself.
