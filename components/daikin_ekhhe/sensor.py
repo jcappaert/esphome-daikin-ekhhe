@@ -33,18 +33,6 @@ TYPES = [
     FAN_SPEED_RPM,
 ]
 
-DEBUG_TYPES = [
-    FRAMES_CAPTURED_TOTAL,
-    FRAMES_DROPPED_TOTAL,
-    FRAMES_TRUNCATED_TOTAL,
-    CRC_ERRORS_TOTAL,
-    FRAMING_ERRORS_TOTAL,
-    BYTES_CAPTURED_TOTAL,
-    CYCLE_PARSE_TIME_MS,
-    CYCLE_TOTAL_TIME_MS,
-    CYCLE_OVER_BUDGET_TOTAL,
-]
-
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -192,8 +180,3 @@ async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
     for key in TYPES:
         await setup_conf(config, key, hub)
-    for key in DEBUG_TYPES:
-        if key in config:
-            conf = config[key]
-            sens = await sensor.new_sensor(conf)
-            cg.add(hub.register_debug_sensor(key, sens))

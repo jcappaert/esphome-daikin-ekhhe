@@ -11,7 +11,6 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_MODE = "mode"
 CONF_CONTINUOUS_RX = "continuous_rx"
 CONF_TX_SEND_CALIBRATION = "tx_send_calibration"
-DEBUG_COMPONENTS = set()
 _LOGGER = logging.getLogger(__name__)
 
 CODEOWNERS = ["@jcappaert"]

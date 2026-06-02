@@ -1,9 +1,9 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import button
-from esphome.const import CONF_ID, ENTITY_CATEGORY_CONFIG, ENTITY_CATEGORY_DIAGNOSTIC
+from esphome.const import CONF_ID, ENTITY_CATEGORY_CONFIG
 
-from . import CONF_EKHHE_ID, DaikinEkhhe, daikin_ekhhe_ns, DEBUG_COMPONENTS
+from . import CONF_EKHHE_ID, DaikinEkhhe, daikin_ekhhe_ns
 from .const import (
     DAIKIN_RESTORE_AUTO_SNAPSHOT,
     DAIKIN_RESTORE_DEFAULT_SETTINGS,
@@ -72,6 +72,3 @@ async def to_code(config):
         )
         await button.register_button(var, conf)
         cg.add(var.set_parent(hub))
-
-    if str(config[CONF_EKHHE_ID]) not in DEBUG_COMPONENTS:
-        return

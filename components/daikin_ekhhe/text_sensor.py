@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome.components import text_sensor
 from esphome.const import DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
 
-from . import CONF_EKHHE_ID, DaikinEkhhe, DEBUG_COMPONENTS
+from . import CONF_EKHHE_ID, DaikinEkhhe
 from .const import (
     CURRENT_TIME,
     DAIKIN_AUTO_SNAPSHOT_STATUS,
@@ -71,27 +71,9 @@ async def to_code(config):
     if L_UI_FW_VERSION in config:
         sens = await text_sensor.new_text_sensor(config[L_UI_FW_VERSION])
         cg.add(hub.register_text_sensor(L_UI_FW_VERSION, sens))
-    if DAIKIN_RAW_FRAME_HEX in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
-        sens = await text_sensor.new_text_sensor(config[DAIKIN_RAW_FRAME_HEX])
-        cg.add(hub.register_debug_text_sensor(DAIKIN_RAW_FRAME_HEX, sens))
-    if DAIKIN_RAW_FRAME_META in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
-        sens = await text_sensor.new_text_sensor(config[DAIKIN_RAW_FRAME_META])
-        cg.add(hub.register_debug_text_sensor(DAIKIN_RAW_FRAME_META, sens))
-    if DAIKIN_UNKNOWN_FIELDS in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
-        sens = await text_sensor.new_text_sensor(config[DAIKIN_UNKNOWN_FIELDS])
-        cg.add(hub.register_debug_text_sensor(DAIKIN_UNKNOWN_FIELDS, sens))
-    if DAIKIN_FRAME_DIFF in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
-        sens = await text_sensor.new_text_sensor(config[DAIKIN_FRAME_DIFF])
-        cg.add(hub.register_debug_text_sensor(DAIKIN_FRAME_DIFF, sens))
     if DAIKIN_KNOWN_GOOD_PROFILE_STATUS in config:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_KNOWN_GOOD_PROFILE_STATUS])
         cg.add(hub.register_known_good_profile_status_sensor(sens))
     if DAIKIN_AUTO_SNAPSHOT_STATUS in config:
         sens = await text_sensor.new_text_sensor(config[DAIKIN_AUTO_SNAPSHOT_STATUS])
         cg.add(hub.register_auto_snapshot_status_sensor(sens))
-    if DAIKIN_DD_B1_TEXT in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
-        sens = await text_sensor.new_text_sensor(config[DAIKIN_DD_B1_TEXT])
-        cg.add(hub.set_dd_b1_text(sens))
-    if DAIKIN_DD_B5_TEXT in config and str(config[CONF_EKHHE_ID]) in DEBUG_COMPONENTS:
-        sens = await text_sensor.new_text_sensor(config[DAIKIN_DD_B5_TEXT])
-        cg.add(hub.set_dd_b5_text(sens))

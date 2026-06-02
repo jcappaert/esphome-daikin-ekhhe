@@ -10,10 +10,6 @@ DaikinEkhheSwitch = daikin_ekhhe_ns.class_(
     "DaikinEkhheSwitch", switch.Switch, cg.Component
 )
 
-DaikinEkhheDebugSwitch = daikin_ekhhe_ns.class_(
-    "DaikinEkhheDebugSwitch", switch.Switch, cg.Component
-)
-
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
@@ -21,7 +17,7 @@ CONFIG_SCHEMA = cv.Schema(
             DaikinEkhheSwitch, entity_category=ENTITY_CATEGORY_CONFIG
         ),
         cv.Optional(DAIKIN_DEBUG_FREEZE): switch.switch_schema(
-            DaikinEkhheDebugSwitch, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            switch.Switch, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
         ),
     }
 )
@@ -35,8 +31,3 @@ async def to_code(config):
         cg.add(hub.register_switch(SILENT_MODE, sw))
         cg.add(sw.set_parent(hub))
         cg.add(sw.set_internal_id(SILENT_MODE))
-    if DAIKIN_DEBUG_FREEZE in config:
-        conf = config[DAIKIN_DEBUG_FREEZE]
-        sw = await switch.new_switch(conf)
-        cg.add(hub.register_debug_switch(sw))
-        cg.add(sw.set_parent(hub))
