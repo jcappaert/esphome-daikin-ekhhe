@@ -932,30 +932,6 @@ bool DaikinEkhheComponent::should_publish_text_(const std::string &key, const st
   return false;
 }
 
-bool DaikinEkhheComponent::should_publish_debug_text_(const std::string &key, const std::string &value,
-                                                      uint32_t min_interval_ms) {
-  uint32_t now = millis();
-  auto it = debug_last_published_text_.find(key);
-  if (it == debug_last_published_text_.end()) {
-    debug_last_published_text_[key] = value;
-    debug_last_published_text_ms_[key] = now;
-    return true;
-  }
-
-  uint32_t last_ms = debug_last_published_text_ms_[key];
-  if (now - last_ms < min_interval_ms) {
-    return false;
-  }
-
-  if (it->second != value) {
-    it->second = value;
-    debug_last_published_text_ms_[key] = now;
-    return true;
-  }
-
-  return false;
-}
-
 std::string DaikinEkhheComponent::packet_type_to_string_(uint8_t packet_type) const {
   switch (packet_type) {
     case DD_PACKET_START_BYTE:
@@ -1042,33 +1018,6 @@ const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_latest_dd_
       continue;
     }
     if ((entry.flags & RAW_FRAME_TRUNCATED) != 0) {
-      continue;
-    }
-    index = idx;
-    return &entry;
-  }
-  return nullptr;
-}
-
-const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::find_previous_frame_by_type_(
-    uint8_t packet_type, uint32_t seq, size_t &index, bool require_ok) const {
-  if (raw_frame_count_ == 0 || packet_type == 0) {
-    return nullptr;
-  }
-  bool past_current = false;
-  for (size_t i = 0; i < raw_frame_count_; ++i) {
-    size_t idx = (raw_frame_head_ + raw_frame_count_ - 1 - i) % kRawFrameBufferSize;
-    const RawFrameEntry &entry = raw_frames_[idx];
-    if (entry.packet_type != packet_type) {
-      continue;
-    }
-    if (!past_current) {
-      if (entry.seq == seq) {
-        past_current = true;
-      }
-      continue;
-    }
-    if (require_ok && !is_frame_ok_(entry)) {
       continue;
     }
     index = idx;
@@ -1395,26 +1344,6 @@ void DaikinEkhheComponent::schedule_queued_profile_restore_from_d2_(const RawFra
   });
 }
 
-const DaikinEkhheComponent::RawFrameEntry *DaikinEkhheComponent::select_raw_frame_(size_t &index, size_t &back) {
-  if (raw_frame_count_ == 0) {
-    return nullptr;
-  }
-
-  const RawFrameEntry *entry = find_latest_frame_by_type_(0, index, true);
-  if (entry == nullptr) {
-    entry = find_latest_frame_by_type_(0, index, false);
-  }
-  if (entry == nullptr) {
-    return nullptr;
-  }
-  size_t newest_index = (raw_frame_head_ + raw_frame_count_ - 1) % kRawFrameBufferSize;
-  back = (newest_index + kRawFrameBufferSize - index) % kRawFrameBufferSize;
-  if (back >= raw_frame_count_) {
-    back = raw_frame_count_ - 1;
-  }
-  return entry;
-}
-
 std::string DaikinEkhheComponent::raw_frame_flags_to_string_(uint8_t flags) const {
   if (flags == 0) {
     return "none";
@@ -1428,59 +1357,6 @@ std::string DaikinEkhheComponent::raw_frame_flags_to_string_(uint8_t flags) cons
     out.pop_back();
   }
   return out;
-}
-
-std::string DaikinEkhheComponent::format_raw_frame_hex_(const RawFrameEntry &entry) const {
-  static const char hex[] = "0123456789ABCDEF";
-  std::string out;
-  out.reserve(entry.length * 4);
-  for (size_t i = 0; i < entry.length; ++i) {
-    if (i % 16 == 0) {
-      char header[8];
-      snprintf(header, sizeof(header), "%02X:", static_cast<unsigned>(i));
-      if (!out.empty()) {
-        out.push_back('\n');
-      }
-      out.append(header);
-    }
-    out.push_back(' ');
-    uint8_t byte = entry.data[i];
-    out.push_back(hex[(byte >> 4) & 0x0F]);
-    out.push_back(hex[byte & 0x0F]);
-  }
-  return out;
-}
-
-std::string DaikinEkhheComponent::format_raw_frame_hex_data_(const uint8_t *data, size_t length) const {
-  static const char hex[] = "0123456789ABCDEF";
-  std::string out;
-  out.reserve(length * 4);
-  for (size_t i = 0; i < length; ++i) {
-    if (i % 16 == 0) {
-      char header[8];
-      snprintf(header, sizeof(header), "%02X:", static_cast<unsigned>(i));
-      if (!out.empty()) {
-        out.push_back('\n');
-      }
-      out.append(header);
-    }
-    out.push_back(' ');
-    uint8_t byte = data[i];
-    out.push_back(hex[(byte >> 4) & 0x0F]);
-    out.push_back(hex[byte & 0x0F]);
-  }
-  return out;
-}
-
-std::string DaikinEkhheComponent::format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back,
-                                                         uint32_t now_ms) const {
-  std::string flags = raw_frame_flags_to_string_(entry.flags);
-  char buffer[160];
-  uint32_t age_ms = now_ms - entry.timestamp_ms;
-  snprintf(buffer, sizeof(buffer), "type=0x%02X len=%u flags=%s ts_ms=%u pos=%u back=%u age_ms=%u seq=%u",
-           entry.packet_type, entry.length, flags.c_str(), entry.timestamp_ms, static_cast<unsigned>(index),
-           static_cast<unsigned>(back), age_ms, entry.seq);
-  return std::string(buffer);
 }
 
 void DaikinEkhheComponent::log_frame_context_(uint32_t center_seq, uint8_t before, uint8_t after) const {
@@ -1523,252 +1399,6 @@ void DaikinEkhheComponent::log_frame_context_(uint32_t center_seq, uint8_t befor
   }
 }
 
-bool DaikinEkhheComponent::is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const {
-  if (offset == 0 || offset == length - 1) {
-    return true;
-  }
-
-  auto has_offset = [](const uint8_t *list, size_t count, size_t value) {
-    for (size_t i = 0; i < count; ++i) {
-      if (list[i] == value) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  switch (packet_type) {
-    case DD_PACKET_START_BYTE: {
-      static const uint8_t dd_known[] = {
-          DD_PACKET_START_IDX,
-          DD_PACKET_B_IDX,
-          DD_PACKET_A_IDX,
-          DD_PACKET_C_IDX,
-          DD_PACKET_D_IDX,
-          DD_PACKET_E_IDX,
-          DD_PACKET_F_IDX,
-          DD_PACKET_G_IDX,
-          DD_PACKET_H_IDX,
-          DD_PACKET_I_IDX,
-          DD_PACKET_I_IDX + 1,
-          DD_PACKET_DIG_IDX,
-          DD_PACKET_FAN_RPM_IDX,
-          DD_PACKET_FAN_RPM_IDX + 1,
-          DD_PACKET_J_FW_IDX,
-          DD_PACKET_END,
-      };
-      return has_offset(dd_known, sizeof(dd_known) / sizeof(dd_known[0]), offset);
-    }
-    case D2_PACKET_START_BYTE: {
-      static const uint8_t d2_known[] = {
-          D2_PACKET_START_IDX,
-          D2_PACKET_MASK1_IDX,
-          D2_PACKET_MASK2_IDX,
-          D2_PACKET_MODE_IDX,
-          D2_PACKET_P4_IDX,
-          D2_PACKET_P7_IDX,
-          D2_PACKET_P10_IDX,
-          D2_PACKET_P2_IDX,
-          D2_PACKET_VAC_DAYS,
-          D2_PACKET_P29_IDX,
-          D2_PACKET_P31_IDX,
-          D2_PACKET_P8_IDX,
-          D2_PACKET_P9_IDX,
-          D2_PACKET_ECO_TTARGET_IDX,
-          D2_PACKET_AUTO_TTARGET_IDX,
-          D2_PACKET_BOOST_TTGARGET_IDX,
-          D2_PACKET_ELECTRIC_TTARGET_IDX,
-          D2_PACKET_P1_IDX,
-          D2_PACKET_P32_IDX,
-          D2_PACKET_P3_IDX,
-          D2_PACKET_P30_IDX,
-          D2_PACKET_P25_IDX,
-          D2_PACKET_P26_IDX,
-          D2_PACKET_P27_IDX,
-          D2_PACKET_P28_IDX,
-          D2_PACKET_P12_IDX,
-          D2_PACKET_P14_IDX,
-          D2_PACKET_P24_IDX,
-          D2_PACKET_P16_IDX,
-          D2_PACKET_P23_IDX,
-          D2_PACKET_P17_IDX,
-          D2_PACKET_P18_IDX,
-          D2_PACKET_P19_IDX,
-          D2_PACKET_P20_IDX,
-          D2_PACKET_P21_IDX,
-          D2_PACKET_P22_IDX,
-          D2_PACKET_P34_IDX,
-          D2_PACKET_P37_IDX,
-          D2_PACKET_P38_IDX,
-          D2_PACKET_P40_IDX,
-          D2_PACKET_P36_IDX,
-          D2_PACKET_P35_IDX,
-          D2_PACKET_P41_IDX,
-          D2_PACKET_P42_IDX,
-          D2_PACKET_P43_IDX,
-          D2_PACKET_P44_IDX,
-          D2_PACKET_P45_IDX,
-          D2_PACKET_P46_IDX,
-          D2_PACKET_HOUR_IDX,
-          D2_PACKET_MIN_IDX,
-          D2_PACKET_P47_IDX,
-          D2_PACKET_P48_IDX,
-          D2_PACKET_P49_IDX,
-          D2_PACKET_P50_IDX,
-          D2_PACKET_P51_IDX,
-          D2_PACKET_P52_IDX,
-          D2_PACKET_P54_IDX,
-          D2_PACKET_END,
-      };
-      return has_offset(d2_known, sizeof(d2_known) / sizeof(d2_known[0]), offset);
-    }
-    case D4_PACKET_START_BYTE: {
-      static const uint8_t d4_known[] = {
-          D4_PACKET_START_IDX,
-          EXT_PACKET_P53_IDX,
-          EXT_PACKET_P71_IDX,
-          EXT_PACKET_P58_IDX,
-          EXT_PACKET_P59_IDX,
-          EXT_PACKET_P56_IDX,
-          EXT_PACKET_P57_IDX,
-          EXT_PACKET_P60_IDX,
-          EXT_PACKET_P61_IDX,
-          EXT_PACKET_P62_IDX,
-          EXT_PACKET_P63_IDX,
-          EXT_PACKET_P64_IDX,
-          EXT_PACKET_P65_IDX,
-          EXT_PACKET_P55_IDX,
-          EXT_PACKET_P66_IDX,
-          EXT_PACKET_P67_IDX,
-          EXT_PACKET_P68_IDX,
-          EXT_PACKET_P69_IDX,
-          EXT_PACKET_P70_IDX,
-          EXT_PACKET_P72_IDX,
-          D4_PACKET_END,
-      };
-      return has_offset(d4_known, sizeof(d4_known) / sizeof(d4_known[0]), offset);
-    }
-    case C1_PACKET_START_BYTE: {
-      static const uint8_t c1_known[] = {
-          C1_PACKET_START_IDX,
-          EXT_PACKET_P53_IDX,
-          EXT_PACKET_P71_IDX,
-          EXT_PACKET_P58_IDX,
-          EXT_PACKET_P59_IDX,
-          EXT_PACKET_P56_IDX,
-          EXT_PACKET_P57_IDX,
-          EXT_PACKET_P60_IDX,
-          EXT_PACKET_P61_IDX,
-          EXT_PACKET_P62_IDX,
-          EXT_PACKET_P63_IDX,
-          EXT_PACKET_P64_IDX,
-          EXT_PACKET_P65_IDX,
-          EXT_PACKET_P55_IDX,
-          EXT_PACKET_P66_IDX,
-          EXT_PACKET_P67_IDX,
-          EXT_PACKET_P68_IDX,
-          EXT_PACKET_P69_IDX,
-          EXT_PACKET_P70_IDX,
-          EXT_PACKET_P72_IDX,
-          C1_PACKET_END,
-      };
-      return has_offset(c1_known, sizeof(c1_known) / sizeof(c1_known[0]), offset);
-    }
-    case C2_PACKET_START_BYTE: {
-      static const uint8_t c2_known[] = {
-          C2_PACKET_START_IDX,
-          EXT_PACKET_P53_IDX,
-          EXT_PACKET_P71_IDX,
-          EXT_PACKET_P58_IDX,
-          EXT_PACKET_P59_IDX,
-          EXT_PACKET_P56_IDX,
-          EXT_PACKET_P57_IDX,
-          EXT_PACKET_P60_IDX,
-          EXT_PACKET_P61_IDX,
-          EXT_PACKET_P62_IDX,
-          EXT_PACKET_P63_IDX,
-          EXT_PACKET_P64_IDX,
-          EXT_PACKET_P65_IDX,
-          EXT_PACKET_P55_IDX,
-          EXT_PACKET_P66_IDX,
-          EXT_PACKET_P67_IDX,
-          EXT_PACKET_P68_IDX,
-          EXT_PACKET_P69_IDX,
-          EXT_PACKET_P70_IDX,
-          EXT_PACKET_P72_IDX,
-          C2_PACKET_END,
-      };
-      return has_offset(c2_known, sizeof(c2_known) / sizeof(c2_known[0]), offset);
-    }
-    case CC_PACKET_START_BYTE: {
-      static const uint8_t cc_known[] = {
-          CC_PACKET_START_IDX,
-          CC_PACKET_MASK1_IDX,
-          CC_PACKET_MASK2_IDX,
-          CC_PACKET_MODE_IDX,
-          CC_PACKET_P4_IDX,
-          CC_PACKET_P7_IDX,
-          CC_PACKET_P10_IDX,
-          CC_PACKET_P2_IDX,
-          CC_PACKET_VAC_DAYS,
-          CC_PACKET_P29_IDX,
-          CC_PACKET_P31_IDX,
-          CC_PACKET_P8_IDX,
-          CC_PACKET_P9_IDX,
-          CC_PACKET_ECO_TTARGET_IDX,
-          CC_PACKET_AUTO_TTARGET_IDX,
-          CC_PACKET_BOOST_TTGARGET_IDX,
-          CC_PACKET_ELECTRIC_TTARGET_IDX,
-          CC_PACKET_P1_IDX,
-          CC_PACKET_P32_IDX,
-          CC_PACKET_P3_IDX,
-          CC_PACKET_P30_IDX,
-          CC_PACKET_P25_IDX,
-          CC_PACKET_P26_IDX,
-          CC_PACKET_P27_IDX,
-          CC_PACKET_P28_IDX,
-          CC_PACKET_P12_IDX,
-          CC_PACKET_P14_IDX,
-          CC_PACKET_P24_IDX,
-          CC_PACKET_P16_IDX,
-          CC_PACKET_P23_IDX,
-          CC_PACKET_P17_IDX,
-          CC_PACKET_P18_IDX,
-          CC_PACKET_P19_IDX,
-          CC_PACKET_P20_IDX,
-          CC_PACKET_P21_IDX,
-          CC_PACKET_P22_IDX,
-          CC_PACKET_P34_IDX,
-          CC_PACKET_P37_IDX,
-          CC_PACKET_P38_IDX,
-          CC_PACKET_P40_IDX,
-          CC_PACKET_P36_IDX,
-          CC_PACKET_P35_IDX,
-          CC_PACKET_P41_IDX,
-          CC_PACKET_P42_IDX,
-          CC_PACKET_P43_IDX,
-          CC_PACKET_P44_IDX,
-          CC_PACKET_P45_IDX,
-          CC_PACKET_P46_IDX,
-          CC_PACKET_HOUR_IDX,
-          CC_PACKET_MIN_IDX,
-          CC_PACKET_P47_IDX,
-          CC_PACKET_P48_IDX,
-          CC_PACKET_P49_IDX,
-          CC_PACKET_P50_IDX,
-          CC_PACKET_P51_IDX,
-          CC_PACKET_P52_IDX,
-          CC_PACKET_L_FW_IDX,
-          CC_PACKET_P54_IDX,
-          CC_PACKET_END,
-      };
-      return has_offset(cc_known, sizeof(cc_known) / sizeof(cc_known[0]), offset);
-    }
-    default:
-      return false;
-  }
-}
-
 const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_family_spec_(
     TxPacketFamily family) const {
   static const TxPacketFamilySpec main_family = {
@@ -1791,97 +1421,11 @@ const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_
   return family == TxPacketFamily::EXTENDED ? extended_family : main_family;
 }
 
-std::string DaikinEkhheComponent::format_unknown_fields_(const RawFrameEntry &entry) const {
-  std::string out;
-  char header[64];
-  snprintf(header, sizeof(header), "type=0x%02X len=%u unknown:", entry.packet_type, entry.length);
-  out.append(header);
-  bool any = false;
-  size_t rows = (entry.length + 15) / 16;
-  for (size_t row = 0; row < rows; ++row) {
-    size_t row_start = row * 16;
-    size_t row_end = row_start + 16;
-    if (row_end > entry.length) {
-      row_end = entry.length;
-    }
-    bool row_has_unknown = false;
-    for (size_t i = row_start; i < row_end; ++i) {
-      if (!is_known_offset_(entry.packet_type, i, entry.length)) {
-        row_has_unknown = true;
-        break;
-      }
-    }
-    if (!row_has_unknown) {
-      continue;
-    }
-    any = true;
-    out.push_back('\n');
-    char row_buf[16];
-    snprintf(row_buf, sizeof(row_buf), "%u:", static_cast<unsigned>(row_start));
-    out.append(row_buf);
-    for (size_t i = row_start; i < row_end; ++i) {
-      out.push_back(' ');
-      if (is_known_offset_(entry.packet_type, i, entry.length)) {
-        out.append("--");
-      } else {
-        char byte_buf[4];
-        snprintf(byte_buf, sizeof(byte_buf), "%02X", entry.data[i]);
-        out.append(byte_buf);
-      }
-    }
-  }
-  if (!any) {
-    out.append("\nnone");
-  }
-  return out;
-}
-
-std::string DaikinEkhheComponent::format_frame_diff_(const RawFrameEntry &entry,
-                                                     const RawFrameEntry *prev) const {
-  static const char hex[] = "0123456789ABCDEF";
-  char header[96];
-  if (prev == nullptr) {
-    snprintf(header, sizeof(header), "type=0x%02X len=%u diff=none (no previous)", entry.packet_type, entry.length);
-    return std::string(header);
-  }
-  size_t length = entry.length < prev->length ? entry.length : prev->length;
-  size_t changes = 0;
-  std::string out;
-  snprintf(header, sizeof(header), "type=0x%02X len=%u prev_len=%u diff:", entry.packet_type, entry.length,
-           prev->length);
-  out.append(header);
-  for (size_t i = 0; i < length; ++i) {
-    uint8_t now = entry.data[i];
-    uint8_t before = prev->data[i];
-    if (now == before) {
-      continue;
-    }
-    if (changes % 8 == 0) {
-      out.push_back('\n');
-    }
-    char chunk[24];
-    snprintf(chunk, sizeof(chunk), "%u:%02X>%02X ", static_cast<unsigned>(i), before, now);
-    out.append(chunk);
-    changes++;
-    if (changes >= 32) {
-      out.append("...");
-      break;
-    }
-  }
-  if (changes == 0 && entry.length != prev->length) {
-    out.append("\nlen change only");
-  } else if (changes == 0) {
-    out.append("\nno changes");
-  }
-  return out;
-}
-
 void DaikinEkhheComponent::publish_debug_outputs_() {
   if (!debug_mode_) {
     return;
   }
 
-  uint32_t now_ms = millis();
   auto publish_debug_sensor = [this](const std::string &key, float value, uint32_t min_interval_ms,
                                      uint32_t refresh_ms) {
     if (debug_sensors_.find(key) == debug_sensors_.end()) {
@@ -1909,75 +1453,6 @@ void DaikinEkhheComponent::publish_debug_outputs_() {
   publish_debug_sensor("cycle_total_time_ms", cycle_total_ms_, kDebugTimingPublishMinIntervalMs, 0);
   publish_debug_sensor("cycle_over_budget_total", cycle_over_budget_total_, kDebugCounterPublishIntervalMs,
                        kDebugCounterPublishIntervalMs);
-
-  size_t index = 0;
-  size_t back = 0;
-  const RawFrameEntry *entry = select_raw_frame_(index, back);
-  if (entry == nullptr) {
-    return;
-  }
-
-  auto publish_debug_text = [this](const std::string &key, const std::string &value) {
-    if (debug_text_sensors_.find(key) == debug_text_sensors_.end()) {
-      return;
-    }
-    if (should_publish_debug_text_(key, value, kDebugTextPublishMinIntervalMs)) {
-      defer([this, key, value]() { debug_text_sensors_[key]->publish_state(value); });
-    }
-  };
-
-  publish_debug_text("daikin_raw_frame_hex", format_raw_frame_hex_(*entry));
-  publish_debug_text("daikin_raw_frame_meta", format_raw_frame_meta_(*entry, index, back, now_ms));
-  publish_debug_text("daikin_unknown_fields", format_unknown_fields_(*entry));
-
-  size_t prev_index = 0;
-  const RawFrameEntry *prev = find_previous_frame_by_type_(entry->packet_type, entry->seq, prev_index, true);
-  if (prev == nullptr) {
-    prev = find_previous_frame_by_type_(entry->packet_type, entry->seq, prev_index, false);
-  }
-  publish_debug_text("daikin_frame_diff", format_frame_diff_(*entry, prev));
-
-  if (dd_b1_text_ != nullptr || dd_b5_text_ != nullptr) {
-    size_t dd_index = 0;
-    const RawFrameEntry *dd_entry = find_latest_frame_by_type_(DD_PACKET_START_BYTE, dd_index, false);
-    const bool has_dd = dd_entry != nullptr && dd_entry->length >= 6 &&
-                        (dd_entry->flags & RAW_FRAME_TRUNCATED) == 0;
-    if (has_dd) {
-      uint8_t b1 = dd_entry->data[1];
-      uint8_t b5 = dd_entry->data[5];
-      if (dd_b1_text_ != nullptr &&
-          (!last_dd_b1_valid_ || b1 != last_dd_b1_) &&
-          (now_ms - last_dd_b1_publish_ms_) >= kDebugTextPublishMinIntervalMs) {
-        char buffer[8];
-        snprintf(buffer, sizeof(buffer), "0x%02X", b1);
-        dd_b1_text_->publish_state(buffer);
-        last_dd_b1_publish_ms_ = now_ms;
-        last_dd_b1_valid_ = true;
-      }
-      if (dd_b5_text_ != nullptr &&
-          (!last_dd_b5_valid_ || b5 != last_dd_b5_) &&
-          (now_ms - last_dd_b5_publish_ms_) >= kDebugTextPublishMinIntervalMs) {
-        char buffer[8];
-        snprintf(buffer, sizeof(buffer), "0x%02X", b5);
-        dd_b5_text_->publish_state(buffer);
-        last_dd_b5_publish_ms_ = now_ms;
-        last_dd_b5_valid_ = true;
-      }
-      last_dd_b1_ = b1;
-      last_dd_b5_ = b5;
-    } else {
-      if (dd_b1_text_ != nullptr && last_dd_b1_valid_) {
-        dd_b1_text_->publish_state("");
-        last_dd_b1_valid_ = false;
-      }
-      if (dd_b5_text_ != nullptr && last_dd_b5_valid_) {
-        dd_b5_text_->publish_state("");
-        last_dd_b5_valid_ = false;
-      }
-      last_dd_b1_ = 0xFF;
-      last_dd_b5_ = 0xFF;
-    }
-  }
 }
 
 void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
@@ -2789,13 +2264,6 @@ void DaikinEkhheComponent::register_text_sensor(const std::string &text_sensor_n
 
 void DaikinEkhheComponent::register_timestamp_sensor(text_sensor::TextSensor *sensor) {
   this->timestamp_sensor_ = sensor;
-}
-
-void DaikinEkhheComponent::register_debug_text_sensor(const std::string &sensor_name,
-                                                      esphome::text_sensor::TextSensor *sensor) {
-  if (sensor != nullptr) {
-    debug_text_sensors_[sensor_name] = sensor;
-  }
 }
 
 void DaikinEkhheComponent::register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor) {

@@ -128,15 +128,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_select(const std::string &select_name, select::Select *select);
   void register_text_sensor(const std::string &text_sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
-  void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
 #if defined(USE_SWITCH)
   void register_switch(const std::string &switch_name, switch_::Switch *sw);
 #endif
   void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
-  void set_dd_b1_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b1_text_ = sensor; }
-  void set_dd_b5_text(esphome::text_sensor::TextSensor *sensor) { this->dd_b5_text_ = sensor; }
   void set_dd_heating_demand(binary_sensor::BinarySensor *sensor) { this->dd_heating_demand_ = sensor; }
   void set_hp_active(binary_sensor::BinarySensor *sensor) { this->hp_active_ = sensor; }
   void set_eh_active(binary_sensor::BinarySensor *sensor) { this->eh_active_ = sensor; }
@@ -403,12 +400,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #endif
   std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
-  std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
   std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
   text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
   text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
-  text_sensor::TextSensor *dd_b1_text_ = nullptr;
-  text_sensor::TextSensor *dd_b5_text_ = nullptr;
   binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
   binary_sensor::BinarySensor *hp_active_ = nullptr;
   binary_sensor::BinarySensor *eh_active_ = nullptr;
@@ -440,7 +434,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
   struct RawFrameEntry;
 
-  bool should_publish_debug_text_(const std::string &key, const std::string &value, uint32_t min_interval_ms);
   void publish_debug_outputs_();
   void publish_profile_statuses_();
   void publish_profile_status_(bool known_good);
@@ -452,28 +445,18 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
   void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
-  const RawFrameEntry *select_raw_frame_(size_t &index, size_t &back);
   const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
   const RawFrameEntry *find_latest_dd_frame_(size_t &index) const;
-  const RawFrameEntry *find_previous_frame_by_type_(uint8_t packet_type, uint32_t seq, size_t &index,
-                                                    bool require_ok) const;
   bool is_frame_ok_(const RawFrameEntry &entry) const;
   std::string raw_frame_flags_to_string_(uint8_t flags) const;
-  std::string format_raw_frame_hex_(const RawFrameEntry &entry) const;
-  std::string format_raw_frame_hex_data_(const uint8_t *data, size_t length) const;
-  std::string format_raw_frame_meta_(const RawFrameEntry &entry, size_t index, size_t back, uint32_t now_ms) const;
   void log_frame_context_(uint32_t center_seq, uint8_t before, uint8_t after) const;
 
-  std::string format_unknown_fields_(const RawFrameEntry &entry) const;
-  std::string format_frame_diff_(const RawFrameEntry &entry, const RawFrameEntry *prev) const;
-  bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;
 #if defined(USE_SWITCH)
   bool current_operational_mode_(uint8_t &mode) const;
   bool silent_mode_allowed_mode_(uint8_t mode) const;
   void publish_silent_mode_from_latest_packet_();
 #endif
-  uint8_t packet_type_from_string_(const std::string &value) const;
   std::string packet_type_to_string_(uint8_t packet_type) const;
   enum class TxPacketKind : uint8_t {
     SINGLE_FIELD,
@@ -730,14 +713,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint32_t last_published_timestamp_ms_ = 0;
   std::map<std::string, float> debug_last_published_values_;
   std::map<std::string, uint32_t> debug_last_published_values_ms_;
-  std::map<std::string, std::string> debug_last_published_text_;
-  std::map<std::string, uint32_t> debug_last_published_text_ms_;
-  uint8_t last_dd_b1_ = 0xFF;
-  uint8_t last_dd_b5_ = 0xFF;
-  uint32_t last_dd_b1_publish_ms_ = 0;
-  uint32_t last_dd_b5_publish_ms_ = 0;
-  bool last_dd_b1_valid_ = false;
-  bool last_dd_b5_valid_ = false;
   bool last_dd_demand_ = false;
   bool last_hp_active_ = false;
   bool last_eh_active_ = false;
