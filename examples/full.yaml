@@ -265,6 +265,11 @@ select:
     evaporator_fan_compressor_off_mode:
       name: "P58: Evaporator fan compressor off mode"
 
+switch:
+  - platform: daikin_ekhhe
+    silent_mode:
+      name: "Silent mode"
+
 text_sensor:
   - platform: daikin_ekhhe
     current_time:

@@ -120,6 +120,8 @@ text_sensor:
 
 switch:
   - platform: daikin_ekhhe
+    silent_mode:
+      name: "CI Silent Mode"
     daikin_debug_freeze:
       name: "CI Debug Freeze"
 

@@ -290,6 +290,8 @@ select:
 
 switch:
   - platform: daikin_ekhhe
+    silent_mode:
+      name: "Silent mode"
     daikin_debug_freeze:
       name: "Daikin Debug Freeze"
 
