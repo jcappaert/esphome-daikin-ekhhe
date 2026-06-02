@@ -1,10 +1,6 @@
 
 #pragma once
 
-#ifndef DAIKIN_EKHHE_DEBUG
-#define DAIKIN_EKHHE_DEBUG 0
-#endif
-
 #include <string>
 #include <map>
 #include <type_traits>
@@ -128,7 +124,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_select(const std::string &select_name, select::Select *select);
   void register_text_sensor(const std::string &text_sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
-  void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
 #if defined(USE_SWITCH)
   void register_switch(const std::string &switch_name, switch_::Switch *sw);
 #endif
@@ -363,16 +358,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kTimestampRefreshMs = 5 * 60 * 1000;
   static constexpr uint32_t kCycleTimeoutMs = 2000;
   static constexpr uint32_t kFrameReadTimeoutMs = 120;
-  static constexpr uint32_t kCycleOverBudgetMs = 2000;
-  static constexpr uint32_t kDebugTextPublishMinIntervalMs = 1000;
-  static constexpr uint32_t kDebugCounterPublishIntervalMs = 30000;
-  static constexpr uint32_t kDebugTimingPublishMinIntervalMs = 1000;
   static constexpr size_t kRawFrameMaxLen = 71;
-  static constexpr size_t kRawFrameBufferSize = DAIKIN_EKHHE_DEBUG ? 64 : 16;
+  static constexpr size_t kRawFrameBufferSize = 16;
   static constexpr uint8_t kBitPositionNoBitmask = 255;
-  static constexpr uint32_t kCdContextLogDelayMs = 4000;
-  static constexpr uint8_t kCdContextFramesBefore = 6;
-  static constexpr uint8_t kCdContextFramesAfter = 8;
   static constexpr uint32_t kDefaultTxDelayAfterD2Ms = 75;
   static constexpr uint32_t kMaxTxDelayAfterD2Ms = 250;
   static constexpr uint8_t kTxMaxRepeats = 5;
@@ -400,7 +388,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #endif
   std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
-  std::map<std::string, esphome::sensor::Sensor *> debug_sensors_;
   text_sensor::TextSensor *known_good_profile_status_sensor_ = nullptr;
   text_sensor::TextSensor *auto_snapshot_status_sensor_ = nullptr;
   binary_sensor::BinarySensor *dd_heating_demand_ = nullptr;
@@ -429,12 +416,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                              float epsilon, uint32_t refresh_ms);
   bool should_publish_bool_(const std::string &key, bool value, std::map<std::string, bool> &last_values,
                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
- bool should_publish_text_(const std::string &key, const std::string &value,
+  bool should_publish_text_(const std::string &key, const std::string &value,
                             std::map<std::string, std::string> &last_values,
                             std::map<std::string, uint32_t> &last_publish_ms, uint32_t refresh_ms);
   struct RawFrameEntry;
 
-  void publish_debug_outputs_();
   void publish_profile_statuses_();
   void publish_profile_status_(bool known_good);
   std::string format_profile_status_(bool known_good) const;
@@ -445,12 +431,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void restore_profile_(bool known_good);
   void update_dd_b1_bit_sensors_();
   void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
-  const RawFrameEntry *find_raw_frame_by_seq_(uint32_t seq, size_t &index) const;
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
   const RawFrameEntry *find_latest_dd_frame_(size_t &index) const;
   bool is_frame_ok_(const RawFrameEntry &entry) const;
-  std::string raw_frame_flags_to_string_(uint8_t flags) const;
-  void log_frame_context_(uint32_t center_seq, uint8_t before, uint8_t after) const;
 
 #if defined(USE_SWITCH)
   bool current_operational_mode_(uint8_t &mode) const;
@@ -529,16 +512,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool uart_tx_active_ = false; // used for SW "flow control" to avoid RS485 bus contention
   bool continuous_rx_ = false;
   unsigned long last_rx_time_ = 0;
-  static constexpr bool debug_mode_ = DAIKIN_EKHHE_DEBUG;
   static constexpr uint32_t kAutoSnapshotCooldownMs = 15UL * 60UL * 1000UL;
 
   uint32_t cycle_start_ms_ = 0;
   uint32_t cycle_bytes_read_ = 0;
   uint32_t cycle_packets_seen_ = 0;
-  uint32_t cycle_packets_parsed_ = 0;
-  uint32_t cycle_parse_ms_ = 0;
-  uint32_t cycle_total_ms_ = 0;
-  uint32_t cycle_over_budget_total_ = 0;
   uint32_t cycle_timeouts_ = 0;
   uint32_t cycle_checksum_errors_ = 0;
   uint8_t cycle_checksum_error_mask_ = 0;
@@ -684,13 +662,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   size_t raw_frame_head_ = 0;
   size_t raw_frame_count_ = 0;
   uint32_t raw_frame_seq_ = 0;
-  uint32_t raw_frames_captured_ = 0;
-  uint32_t raw_frames_dropped_ = 0;
-  uint32_t raw_frames_truncated_ = 0;
-  uint32_t raw_frames_error_ = 0;
-  uint32_t raw_bytes_captured_ = 0;
-  uint32_t raw_crc_errors_total_ = 0;
-  uint32_t raw_framing_errors_total_ = 0;
   uint32_t last_frame_profile_ms_ = 0;
   uint8_t last_frame_profile_type_ = 0;
   uint32_t last_cc_profile_ms_ = 0;
@@ -711,8 +682,6 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, uint32_t> last_published_text_ms_;
   std::string last_published_timestamp_;
   uint32_t last_published_timestamp_ms_ = 0;
-  std::map<std::string, float> debug_last_published_values_;
-  std::map<std::string, uint32_t> debug_last_published_values_ms_;
   bool last_dd_demand_ = false;
   bool last_hp_active_ = false;
   bool last_eh_active_ = false;
