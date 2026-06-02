@@ -95,6 +95,11 @@ select:
     evaporator_fan_compressor_off_mode:
       name: "CI P58 Evaporator Fan Compressor Off Mode"
 
+switch:
+  - platform: daikin_ekhhe
+    silent_mode:
+      name: "CI Silent Mode"
+
 button:
   - platform: daikin_ekhhe
     daikin_restore_default_settings:

@@ -15,7 +15,7 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
-#if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
+#if defined(USE_SWITCH)
 #include "esphome/components/switch/switch.h"
 #endif
 #if defined(USE_BUTTON)
@@ -73,6 +73,19 @@ class DaikinEkhheDebugSelect : public select::Select, public Component {
  private:
   DaikinEkhheComponent *parent_;
 };
+
+#if defined(USE_SWITCH)
+class DaikinEkhheSwitch : public switch_::Switch {
+ public:
+  void write_state(bool state) override;
+  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
+  void set_internal_id(const std::string &id) { this->internal_id_ = id; }
+
+ private:
+  DaikinEkhheComponent *parent_;
+  std::string internal_id_;
+};
+#endif
 
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
 class DaikinEkhheDebugSwitch : public switch_::Switch {
@@ -138,6 +151,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_debug_text_sensor(const std::string &sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_debug_sensor(const std::string &sensor_name, esphome::sensor::Sensor *sensor);
   void register_debug_select(DaikinEkhheDebugSelect *select);
+#if defined(USE_SWITCH)
+  void register_switch(const std::string &switch_name, switch_::Switch *sw);
+#endif
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
   void register_debug_switch(DaikinEkhheDebugSwitch *sw);
 #endif
@@ -154,6 +170,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void set_binary_sensor_value(const std::string &sensor_name, bool value);
   void set_number_value(const std::string &number_name, float value);
   void set_select_value(const std::string &select_name, int value);
+#if defined(USE_SWITCH)
+  void set_switch_value(const std::string &switch_name, bool value);
+#endif
   void update_timestamp(uint8_t hour, uint8_t minute);
 
   // Allow UART command sending for Number/Select control
@@ -167,6 +186,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void set_debug_freeze(bool enabled);
   void update_number_cache(const std::string &number_name, float value);
   void update_select_cache(const std::string &select_name, const std::string &value);
+#if defined(USE_SWITCH)
+  void update_switch_cache(const std::string &switch_name, bool value);
+  bool set_silent_mode(bool enabled);
+#endif
 
 
   enum EkkheDDPacket {
@@ -383,6 +406,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kMaxTxDelayAfterD2Ms = 250;
   static constexpr uint8_t kTxMaxRepeats = 5;
   static constexpr uint8_t kDeferredTxMax = 8;
+  static constexpr uint8_t kOperationalModeAuto = 0;
+  static constexpr uint8_t kOperationalModeEco = 1;
+  static constexpr uint8_t kOperationalModeBoost = 2;
 
   static constexpr uint8_t kPacketMaskDD = 1 << 0;
   static constexpr uint8_t kPacketMaskD2 = 1 << 1;
@@ -398,6 +424,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, esphome::binary_sensor::BinarySensor *> binary_sensors_;
   std::map<std::string, esphome::number::Number *> numbers_;
   std::map<std::string, DaikinEkhheSelect *> selects_;
+#if defined(USE_SWITCH)
+  std::map<std::string, switch_::Switch *> switches_;
+#endif
   std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
   std::map<std::string, esphome::text_sensor::TextSensor *> debug_text_sensors_;
@@ -469,6 +498,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::string format_unknown_fields_(const RawFrameEntry &entry) const;
   std::string format_frame_diff_(const RawFrameEntry &entry, const RawFrameEntry *prev) const;
   bool is_known_offset_(uint8_t packet_type, size_t offset, size_t length) const;
+#if defined(USE_SWITCH)
+  bool current_operational_mode_(uint8_t &mode) const;
+  bool silent_mode_allowed_mode_(uint8_t mode) const;
+  void publish_silent_mode_from_latest_packet_();
+#endif
   uint8_t packet_type_from_string_(const std::string &value) const;
   std::string packet_type_to_string_(uint8_t packet_type) const;
   enum class TxPacketKind : uint8_t {
@@ -719,6 +753,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, uint32_t> last_published_binary_ms_;
   std::map<std::string, std::string> last_published_select_values_;
   std::map<std::string, uint32_t> last_published_select_ms_;
+#if defined(USE_SWITCH)
+  std::map<std::string, bool> last_published_switch_values_;
+  std::map<std::string, uint32_t> last_published_switch_ms_;
+#endif
   std::map<std::string, std::string> last_published_text_values_;
   std::map<std::string, uint32_t> last_published_text_ms_;
   std::string last_published_timestamp_;

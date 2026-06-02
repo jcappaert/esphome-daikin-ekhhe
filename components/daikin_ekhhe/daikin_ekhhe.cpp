@@ -25,6 +25,7 @@ static const uint8_t C1_PACKET_START_BYTE = 0xC1;
 static const uint8_t C2_PACKET_START_BYTE = 0xC2;
 static const uint8_t CC_PACKET_START_BYTE = 0xCC;
 static const uint8_t CD_PACKET_START_BYTE = 0xCD;
+static const uint8_t SILENT_MODE_BIT_POSITION = 6;
 
 
 // Packet definitions
@@ -256,6 +257,8 @@ static const ManagedFieldSpec PROFILE_MANAGED_FIELDS[] = {
      DaikinEkhheComponent::D2_PACKET_MASK1_IDX, 0, 1},
     {"OPERATIONAL_MODE", DaikinEkhheComponent::CC_PACKET_MODE_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_MODE_IDX, BIT_POSITION_NO_BITMASK, 0},
+    {"SILENT_MODE", DaikinEkhheComponent::CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION, 1,
+     DaikinEkhheComponent::D2_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION, 1},
     {"P1", DaikinEkhheComponent::CC_PACKET_P1_IDX, BIT_POSITION_NO_BITMASK, 0,
      DaikinEkhheComponent::D2_PACKET_P1_IDX, BIT_POSITION_NO_BITMASK, 0},
     {"P2", DaikinEkhheComponent::CC_PACKET_P2_IDX, BIT_POSITION_NO_BITMASK, 0,
@@ -2483,6 +2486,21 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
     set_select_value(param_name, value);
   }
 
+#if defined(USE_SWITCH)
+  if (D2_PACKET_MASK2_IDX < buffer.size()) {
+    const bool pending_silent_write =
+        pending_tx_.active && pending_tx_.family == TxPacketFamily::MAIN &&
+        pending_tx_.index == CC_PACKET_MASK2_IDX &&
+        pending_tx_.bit_position == SILENT_MODE_BIT_POSITION;
+    const bool deferred_silent_write =
+        has_deferred_user_tx_(TxPacketFamily::MAIN, CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION);
+    if (!pending_silent_write && !deferred_silent_write) {
+      set_switch_value(SILENT_MODE,
+                       extract_field_value(buffer, D2_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION, 1) != 0);
+    }
+  }
+#endif
+
   update_timestamp(buffer[D2_PACKET_HOUR_IDX], buffer[D2_PACKET_MIN_IDX]);
 
   return;
@@ -2661,6 +2679,29 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
     set_select_value(param_name, value);
   }
 
+#if defined(USE_SWITCH)
+  if (CC_PACKET_MASK2_IDX < buffer.size()) {
+    const bool pending_silent_write =
+        pending_tx_.active && pending_tx_.family == TxPacketFamily::MAIN &&
+        pending_tx_.index == CC_PACKET_MASK2_IDX &&
+        pending_tx_.bit_position == SILENT_MODE_BIT_POSITION;
+    const bool deferred_silent_write =
+        has_deferred_user_tx_(TxPacketFamily::MAIN, CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION);
+    const bool waiting_for_silent_ui_sync =
+        tx_ui_sync_.active && tx_ui_sync_.family == TxPacketFamily::MAIN &&
+        tx_ui_sync_.index == CC_PACKET_MASK2_IDX &&
+        tx_ui_sync_.bit_position == SILENT_MODE_BIT_POSITION && !cc_sync_matched;
+    const bool waiting_for_silent_profile_sync =
+        (pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
+        is_profile_managed_field(CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION);
+    if (!pending_silent_write && !deferred_silent_write && !waiting_for_silent_ui_sync &&
+        !waiting_for_silent_profile_sync) {
+      set_switch_value(SILENT_MODE,
+                       extract_field_value(buffer, CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION, 1) != 0);
+    }
+  }
+#endif
+
   set_text_sensor_value_(L_UI_FW_VERSION, "U" + std::to_string(buffer[CC_PACKET_L_FW_IDX]));
 
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
@@ -2801,6 +2842,14 @@ void DaikinEkhheComponent::register_debug_select(DaikinEkhheDebugSelect *select)
   }
 }
 
+#if defined(USE_SWITCH)
+void DaikinEkhheComponent::register_switch(const std::string &switch_name, switch_::Switch *sw) {
+  if (sw != nullptr) {
+    switches_[switch_name] = sw;
+  }
+}
+#endif
+
 #if DAIKIN_EKHHE_DEBUG && defined(USE_SWITCH)
 void DaikinEkhheComponent::register_debug_switch(DaikinEkhheDebugSwitch *sw) {
   this->debug_freeze_switch_ = sw;
@@ -2864,6 +2913,22 @@ void DaikinEkhheComponent::set_binary_sensor_value(const std::string &sensor_nam
     }
   }
 }
+
+#if defined(USE_SWITCH)
+void DaikinEkhheComponent::set_switch_value(const std::string &switch_name, bool value) {
+  if (switches_.find(switch_name) != switches_.end()) {
+    if (!cycle_publish_allowed_) {
+      return;
+    }
+    if (should_publish_bool_(switch_name, value, last_published_switch_values_,
+                             last_published_switch_ms_, kSlowPublishRefreshMs)) {
+      defer([this, switch_name, value]() {
+        switches_[switch_name]->publish_state(value);
+      });
+    }
+  }
+}
+#endif
 
 void DaikinEkhheComponent::set_number_value(const std::string &number_name, float value) {
   // This sets a number value that's been gotten from the UART stream, not something that's 
@@ -2956,6 +3021,62 @@ void DaikinEkhheComponent::update_select_cache(const std::string &select_name, c
   last_published_select_values_[select_name] = value;
   last_published_select_ms_[select_name] = now;
 }
+
+#if defined(USE_SWITCH)
+void DaikinEkhheComponent::update_switch_cache(const std::string &switch_name, bool value) {
+  uint32_t now = millis();
+  last_published_switch_values_[switch_name] = value;
+  last_published_switch_ms_[switch_name] = now;
+}
+
+bool DaikinEkhheComponent::current_operational_mode_(uint8_t &mode) const {
+  if (last_d2_packet_.size() > D2_PACKET_MODE_IDX) {
+    mode = last_d2_packet_[D2_PACKET_MODE_IDX];
+    return true;
+  }
+  if (last_cc_packet_.size() > CC_PACKET_MODE_IDX) {
+    mode = last_cc_packet_[CC_PACKET_MODE_IDX];
+    return true;
+  }
+  return false;
+}
+
+bool DaikinEkhheComponent::silent_mode_allowed_mode_(uint8_t mode) const {
+  return mode == kOperationalModeAuto || mode == kOperationalModeEco || mode == kOperationalModeBoost;
+}
+
+void DaikinEkhheComponent::publish_silent_mode_from_latest_packet_() {
+  bool enabled = false;
+  if (last_d2_packet_.size() > D2_PACKET_MASK2_IDX) {
+    enabled = extract_field_value(last_d2_packet_, D2_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION, 1) != 0;
+  } else if (last_cc_packet_.size() > CC_PACKET_MASK2_IDX) {
+    enabled = extract_field_value(last_cc_packet_, CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION, 1) != 0;
+  }
+  set_switch_value(SILENT_MODE, enabled);
+}
+
+bool DaikinEkhheComponent::set_silent_mode(bool enabled) {
+  if (enabled) {
+    uint8_t mode = 0;
+    if (!current_operational_mode_(mode)) {
+      DAIKIN_WARN(TAG, "Silent mode cannot be enabled before an operational mode has been received.");
+      publish_silent_mode_from_latest_packet_();
+      return false;
+    }
+    if (!silent_mode_allowed_mode_(mode)) {
+      DAIKIN_WARN(TAG, "Silent mode can only be enabled in Auto, Eco, or Boost mode; current mode=%u", mode);
+      publish_silent_mode_from_latest_packet_();
+      return false;
+    }
+  }
+
+  if (!send_uart_cc_command(CC_PACKET_MASK2_IDX, enabled ? 1 : 0, SILENT_MODE_BIT_POSITION, 1)) {
+    publish_silent_mode_from_latest_packet_();
+    return false;
+  }
+  return true;
+}
+#endif
 
 uint8_t DaikinEkhheComponent::ekhhe_checksum(const std::vector<uint8_t>& data_bytes) {
   // Compute the checksum as (sum of data bytes) mod 256 + 170
@@ -3138,6 +3259,26 @@ void DaikinEkhheDebugSwitch::write_state(bool state) {
     return;
   }
   this->parent_->set_debug_freeze(state);
+}
+#endif
+
+#if defined(USE_SWITCH)
+void DaikinEkhheSwitch::write_state(bool state) {
+  if (this->parent_ == nullptr) {
+    DAIKIN_WARN(TAG, "Parent component is null, cannot send Switch command.");
+    return;
+  }
+
+  auto name = this->internal_id_;
+  if (name == SILENT_MODE) {
+    if (this->parent_->set_silent_mode(state)) {
+      this->parent_->update_switch_cache(name, state);
+      this->publish_state(state);
+    }
+    return;
+  }
+
+  DAIKIN_WARN(TAG, "No matching UART command for Switch: %s", name.c_str());
 }
 #endif
 
@@ -3751,6 +3892,12 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
         set_select_value(entry.first, field_value);
       }
     }
+#if defined(USE_SWITCH)
+    if (pending_tx_.family == TxPacketFamily::MAIN && index == CC_PACKET_MASK2_IDX &&
+        pending_tx_.bit_position == SILENT_MODE_BIT_POSITION) {
+      set_switch_value(SILENT_MODE, field_value != 0);
+    }
+#endif
   }
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;

@@ -39,6 +39,7 @@ static const std::string PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM = "pa_heat_pump_temp
 
 static const std::string POWER_STATUS            = "power_status";
 static const std::string OPERATIONAL_MODE        = "operational_mode";
+static const std::string SILENT_MODE             = "silent_mode";
 static const std::string CURRENT_TIME            = "current_time";
 
 static const std::string AUTO_T_TEMPERATURE      = "auto_target_temperature";

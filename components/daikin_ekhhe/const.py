@@ -32,6 +32,7 @@ PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM = "pa_heat_pump_temperature_unsuitable_alarm"
 
 POWER_STATUS            = "power_status"
 OPERATIONAL_MODE        = "operational_mode"
+SILENT_MODE             = "silent_mode"
 CURRENT_TIME            = "current_time"
 AUTO_T_TEMPERATURE      = "auto_target_temperature"
 ECO_T_TEMPERATURE       = "eco_target_temperature"
