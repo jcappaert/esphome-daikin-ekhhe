@@ -773,7 +773,12 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     return;
   }
 
-  uint8_t packet_mask = packet_mask_for_start_(byte);
+  handle_complete_packet_(byte, packet.data(), expected_length);
+}
+
+void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const uint8_t *data, size_t length) {
+  std::vector<uint8_t> packet(data, data + length);
+  uint8_t packet_mask = packet_mask_for_start_(packet_type);
   uint8_t flags = 0;
   bool crc_ok = true;
   if ((packet_mask & kChecksumPacketMask) != 0) {
@@ -783,11 +788,11 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     }
   }
 
-  store_raw_frame_(byte, packet.data(), expected_length, flags);
+  store_raw_frame_(packet_type, packet.data(), length, flags);
 
   if (!crc_ok) {
     if (cycle_synced_) {
-      if (latest_packets_.count(byte) == 0) {
+      if (latest_packets_.count(packet_type) == 0) {
         cycle_checksum_errors_++;
         cycle_checksum_error_mask_ |= packet_mask;
       }
@@ -798,7 +803,7 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   const uint32_t now_ms = millis();
   if (tx_operation_active_() && tx_waiting_for_first_rx_) {
     DAIKIN_DBG(TAG, "TX timing: first_rx_after_tx type=%s dt=%u",
-               packet_type_to_string_(byte).c_str(), now_ms - tx_sent_ms_);
+               packet_type_to_string_(packet_type).c_str(), now_ms - tx_sent_ms_);
     tx_waiting_for_first_rx_ = false;
   }
 
@@ -810,35 +815,35 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   } else if (pending_profile_restore_.active) {
     tx_readback_type = tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type;
   }
-  if (tx_operation_active_() && tx_waiting_for_first_cc_ && byte == tx_readback_type) {
+  if (tx_operation_active_() && tx_waiting_for_first_cc_ && packet_type == tx_readback_type) {
     DAIKIN_DBG(TAG, "TX timing: first_readback_after_tx type=%s dt=%u",
-               packet_type_to_string_(byte).c_str(), now_ms - tx_sent_ms_);
+               packet_type_to_string_(packet_type).c_str(), now_ms - tx_sent_ms_);
     tx_waiting_for_first_cc_ = false;
   }
 
   last_frame_profile_ms_ = now_ms;
-  last_frame_profile_type_ = byte;
-  if (byte == CC_PACKET_START_BYTE) {
+  last_frame_profile_type_ = packet_type;
+  if (packet_type == CC_PACKET_START_BYTE) {
     last_cc_profile_ms_ = now_ms;
   }
-  if (byte == C2_PACKET_START_BYTE) {
+  if (packet_type == C2_PACKET_START_BYTE) {
     last_c2_packet_ = packet;
   }
   if (pending_restore_.active &&
-      byte == tx_packet_family_spec_(pending_restore_.family).readback_packet_type) {
+      packet_type == tx_packet_family_spec_(pending_restore_.family).readback_packet_type) {
     check_pending_restore_(packet);
   }
   if (pending_profile_restore_.active &&
-      byte == tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type) {
+      packet_type == tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type) {
     check_pending_profile_restore_(packet);
   }
-  if (byte == D2_PACKET_START_BYTE && pending_time_band_tx_.active) {
+  if (packet_type == D2_PACKET_START_BYTE && pending_time_band_tx_.active) {
     check_pending_time_band_(packet);
   }
-  if (pending_tx_.active && byte == tx_packet_family_spec_(pending_tx_.family).readback_packet_type) {
+  if (pending_tx_.active && packet_type == tx_packet_family_spec_(pending_tx_.family).readback_packet_type) {
     check_pending_tx_(packet);
   }
-  if (byte == D2_PACKET_START_BYTE &&
+  if (packet_type == D2_PACKET_START_BYTE &&
       (pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
        pending_time_band_tx_.active)) {
     size_t d2_index = 0;
@@ -865,15 +870,15 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     cycle_checksum_error_mask_ = 0;
     cycle_framing_errors_ = 0;
     cycle_framing_error_start_ = 0;
-    cycle_bytes_read_ = expected_length;
+    cycle_bytes_read_ = length;
   }
 
-  if (cycle_synced_ && latest_packets_.count(byte) > 0) {
+  if (cycle_synced_ && latest_packets_.count(packet_type) > 0) {
     return;
   }
 
   // Store only the latest version of each valid packet
-  latest_packets_[byte] = packet;
+  latest_packets_[packet_type] = packet;
   cycle_packets_seen_++;
   cycle_packet_types_seen_ |= packet_mask;
 }

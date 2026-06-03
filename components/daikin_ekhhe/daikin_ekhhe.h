@@ -428,6 +428,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void process_packet_set();
   bool packet_set_complete();
   void store_latest_packet(uint8_t byte);
+  void handle_complete_packet_(uint8_t packet_type, const uint8_t *data, size_t length);
   bool read_packet_bytes_(uint8_t *dest, size_t length, uint32_t timeout_ms);
   void store_raw_frame_(uint8_t packet_type, const uint8_t *data, size_t length, uint8_t flags);
   void reset_cycle_stats_();
