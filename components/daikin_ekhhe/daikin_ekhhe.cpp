@@ -751,31 +751,6 @@ void DaikinEkhheComponent::loop() {
     }
 }
 
-void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
-  last_rx_time_ = millis();
-
-  // Wait for a start byte
-  if (PACKET_SIZES.find(byte) == PACKET_SIZES.end()) {
-    return;
-  }
-
-  // Read the expected packet size
-  uint8_t expected_length = PACKET_SIZES.at(byte);
-  std::vector<uint8_t> packet(expected_length);
-  packet[0] = byte;
-
-  // Read the rest of the packet
-  if (!read_packet_bytes_(packet.data() + 1, expected_length - 1, kFrameReadTimeoutMs)) {
-    if (cycle_synced_) {
-      cycle_framing_errors_++;
-      cycle_framing_error_start_ = byte;
-    }
-    return;
-  }
-
-  handle_complete_packet_(byte, packet.data(), expected_length);
-}
-
 void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const uint8_t *data, size_t length) {
   std::vector<uint8_t> packet(data, data + length);
   uint8_t packet_mask = packet_mask_for_start_(packet_type);
@@ -881,21 +856,6 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
   latest_packets_[packet_type] = packet;
   cycle_packets_seen_++;
   cycle_packet_types_seen_ |= packet_mask;
-}
-
-bool DaikinEkhheComponent::read_packet_bytes_(uint8_t *dest, size_t length, uint32_t timeout_ms) {
-  uint32_t start_ms = millis();
-  size_t offset = 0;
-
-  while (offset < length) {
-    if (this->available()) {
-      dest[offset++] = read_rx_byte_();
-    } else if (millis() - start_ms >= timeout_ms) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 uint8_t DaikinEkhheComponent::read_rx_byte_() {
