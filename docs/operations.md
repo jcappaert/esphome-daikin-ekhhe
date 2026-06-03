@@ -6,7 +6,7 @@ This page covers behavior that matters once the component is installed: polling,
 
 When idle, the component listens according to `update_interval`. A normal read cycle collects the known bus state and then publishes configured entities.
 
-During writes, the component temporarily keeps RX active even if `continuous_rx` is disabled. This lets it observe readback confirmation and then wait briefly for the display-originated packet to catch up, reducing Home Assistant UI churn.
+During writes, the component temporarily keeps RX active even if `continuous_rx` is disabled. This lets it observe readback confirmation and then wait briefly for the display state to catch up, reducing Home Assistant UI churn.
 
 ## Writes
 
@@ -44,26 +44,32 @@ The component has two persistent profile slots in ESP flash:
 
 The auto snapshot is rate-limited to reduce flash writes. At the time of writing, it is stored at most once per 15 minutes and only when the managed fields differ from the stored auto snapshot.
 
+Each profile is one logical recovery point for the supported managed settings. Internally, saving a profile requires a recent complete read of both settings areas. If either area has not been captured yet, saving is skipped instead of storing a partial recovery point.
+
 Profile status text sensors report whether each slot is empty or valid:
 
 - `daikin_known_good_profile_status`
 - `daikin_auto_snapshot_status`
 
+A valid profile status reports both stored lengths, for example `VALID main=71 extended=51`. If a previously saved profile was created by an older component version, it may show `EMPTY`; save a fresh known-good profile after verifying the device settings.
+
+Restoring a profile is a broad operation. The component restores the supported managed settings in two internal stages and reports success only after both stages are confirmed by device readback. If only one stage applies, the restore logs a partial-failure warning so you can retry or verify settings on the physical display.
+
 ## Restore Defaults
 
-The `daikin_restore_default_settings` button restores documented datasheet/manual defaults for the supported settings. It sends one managed restore packet rather than looping through individual fields.
+The `daikin_restore_default_settings` button restores documented datasheet/manual defaults for the supported settings. It uses managed batch writes rather than looping through individual fields one by one.
 
 Current restore-defaults scope:
 
-- `P1-P52`
+- `P1-P72`
 - `auto_target_temperature`
 - `eco_target_temperature`
 - `boost_target_temperature`
 - `electric_target_temperature`
 
-Runtime fields outside that scope, such as current operating mode, power state, clock values, and vacation days, are preserved from the latest base packet.
+Runtime fields outside that scope, such as current operating mode, power state, clock values, and vacation days, are preserved from the latest observed device state.
 
-Extended settings `P53` and `P55-P72` are writable individually, but they are not part of the current restore-defaults batch. `P54` is also outside the current restore-defaults batch because the documented batch scope is `P1-P52` plus target temperatures.
+Like profile restore, restore-defaults is applied in two internal stages and is considered successful only when the device reports all supported defaults back. A partial failure means some settings may have changed while others did not, so check the warning logs and verify critical parameters on the display before continuing.
 
 Only press the restore-defaults button when you intend to rewrite many installer parameters at once.
 
@@ -93,7 +99,7 @@ At `WARN` level, pay attention to:
 
 - `TX not applied`: the device did not report the requested value after all retry attempts.
 - Write applied after more than one attempt: the change worked, but timing or state conditions were not ideal.
-- Restore/profile warnings: the restore was blocked, missing a valid base packet, missing a stored profile, or failed confirmation.
+- Restore/profile warnings: the restore was blocked, missing recent source data, missing a stored profile, failed one internal stage, or failed confirmation.
 
 At `DEBUG` level, expect more operational timing detail:
 
@@ -131,11 +137,18 @@ For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_ca
 
 ### Home Assistant briefly jumps back to old values
 
-Some delay is normal. The component confirms controller readback first, then waits for the UI-side packet to reflect the applied value. If `update_interval` is long, UI refreshes may feel slower outside write windows.
+Some delay is normal. The component confirms controller readback first, then waits for the display-side state to reflect the applied value. If `update_interval` is long, UI refreshes may feel slower outside write windows.
 
 ### Restore buttons do nothing
 
-- Confirm at least one valid base packet has been captured.
+- Confirm the device has completed at least one normal read cycle since boot.
 - Confirm no other write or restore is already active.
 - Check the profile status text sensors for `VALID`.
 - Enable debug logging and look for restore scheduling or confirmation warnings.
+
+### Restore reports a partial failure
+
+- Wait for the next normal refresh and check whether the setting values are stable.
+- Retry once if the bus was busy or Home Assistant sent other writes at the same time.
+- If the same restore stage fails repeatedly, expose `tx_send_calibration` and test nearby timing values.
+- Verify critical installer parameters on the physical display before relying on the restored profile/defaults.
