@@ -902,6 +902,60 @@ uint8_t DaikinEkhheComponent::read_rx_byte_() {
   return this->read();
 }
 
+void DaikinEkhheComponent::reset_rx_frame_() {
+  rx_frame_active_ = false;
+  rx_frame_start_ms_ = 0;
+  rx_frame_type_ = 0;
+  rx_frame_expected_len_ = 0;
+  rx_frame_offset_ = 0;
+}
+
+void DaikinEkhheComponent::consume_uart_byte_(uint8_t byte, uint32_t now_ms) {
+  last_rx_time_ = now_ms;
+
+  if (!rx_frame_active_) {
+    auto size_it = PACKET_SIZES.find(byte);
+    if (size_it == PACKET_SIZES.end()) {
+      return;
+    }
+
+    rx_frame_active_ = true;
+    rx_frame_start_ms_ = now_ms;
+    rx_frame_type_ = byte;
+    rx_frame_expected_len_ = size_it->second;
+    rx_frame_offset_ = 1;
+    rx_frame_buffer_[0] = byte;
+
+    if (rx_frame_expected_len_ == rx_frame_offset_) {
+      handle_complete_packet_(rx_frame_type_, rx_frame_buffer_, rx_frame_expected_len_);
+      reset_rx_frame_();
+    }
+    return;
+  }
+
+  if (rx_frame_offset_ < kRawFrameMaxLen) {
+    rx_frame_buffer_[rx_frame_offset_] = byte;
+  }
+  rx_frame_offset_++;
+
+  if (rx_frame_offset_ >= rx_frame_expected_len_) {
+    handle_complete_packet_(rx_frame_type_, rx_frame_buffer_, rx_frame_expected_len_);
+    reset_rx_frame_();
+  }
+}
+
+void DaikinEkhheComponent::check_rx_frame_timeout_(uint32_t now_ms) {
+  if (!rx_frame_active_ || (now_ms - rx_frame_start_ms_) < kFrameReadTimeoutMs) {
+    return;
+  }
+
+  if (cycle_synced_) {
+    cycle_framing_errors_++;
+    cycle_framing_error_start_ = rx_frame_type_;
+  }
+  reset_rx_frame_();
+}
+
 void DaikinEkhheComponent::store_raw_frame_(uint8_t packet_type, const uint8_t *data, size_t length, uint8_t flags) {
   if (length > kRawFrameMaxLen) {
     length = kRawFrameMaxLen;
@@ -1984,6 +2038,7 @@ bool DaikinEkhheComponent::packet_set_complete() {
 void DaikinEkhheComponent::start_uart_cycle() {
     uart_active_ = true;
     latest_packets_.clear();
+    reset_rx_frame_();
     reset_cycle_stats_();
 }
 
