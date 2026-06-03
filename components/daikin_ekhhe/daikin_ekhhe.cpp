@@ -725,13 +725,14 @@ void DaikinEkhheComponent::loop() {
     // Receive bytes
     while (this->available()) {
       uint8_t byte = read_rx_byte_();
-      store_latest_packet(byte);
+      consume_uart_byte_(byte, millis());
       if (packet_set_complete()) {
         break;
       }
     }
 
     now = millis();
+    check_rx_frame_timeout_(now);
     if (uart_active_ && cycle_synced_ && !packet_set_complete()) {
       if (last_rx_time_ > 0 && (now - last_rx_time_) > kCycleTimeoutMs && !cycle_timeout_logged_) {
         cycle_timeouts_++;
