@@ -102,6 +102,9 @@ Confirmed indicators currently include `P01` through `P08`, `E01`, `E02`,
 `PA` before settling into `P04`; exposing both sensors lets Home Assistant show
 that transition instead of hiding it.
 
+Use `master_fault` when you only need a single alert/automation trigger. It is
+on whenever any confirmed fault/protection/alarm indicator is active.
+
 `E04` and `E08` are intentionally not included at this time. They are not just
 missing from the entity list; they have not been reproduced with a reliable
 bus-visible status bit. In particular, `E04` may depend on hardware/manual
