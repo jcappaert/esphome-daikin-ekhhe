@@ -57,6 +57,8 @@ binary_sensor:
       name: "CI Heat Pump Active"
     eh_active:
       name: "CI Electric Heater Active"
+    master_fault:
+      name: "CI Master Fault"
     p01_tank_lower_probe_fault:
       name: "CI P01 Tank Lower Probe Fault"
     p02_tank_upper_probe_fault:

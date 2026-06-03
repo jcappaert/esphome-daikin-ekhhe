@@ -17,6 +17,7 @@ DIG1_CONFIG             = "dig1_config"
 DIG2_CONFIG             = "dig2_config"
 DIG3_CONFIG             = "dig3_config"
 
+MASTER_FAULT = "master_fault"
 P01_TANK_LOWER_PROBE_FAULT = "p01_tank_lower_probe_fault"
 P02_TANK_UPPER_PROBE_FAULT = "p02_tank_upper_probe_fault"
 P03_DEFROST_PROBE_FAULT = "p03_defrost_probe_fault"

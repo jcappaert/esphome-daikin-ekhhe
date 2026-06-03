@@ -2057,22 +2057,42 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
   set_text_sensor_value_(J_POWER_FW_VERSION, "U" + std::to_string(buffer[DD_PACKET_J_FW_IDX]));
 
   // update binary_sensors
+  const bool p01_tank_lower_probe_fault = (buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x04) != 0;
+  const bool p02_tank_upper_probe_fault = (buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x02) != 0;
+  const bool p03_defrost_probe_fault = (buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x01) != 0;
+  const bool p04_inlet_air_probe_fault = (buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x08) != 0;
+  const bool p05_evaporator_inlet_probe_fault = (buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x80) != 0;
+  const bool p06_evaporator_outlet_probe_fault = (buffer[DD_PACKET_ALARM_IDX] & 0x01) != 0;
+  const bool p07_compressor_flow_probe_fault = (buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x10) != 0;
+  const bool p08_solar_collector_probe_fault = (buffer[DD_PACKET_ALARM2_IDX] & 0x01) != 0;
+  const bool e01_high_pressure_protection = (buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x40) != 0;
+  const bool e02_solar_recirculation_alarm = (buffer[DD_PACKET_ALARM_IDX] & 0x02) != 0;
+  const bool e03_electronic_fan_fault = (buffer[DD_PACKET_ALARM2_IDX] & 0x08) != 0;
+  const bool pa_heat_pump_temp_unsuitable_alarm = (buffer[DD_PACKET_ALARM_IDX] & 0x10) != 0;
+  const bool master_fault = p01_tank_lower_probe_fault || p02_tank_upper_probe_fault || p03_defrost_probe_fault ||
+                            p04_inlet_air_probe_fault || p05_evaporator_inlet_probe_fault ||
+                            p06_evaporator_outlet_probe_fault || p07_compressor_flow_probe_fault ||
+                            p08_solar_collector_probe_fault || e01_high_pressure_protection ||
+                            e02_solar_recirculation_alarm || e03_electronic_fan_fault ||
+                            pa_heat_pump_temp_unsuitable_alarm;
+
   std::map<std::string, bool> binary_sensor_values = {
       {DIG1_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x01)},
       {DIG2_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x02)},
       {DIG3_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x04)},
-      {P01_TANK_LOWER_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x04)},
-      {P02_TANK_UPPER_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x02)},
-      {P03_DEFROST_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x01)},
-      {P04_INLET_AIR_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x08)},
-      {P05_EVAPORATOR_INLET_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x80)},
-      {P06_EVAPORATOR_OUTLET_PROBE_FAULT, (bool)(buffer[DD_PACKET_ALARM_IDX] & 0x01)},
-      {P07_COMPRESSOR_FLOW_PROBE_FAULT, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x10)},
-      {P08_SOLAR_COLLECTOR_PROBE_FAULT, (bool)(buffer[DD_PACKET_ALARM2_IDX] & 0x01)},
-      {E01_HIGH_PRESSURE_PROTECTION, (bool)(buffer[DD_PACKET_PROBE_FAULT_IDX] & 0x40)},
-      {E02_SOLAR_RECIRCULATION_ALARM, (bool)(buffer[DD_PACKET_ALARM_IDX] & 0x02)},
-      {E03_ELECTRONIC_FAN_FAULT, (bool)(buffer[DD_PACKET_ALARM2_IDX] & 0x08)},
-      {PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM, (bool)(buffer[DD_PACKET_ALARM_IDX] & 0x10)},
+      {MASTER_FAULT, master_fault},
+      {P01_TANK_LOWER_PROBE_FAULT, p01_tank_lower_probe_fault},
+      {P02_TANK_UPPER_PROBE_FAULT, p02_tank_upper_probe_fault},
+      {P03_DEFROST_PROBE_FAULT, p03_defrost_probe_fault},
+      {P04_INLET_AIR_PROBE_FAULT, p04_inlet_air_probe_fault},
+      {P05_EVAPORATOR_INLET_PROBE_FAULT, p05_evaporator_inlet_probe_fault},
+      {P06_EVAPORATOR_OUTLET_PROBE_FAULT, p06_evaporator_outlet_probe_fault},
+      {P07_COMPRESSOR_FLOW_PROBE_FAULT, p07_compressor_flow_probe_fault},
+      {P08_SOLAR_COLLECTOR_PROBE_FAULT, p08_solar_collector_probe_fault},
+      {E01_HIGH_PRESSURE_PROTECTION, e01_high_pressure_protection},
+      {E02_SOLAR_RECIRCULATION_ALARM, e02_solar_recirculation_alarm},
+      {E03_ELECTRONIC_FAN_FAULT, e03_electronic_fan_fault},
+      {PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM, pa_heat_pump_temp_unsuitable_alarm},
   };
 
   for (const auto &entry : binary_sensor_values) {

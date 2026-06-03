@@ -1,7 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import binary_sensor
-from esphome.const import ENTITY_CATEGORY_DIAGNOSTIC
+from esphome.const import DEVICE_CLASS_PROBLEM, ENTITY_CATEGORY_DIAGNOSTIC
 
 from . import (
     CONF_EKHHE_ID,
@@ -15,6 +15,7 @@ TYPES =[
     DIG1_CONFIG,
     DIG2_CONFIG,
     DIG3_CONFIG,
+    MASTER_FAULT,
     P01_TANK_LOWER_PROBE_FAULT,
     P02_TANK_UPPER_PROBE_FAULT,
     P03_DEFROST_PROBE_FAULT,
@@ -50,6 +51,10 @@ CONFIG_SCHEMA = (
             cv.Optional(DIG3_CONFIG): binary_sensor.binary_sensor_schema(
                 #device_class=DEVICE_CLASS_NONE,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
+            ),
+            cv.Optional(MASTER_FAULT): binary_sensor.binary_sensor_schema(
+                device_class=DEVICE_CLASS_PROBLEM,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(P01_TANK_LOWER_PROBE_FAULT): binary_sensor.binary_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,

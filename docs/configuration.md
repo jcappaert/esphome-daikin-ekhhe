@@ -78,6 +78,7 @@ Common day-to-day controls and state indicators:
 
 Read-only binary sensors for confirmed display faults and alarms:
 
+- `master_fault`
 - `p01_tank_lower_probe_fault`
 - `p02_tank_upper_probe_fault`
 - `p03_defrost_probe_fault`
@@ -93,6 +94,9 @@ Read-only binary sensors for confirmed display faults and alarms:
 
 These indicators mirror observed display states. Use the Daikin display and
 manual as the primary diagnostic reference when a fault is active.
+
+`master_fault` is an aggregate OR of the confirmed fault/alarm indicators and
+is intended as the simplest Home Assistant automation trigger.
 
 `E04` and `E08` are not exposed yet. They are intentionally omitted because
 they have not been reproducibly observed on this unit in a bus-visible form:

@@ -79,6 +79,8 @@ binary_sensor:
       name: "Heat pump active"
     eh_active:
       name: "Electric heater active"
+    master_fault:
+      name: "Master fault"
     p01_tank_lower_probe_fault:
       name: "P01: Tank lower probe fault"
     p02_tank_upper_probe_fault:
