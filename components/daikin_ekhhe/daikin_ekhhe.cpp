@@ -724,8 +724,7 @@ void DaikinEkhheComponent::loop() {
 
     // Receive bytes
     while (this->available()) {
-      uint8_t byte = this->read();
-      cycle_bytes_read_++;
+      uint8_t byte = read_rx_byte_();
       store_latest_packet(byte);
       if (packet_set_complete()) {
         break;
@@ -889,14 +888,18 @@ bool DaikinEkhheComponent::read_packet_bytes_(uint8_t *dest, size_t length, uint
 
   while (offset < length) {
     if (this->available()) {
-      dest[offset++] = this->read();
-      cycle_bytes_read_++;
+      dest[offset++] = read_rx_byte_();
     } else if (millis() - start_ms >= timeout_ms) {
       return false;
     }
   }
 
   return true;
+}
+
+uint8_t DaikinEkhheComponent::read_rx_byte_() {
+  cycle_bytes_read_++;
+  return this->read();
 }
 
 void DaikinEkhheComponent::store_raw_frame_(uint8_t packet_type, const uint8_t *data, size_t length, uint8_t flags) {
