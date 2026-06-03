@@ -92,6 +92,14 @@ number:
       name: "CI P54 Low Pressure Bypass Time"
     ec_fan_speed_regulator_gain:
       name: "CI P72 EC Fan Speed Regulator Gain"
+    time_band_start_hour:
+      name: "CI Time Band Start Hour"
+    time_band_start_minute:
+      name: "CI Time Band Start Minute"
+    time_band_end_hour:
+      name: "CI Time Band End Hour"
+    time_band_end_minute:
+      name: "CI Time Band End Minute"
 
 select:
   - platform: daikin_ekhhe
@@ -99,6 +107,8 @@ select:
       name: "CI Operational mode"
     evaporator_fan_compressor_off_mode:
       name: "CI P58 Evaporator Fan Compressor Off Mode"
+    time_band_mode:
+      name: "CI Time Band Mode"
 
 switch:
   - platform: daikin_ekhhe
@@ -115,6 +125,10 @@ button:
       name: "CI Restore Known Good Profile"
     daikin_restore_auto_snapshot:
       name: "CI Restore Auto Snapshot"
+    daikin_apply_time_band:
+      name: "CI Apply Time Band"
+    daikin_clear_time_band:
+      name: "CI Clear Time Band"
 
 text_sensor:
   - platform: daikin_ekhhe

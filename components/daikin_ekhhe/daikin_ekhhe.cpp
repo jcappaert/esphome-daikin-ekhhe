@@ -832,11 +832,15 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
       byte == tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type) {
     check_pending_profile_restore_(packet);
   }
+  if (byte == D2_PACKET_START_BYTE && pending_time_band_tx_.active) {
+    check_pending_time_band_(packet);
+  }
   if (pending_tx_.active && byte == tx_packet_family_spec_(pending_tx_.family).readback_packet_type) {
     check_pending_tx_(packet);
   }
   if (byte == D2_PACKET_START_BYTE &&
-      (pending_tx_.active || pending_restore_.active || pending_profile_restore_.active)) {
+      (pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
+       pending_time_band_tx_.active)) {
     size_t d2_index = 0;
     const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
     if (d2_entry != nullptr) {
@@ -844,6 +848,8 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
         schedule_queued_restore_from_d2_(*d2_entry);
       } else if (pending_profile_restore_.active) {
         schedule_queued_profile_restore_from_d2_(*d2_entry);
+      } else if (pending_time_band_tx_.active) {
+        schedule_queued_time_band_from_d2_(*d2_entry);
       } else if (pending_tx_.active) {
         schedule_queued_tx_from_d2_(*d2_entry);
       }
@@ -1136,6 +1142,80 @@ bool DaikinEkhheComponent::field_matches_target_(const std::vector<uint8_t> &buf
   return field_value == (value & mask);
 }
 
+bool DaikinEkhheComponent::time_band_matches_packet_(const std::vector<uint8_t> &buffer, bool d2_packet,
+                                                     uint8_t flag, uint8_t start_hour, uint8_t start_minute,
+                                                     uint8_t end_hour, uint8_t end_minute,
+                                                     uint8_t mode) const {
+  const uint8_t flag_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_FLAG_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_FLAG_IDX);
+  const uint8_t start_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_HOUR_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_HOUR_IDX);
+  const uint8_t start_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_MINUTE_IDX)
+                                             : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_MINUTE_IDX);
+  const uint8_t end_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_HOUR_IDX)
+                                         : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_HOUR_IDX);
+  const uint8_t end_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_MINUTE_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_MINUTE_IDX);
+  const uint8_t mode_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_MODE_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_MODE_IDX);
+
+  return buffer.size() > mode_idx &&
+         buffer[flag_idx] == flag &&
+         buffer[start_hour_idx] == start_hour &&
+         buffer[start_minute_idx] == start_minute &&
+         buffer[end_hour_idx] == end_hour &&
+         buffer[end_minute_idx] == end_minute &&
+         buffer[mode_idx] == mode;
+}
+
+bool DaikinEkhheComponent::validate_time_band_request_(uint8_t flag, uint8_t start_hour,
+                                                       uint8_t start_minute, uint8_t end_hour,
+                                                       uint8_t end_minute, uint8_t mode,
+                                                       std::string &reason) const {
+  if (flag != kTimeBandApplyFlag && flag != kTimeBandClearFlag) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "unsupported flag 0x%02X", flag);
+    reason = msg;
+    return false;
+  }
+  if (start_hour > 23 || end_hour > 23) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "hour out of range start=%u end=%u", start_hour, end_hour);
+    reason = msg;
+    return false;
+  }
+  if (start_minute > 59 || end_minute > 59) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "minute out of range start=%u end=%u", start_minute, end_minute);
+    reason = msg;
+    return false;
+  }
+  if (mode > kTimeBandMaxMode) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "mode %u out of range 0..%u", mode, kTimeBandMaxMode);
+    reason = msg;
+    return false;
+  }
+
+  if (flag == kTimeBandApplyFlag) {
+    const uint16_t start_total = static_cast<uint16_t>(start_hour) * 60 + start_minute;
+    const uint16_t end_total = static_cast<uint16_t>(end_hour) * 60 + end_minute;
+    if (end_total == start_total) {
+      reason = "end time must be after start time; use clear for 00:00 -> 00:00";
+      return false;
+    }
+    if (end_total < start_total) {
+      reason = "overnight time bands crossing midnight are not supported";
+      return false;
+    }
+  } else if (start_hour != 0 || start_minute != 0 || end_hour != 0 || end_minute != 0) {
+    reason = "clear command must use 00:00 -> 00:00";
+    return false;
+  }
+
+  return true;
+}
+
 uint8_t DaikinEkhheComponent::tx_readback_index_(TxPacketFamily family, uint8_t write_index,
                                                  uint8_t bit_position) const {
   if (family == TxPacketFamily::EXTENDED) {
@@ -1167,7 +1247,8 @@ uint8_t DaikinEkhheComponent::tx_readback_bit_width_(TxPacketFamily family, uint
 }
 
 bool DaikinEkhheComponent::tx_operation_active_() const {
-  return pending_tx_.active || pending_restore_.active || pending_profile_restore_.active;
+  return pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
+         pending_time_band_tx_.active;
 }
 
 void DaikinEkhheComponent::reset_pending_restore_() {
@@ -1208,6 +1289,20 @@ void DaikinEkhheComponent::reset_queued_profile_restore_() {
   queued_profile_restore_.family = TxPacketFamily::MAIN;
   queued_profile_restore_.anchor_ms = 0;
   queued_profile_restore_.anchor_seq = 0;
+}
+
+void DaikinEkhheComponent::reset_pending_time_band_() {
+  pending_time_band_tx_.active = false;
+  pending_time_band_tx_.flag = 0;
+  pending_time_band_tx_.attempts_sent = 0;
+  pending_time_band_tx_.last_attempt_d2_seq = 0;
+}
+
+void DaikinEkhheComponent::reset_queued_time_band_() {
+  queued_time_band_tx_.active = false;
+  queued_time_band_tx_.scheduled = false;
+  queued_time_band_tx_.anchor_ms = 0;
+  queued_time_band_tx_.anchor_seq = 0;
 }
 
 bool DaikinEkhheComponent::defer_single_field_tx_(TxPacketFamily family, uint8_t index, uint8_t value,
@@ -1266,7 +1361,9 @@ void DaikinEkhheComponent::flush_deferred_user_tx_() {
   }
   if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active ||
       pending_restore_.active || restore_ui_sync_.active ||
-      pending_profile_restore_.active || profile_ui_sync_.active) {
+      pending_profile_restore_.active || profile_ui_sync_.active ||
+      pending_time_band_tx_.active || queued_time_band_tx_.active ||
+      queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
     return;
   }
 
@@ -1483,6 +1580,52 @@ void DaikinEkhheComponent::schedule_queued_profile_restore_from_d2_(const RawFra
                anchor_seq, millis() - anchor_ms, pending_profile_restore_.attempts_sent, kTxMaxRepeats,
                latest_base != latest_packets_.end());
     send_profile_restore_packet_(family, base_packet, packet, known_good);
+  });
+}
+
+void DaikinEkhheComponent::schedule_queued_time_band_from_d2_(const RawFrameEntry &d2_entry) {
+  if (!pending_time_band_tx_.active || queued_time_band_tx_.scheduled) {
+    return;
+  }
+
+  const uint32_t now_ms = millis();
+  const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
+  const uint32_t delay_ms =
+      d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
+  const uint32_t generation = queued_time_band_tx_.generation;
+
+  queued_time_band_tx_.active = true;
+  queued_time_band_tx_.scheduled = true;
+  queued_time_band_tx_.anchor_ms = d2_entry.timestamp_ms;
+  queued_time_band_tx_.anchor_seq = d2_entry.seq;
+
+  DAIKIN_DBG(TAG, "Time-band scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
+             d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_time_band_tx_.request_ms);
+
+  set_timeout(delay_ms, [this, generation]() {
+    if (!queued_time_band_tx_.active || queued_time_band_tx_.generation != generation) {
+      return;
+    }
+
+    const uint32_t anchor_seq = queued_time_band_tx_.anchor_seq;
+    const uint32_t anchor_ms = queued_time_band_tx_.anchor_ms;
+    queued_time_band_tx_.active = false;
+    queued_time_band_tx_.scheduled = false;
+
+    std::vector<uint8_t> base_packet = last_cc_packet_;
+    auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
+    if (latest_cc != latest_packets_.end()) {
+      base_packet = latest_cc->second;
+    }
+
+    pending_time_band_tx_.attempts_sent++;
+    pending_time_band_tx_.last_attempt_d2_seq = anchor_seq;
+
+    DAIKIN_DBG(TAG,
+               "Time-band scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
+               anchor_seq, millis() - anchor_ms, pending_time_band_tx_.attempts_sent, kTxMaxRepeats,
+               latest_cc != latest_packets_.end());
+    send_time_band_packet_(base_packet);
   });
 }
 
@@ -1763,7 +1906,9 @@ void DaikinEkhheComponent::restore_profile_(bool known_good) {
                 known_good ? "Known-good profile" : "Auto snapshot");
     return;
   }
-  if (pending_restore_.active || restore_ui_sync_.active || pending_tx_.active || tx_ui_sync_.active) {
+  if (pending_restore_.active || restore_ui_sync_.active || pending_tx_.active || tx_ui_sync_.active ||
+      pending_time_band_tx_.active || queued_time_band_tx_.active ||
+      queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
     DAIKIN_WARN(TAG, "%s restore blocked: another write is currently active.",
                 known_good ? "Known-good profile" : "Auto snapshot");
     return;
@@ -1880,7 +2025,9 @@ void DaikinEkhheComponent::process_packet_set() {
   processing_updates_ = false;
   last_process_time_ = millis();
   if (pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
+      pending_time_band_tx_.active ||
       tx_ui_sync_.active || restore_ui_sync_.active || profile_ui_sync_.active ||
+      time_band_ui_sync_.active ||
       continuous_rx_) {
     start_uart_cycle();
   } else {
@@ -1935,7 +2082,46 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
   return;
 }
 
+void DaikinEkhheComponent::update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer,
+                                                            bool d2_packet, bool force) {
+  const uint8_t flag_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_FLAG_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_FLAG_IDX);
+  const uint8_t start_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_HOUR_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_HOUR_IDX);
+  const uint8_t start_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_START_MINUTE_IDX)
+                                             : static_cast<uint8_t>(CC_PACKET_TIME_BAND_START_MINUTE_IDX);
+  const uint8_t end_hour_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_HOUR_IDX)
+                                         : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_HOUR_IDX);
+  const uint8_t end_minute_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_END_MINUTE_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_TIME_BAND_END_MINUTE_IDX);
+  const uint8_t mode_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_MODE_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_TIME_BAND_MODE_IDX);
+
+  if (buffer.size() <= mode_idx) {
+    return;
+  }
+  if ((time_band_state_.staged_dirty || time_band_ui_sync_.active) && !force) {
+    return;
+  }
+
+  time_band_state_.initialized = true;
+  time_band_state_.staged_dirty = false;
+  time_band_state_.flag = buffer[flag_idx];
+  time_band_state_.start_hour = buffer[start_hour_idx];
+  time_band_state_.start_minute = buffer[start_minute_idx];
+  time_band_state_.end_hour = buffer[end_hour_idx];
+  time_band_state_.end_minute = buffer[end_minute_idx];
+  time_band_state_.mode = buffer[mode_idx];
+
+  set_number_value(TIME_BAND_START_HOUR, time_band_state_.start_hour);
+  set_number_value(TIME_BAND_START_MINUTE, time_band_state_.start_minute);
+  set_number_value(TIME_BAND_END_HOUR, time_band_state_.end_hour);
+  set_number_value(TIME_BAND_END_MINUTE, time_band_state_.end_minute);
+  set_select_value(TIME_BAND_MODE, time_band_state_.mode);
+}
+
 void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
+  update_time_band_state_from_bus_(buffer, true);
 
   // update numbers
   std::map<std::string, float> number_values = {
@@ -2156,7 +2342,15 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       profile_ui_sync_.active && profile_sync_profile.valid &&
       profile_matches_packet(false, profile_sync_profile.main_data,
                              profile_sync_profile.main_length, buffer, false);
+  const bool time_band_cc_sync_matched =
+      time_band_ui_sync_.active &&
+      time_band_matches_packet_(buffer, false, time_band_ui_sync_.flag,
+                                time_band_ui_sync_.start_hour, time_band_ui_sync_.start_minute,
+                                time_band_ui_sync_.end_hour, time_band_ui_sync_.end_minute,
+                                time_band_ui_sync_.mode);
   const bool pending_profile_active = pending_profile_restore_.active;
+
+  update_time_band_state_from_bus_(buffer, false, time_band_cc_sync_matched);
 
   // update numbers, unsigned and signed separately
   for (const auto &entry : U_NUMBER_PARAM_INDEX) {
@@ -2386,6 +2580,26 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         profile_ui_sync_.main_synced = false;
         profile_ui_sync_.extended_synced = false;
         profile_ui_sync_.cycles_waited = 0;
+      }
+    }
+  }
+
+  if (time_band_ui_sync_.active) {
+    if (time_band_cc_sync_matched) {
+      DAIKIN_DBG(TAG, "Time-band UI synced: cc_cycles=%u", time_band_ui_sync_.cycles_waited + 1);
+      time_band_ui_sync_.active = false;
+      time_band_ui_sync_.cycles_waited = 0;
+    } else {
+      time_band_ui_sync_.cycles_waited++;
+      if (time_band_ui_sync_.cycles_waited >= kTimeBandUiSyncMaxCycles) {
+        DAIKIN_WARN(TAG,
+                    "Time-band UI sync timeout: expected flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u cc_cycles=%u",
+                    time_band_ui_sync_.flag, time_band_ui_sync_.start_hour,
+                    time_band_ui_sync_.start_minute, time_band_ui_sync_.end_hour,
+                    time_band_ui_sync_.end_minute, time_band_ui_sync_.mode,
+                    time_band_ui_sync_.cycles_waited);
+        time_band_ui_sync_.active = false;
+        time_band_ui_sync_.cycles_waited = 0;
       }
     }
   }
@@ -2732,6 +2946,34 @@ void DaikinEkhheComponent::set_tx_delay_after_d2_ms(uint32_t delay_ms) {
     }
 }
 
+bool DaikinEkhheComponent::stage_time_band_number(const std::string &number_name, float value) {
+  const uint8_t staged_value = value <= 0.0f ? 0 : static_cast<uint8_t>(value);
+  if (number_name == TIME_BAND_START_HOUR) {
+    time_band_state_.start_hour = staged_value;
+  } else if (number_name == TIME_BAND_START_MINUTE) {
+    time_band_state_.start_minute = staged_value;
+  } else if (number_name == TIME_BAND_END_HOUR) {
+    time_band_state_.end_hour = staged_value;
+  } else if (number_name == TIME_BAND_END_MINUTE) {
+    time_band_state_.end_minute = staged_value;
+  } else {
+    return false;
+  }
+
+  time_band_state_.initialized = true;
+  time_band_state_.staged_dirty = true;
+  DAIKIN_DBG(TAG, "Time-band staged: %s=%u", number_name.c_str(), staged_value);
+  return true;
+}
+
+bool DaikinEkhheComponent::stage_time_band_mode(uint8_t mode) {
+  time_band_state_.mode = mode;
+  time_band_state_.initialized = true;
+  time_band_state_.staged_dirty = true;
+  DAIKIN_DBG(TAG, "Time-band staged: mode=%u", mode);
+  return true;
+}
+
 void DaikinEkhheComponent::save_known_good_profile() {
   std::vector<uint8_t> main_packet;
   std::vector<uint8_t> extended_packet;
@@ -2748,6 +2990,99 @@ void DaikinEkhheComponent::restore_known_good_profile() {
 
 void DaikinEkhheComponent::restore_auto_snapshot() {
   restore_profile_(false);
+}
+
+void DaikinEkhheComponent::apply_time_band() {
+  if (!time_band_state_.initialized && !last_cc_packet_.empty()) {
+    update_time_band_state_from_bus_(last_cc_packet_, false, true);
+  }
+  if (!time_band_state_.initialized) {
+    DAIKIN_WARN(TAG, "Time-band apply requested before time-band state was initialized from the bus.");
+    return;
+  }
+
+  request_time_band_tx_(kTimeBandApplyFlag, time_band_state_.start_hour,
+                        time_band_state_.start_minute, time_band_state_.end_hour,
+                        time_band_state_.end_minute, time_band_state_.mode);
+}
+
+void DaikinEkhheComponent::clear_time_band() {
+  if (!time_band_state_.initialized && !last_cc_packet_.empty()) {
+    update_time_band_state_from_bus_(last_cc_packet_, false, true);
+  }
+  if (!time_band_state_.initialized) {
+    DAIKIN_WARN(TAG, "Time-band clear requested before time-band state was initialized from the bus.");
+    return;
+  }
+
+  request_time_band_tx_(kTimeBandClearFlag, 0, 0, 0, 0, time_band_state_.mode);
+}
+
+void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hour, uint8_t start_minute,
+                                                 uint8_t end_hour, uint8_t end_minute, uint8_t mode) {
+  if (last_cc_packet_.empty()) {
+    DAIKIN_WARN(TAG, "Time-band command requested before any CC packet was captured.");
+    return;
+  }
+  std::string validation_error;
+  if (!validate_time_band_request_(flag, start_hour, start_minute, end_hour, end_minute, mode,
+                                   validation_error)) {
+    DAIKIN_WARN(TAG, "Time-band command rejected: %s", validation_error.c_str());
+    return;
+  }
+  DAIKIN_DBG(TAG, "Time-band command validated: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
+             flag, start_hour, start_minute, end_hour, end_minute, mode);
+  if (pending_time_band_tx_.active || queued_time_band_tx_.active || queued_time_band_tx_.scheduled) {
+    DAIKIN_WARN(TAG, "Time-band command already in progress.");
+    return;
+  }
+  if (pending_tx_.active || tx_ui_sync_.active || pending_restore_.active || restore_ui_sync_.active ||
+      pending_profile_restore_.active || profile_ui_sync_.active || time_band_ui_sync_.active) {
+    DAIKIN_WARN(TAG, "Time-band command blocked: another write is currently active.");
+    return;
+  }
+
+  tx_request_ms_ = millis();
+  pending_time_band_tx_.active = true;
+  pending_time_band_tx_.flag = flag;
+  pending_time_band_tx_.start_hour = start_hour;
+  pending_time_band_tx_.start_minute = start_minute;
+  pending_time_band_tx_.end_hour = end_hour;
+  pending_time_band_tx_.end_minute = end_minute;
+  pending_time_band_tx_.mode = mode;
+  pending_time_band_tx_.attempts_sent = 0;
+  pending_time_band_tx_.last_attempt_d2_seq = 0;
+  time_band_ui_sync_.active = false;
+  time_band_ui_sync_.cycles_waited = 0;
+
+  reset_queued_time_band_();
+  queued_time_band_tx_.active = true;
+  queued_time_band_tx_.scheduled = false;
+  queued_time_band_tx_.generation++;
+  queued_time_band_tx_.request_ms = tx_request_ms_;
+
+  tx_waiting_for_first_rx_ = false;
+  tx_waiting_for_first_cc_ = false;
+
+  ESP_LOGI(TAG, "Time-band command requested: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
+           flag, start_hour, start_minute, end_hour, end_minute, mode);
+
+  if (!uart_active_ && !uart_tx_active_) {
+    start_uart_cycle();
+  }
+
+  size_t d2_index = 0;
+  const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
+  if (d2_entry != nullptr) {
+    uint32_t d2_age_ms = millis() - d2_entry->timestamp_ms;
+    if (d2_age_ms <= tx_delay_after_d2_ms_) {
+      schedule_queued_time_band_from_d2_(*d2_entry);
+      return;
+    }
+  }
+
+  DAIKIN_DBG(TAG, "Time-band scheduling: waiting_for_next_d2 flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
+             flag, start_hour, start_minute, end_hour, end_minute, mode);
 }
 
 void DaikinEkhheComponent::restore_default_settings() {
@@ -2767,7 +3102,9 @@ void DaikinEkhheComponent::restore_default_settings() {
     DAIKIN_WARN(TAG, "Restore defaults already in progress.");
     return;
   }
-  if (pending_tx_.active || tx_ui_sync_.active) {
+  if (pending_tx_.active || tx_ui_sync_.active ||
+      pending_time_band_tx_.active || queued_time_band_tx_.active ||
+      queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
     DAIKIN_WARN(TAG, "Restore defaults blocked: another write is currently active.");
     return;
   }
@@ -2851,6 +3188,10 @@ void DaikinEkhheActionButton::press_action() {
     this->parent_->restore_known_good_profile();
   } else if (this->action_ == Action::RESTORE_AUTO_SNAPSHOT) {
     this->parent_->restore_auto_snapshot();
+  } else if (this->action_ == Action::APPLY_TIME_BAND) {
+    this->parent_->apply_time_band();
+  } else if (this->action_ == Action::CLEAR_TIME_BAND) {
+    this->parent_->clear_time_band();
   }
 }
 #endif
@@ -2871,6 +3212,12 @@ void DaikinEkhheNumber::control(float value) {
         this->parent_->set_tx_delay_after_d2_ms(delay_ms);
         delay_ms = this->parent_->get_tx_delay_after_d2_ms();
         ESP_LOGI(TAG, "TX send calibration set to %u ms", delay_ms);
+        return;
+    }
+
+    if (this->parent_->stage_time_band_number(name, value)) {
+        this->parent_->update_number_cache(name, value);
+        this->publish_state(value);
         return;
     }
 
@@ -2926,7 +3273,15 @@ void DaikinEkhheSelect::control(const std::string &value) {
         return;
     }
     uint8_t uart_value = static_cast<uint8_t>(it->second);
-  
+
+    if (name == TIME_BAND_MODE) {
+        if (this->parent_->stage_time_band_mode(uart_value)) {
+            this->parent_->update_select_cache(name, value);
+            this->publish_state(value);
+        }
+        return;
+    }
+
     bool extended_family = false;
 
     // Look up the packet index for this select entity
@@ -3048,6 +3403,14 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(TxPacketFamily family, const
              static_cast<unsigned>(command.size()));
     DAIKIN_DBG(TAG, "TX timing: restore_request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
+  } else if (kind == TxPacketKind::TIME_BAND) {
+    ESP_LOGI(TAG, "TX time band sent: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u attempt=%u/%u len=%u",
+             pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
+             pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
+             pending_time_band_tx_.end_minute, pending_time_band_tx_.mode,
+             attempts_sent, kTxMaxRepeats, static_cast<unsigned>(command.size()));
+    DAIKIN_DBG(TAG, "TX timing: time_band_request_to_send=%u since_last_rx=%u base_age=%u",
+               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else {
     ESP_LOGI(TAG, "TX %s sent: snapshot len=%u", tx_type.c_str(), static_cast<unsigned>(command.size()));
     DAIKIN_DBG(TAG, "TX timing: snapshot_send since_last_rx=%u base_age=%u",
@@ -3131,6 +3494,34 @@ bool DaikinEkhheComponent::validate_outbound_cd_packet_(TxPacketFamily family,
     }
   } else if (kind == TxPacketKind::RESTORE_DEFAULTS) {
     apply_restore_defaults_to_packet(expected, family == TxPacketFamily::EXTENDED);
+  } else if (kind == TxPacketKind::TIME_BAND) {
+    if (family != TxPacketFamily::MAIN) {
+      reason = "time-band commands are only valid for the main packet family";
+      return false;
+    }
+    auto is_allowed_time_band_diff = [&command](size_t offset) -> bool {
+      return offset == CC_PACKET_TIME_BAND_FLAG_IDX ||
+             offset == CC_PACKET_TIME_BAND_START_HOUR_IDX ||
+             offset == CC_PACKET_TIME_BAND_START_MINUTE_IDX ||
+             offset == CC_PACKET_TIME_BAND_END_HOUR_IDX ||
+             offset == CC_PACKET_TIME_BAND_END_MINUTE_IDX ||
+             offset == CC_PACKET_TIME_BAND_MODE_IDX ||
+             offset == command.size() - 1;
+    };
+
+    for (size_t i = 0; i < expected.size(); ++i) {
+      if (expected[i] == command[i]) {
+        continue;
+      }
+      if (!is_allowed_time_band_diff(i)) {
+        char msg[128];
+        snprintf(msg, sizeof(msg), "time-band command changed unexpected byte %u expected=0x%02X actual=0x%02X",
+                 static_cast<unsigned>(i), expected[i], command[i]);
+        reason = msg;
+        return false;
+      }
+    }
+    return true;
   }
 
   expected.back() = ekhhe_checksum(expected);
@@ -3327,6 +3718,52 @@ void DaikinEkhheComponent::send_profile_restore_packet_(TxPacketFamily family,
 
   send_prebuilt_cd_packet_(family, command, TxPacketKind::PROFILE_RESTORE, 0, 0, BIT_POSITION_NO_BITMASK,
                            0, pending_profile_restore_.attempts_sent);
+}
+
+void DaikinEkhheComponent::send_time_band_packet_(const std::vector<uint8_t> &base_packet) {
+  if (!pending_time_band_tx_.active) {
+    return;
+  }
+  if (base_packet.empty()) {
+    DAIKIN_WARN(TAG, "Time-band TX blocked: base CC packet empty.");
+    reset_pending_time_band_();
+    reset_queued_time_band_();
+    return;
+  }
+  if (base_packet.size() != CC_PACKET_SIZE) {
+    DAIKIN_WARN(TAG, "Time-band TX blocked: base CC packet length %u invalid.",
+                static_cast<unsigned>(base_packet.size()));
+    reset_pending_time_band_();
+    reset_queued_time_band_();
+    return;
+  }
+
+  std::vector<uint8_t> command = base_packet;
+  command[0] = CD_PACKET_START_BYTE;
+  command[CC_PACKET_TIME_BAND_FLAG_IDX] = pending_time_band_tx_.flag;
+  command[CC_PACKET_TIME_BAND_START_HOUR_IDX] = pending_time_band_tx_.start_hour;
+  command[CC_PACKET_TIME_BAND_START_MINUTE_IDX] = pending_time_band_tx_.start_minute;
+  command[CC_PACKET_TIME_BAND_END_HOUR_IDX] = pending_time_band_tx_.end_hour;
+  command[CC_PACKET_TIME_BAND_END_MINUTE_IDX] = pending_time_band_tx_.end_minute;
+  command[CC_PACKET_TIME_BAND_MODE_IDX] = pending_time_band_tx_.mode;
+  command.back() = ekhhe_checksum(command);
+
+  std::string validation_error;
+  if (!validate_outbound_cd_packet_(TxPacketFamily::MAIN, base_packet, command, TxPacketKind::TIME_BAND,
+                                    0, 0, BIT_POSITION_NO_BITMASK, 0, validation_error)) {
+    DAIKIN_WARN(TAG, "Time-band TX blocked by packet diff guard: %s", validation_error.c_str());
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
+    reset_pending_time_band_();
+    reset_queued_time_band_();
+    if (!uart_active_ && !uart_tx_active_) {
+      start_uart_cycle();
+    }
+    return;
+  }
+
+  send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::TIME_BAND, 0, 0,
+                           BIT_POSITION_NO_BITMASK, 0, pending_time_band_tx_.attempts_sent);
 }
 
 void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer) {
@@ -3735,6 +4172,112 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
   reset_queued_profile_restore_();
 }
 
+void DaikinEkhheComponent::check_pending_time_band_(const std::vector<uint8_t> &buffer) {
+  if (!pending_time_band_tx_.active) {
+    return;
+  }
+  if (buffer.size() <= D2_PACKET_TIME_BAND_MODE_IDX) {
+    DAIKIN_WARN(TAG, "Time-band readback packet too short: len=%u", static_cast<unsigned>(buffer.size()));
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
+    reset_pending_time_band_();
+    reset_queued_time_band_();
+    flush_deferred_user_tx_();
+    return;
+  }
+
+  struct FieldCheck {
+    const char *name;
+    uint8_t index;
+    uint8_t expected;
+  };
+  const FieldCheck fields[] = {
+      {"flag", D2_PACKET_TIME_BAND_FLAG_IDX, pending_time_band_tx_.flag},
+      {"start_hour", D2_PACKET_TIME_BAND_START_HOUR_IDX, pending_time_band_tx_.start_hour},
+      {"start_minute", D2_PACKET_TIME_BAND_START_MINUTE_IDX, pending_time_band_tx_.start_minute},
+      {"end_hour", D2_PACKET_TIME_BAND_END_HOUR_IDX, pending_time_band_tx_.end_hour},
+      {"end_minute", D2_PACKET_TIME_BAND_END_MINUTE_IDX, pending_time_band_tx_.end_minute},
+      {"mode", D2_PACKET_TIME_BAND_MODE_IDX, pending_time_band_tx_.mode},
+  };
+
+  const FieldCheck *first_mismatch = nullptr;
+  for (const auto &field : fields) {
+    if (buffer[field.index] != field.expected) {
+      first_mismatch = &field;
+      break;
+    }
+  }
+
+  if (first_mismatch == nullptr) {
+    if (pending_time_band_tx_.attempts_sent == 0) {
+      DAIKIN_DBG(TAG, "Time-band already current: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
+                 pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
+                 pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
+                 pending_time_band_tx_.end_minute, pending_time_band_tx_.mode);
+    } else if (pending_time_band_tx_.attempts_sent > 1) {
+      DAIKIN_WARN(TAG,
+                  "Time-band applied after retries: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u attempts=%u",
+                  pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
+                  pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
+                  pending_time_band_tx_.end_minute, pending_time_band_tx_.mode,
+                  pending_time_band_tx_.attempts_sent);
+      DAIKIN_DBG(TAG, "TX timing: time_band_applied_after=%u attempts=%u",
+                 millis() - tx_sent_ms_, pending_time_band_tx_.attempts_sent);
+    } else {
+      ESP_LOGI(TAG, "Time-band applied: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
+               pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
+               pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
+               pending_time_band_tx_.end_minute, pending_time_band_tx_.mode);
+      DAIKIN_DBG(TAG, "TX timing: time_band_applied_after=%u attempts=%u",
+                 millis() - tx_sent_ms_, pending_time_band_tx_.attempts_sent);
+    }
+
+    update_time_band_state_from_bus_(buffer, true, true);
+    if (pending_time_band_tx_.attempts_sent > 0) {
+      time_band_ui_sync_.active = true;
+      time_band_ui_sync_.flag = pending_time_band_tx_.flag;
+      time_band_ui_sync_.start_hour = pending_time_band_tx_.start_hour;
+      time_band_ui_sync_.start_minute = pending_time_band_tx_.start_minute;
+      time_band_ui_sync_.end_hour = pending_time_band_tx_.end_hour;
+      time_band_ui_sync_.end_minute = pending_time_band_tx_.end_minute;
+      time_band_ui_sync_.mode = pending_time_band_tx_.mode;
+      time_band_ui_sync_.cycles_waited = 0;
+    }
+    tx_waiting_for_first_rx_ = false;
+    tx_waiting_for_first_cc_ = false;
+    reset_pending_time_band_();
+    reset_queued_time_band_();
+    flush_deferred_user_tx_();
+    return;
+  }
+
+  if (pending_time_band_tx_.attempts_sent == 0) {
+    return;
+  }
+
+  if (pending_time_band_tx_.attempts_sent < kTxMaxRepeats) {
+    DAIKIN_DBG(TAG,
+               "Time-band retry pending: first_mismatch=%s expected=0x%02X current=0x%02X attempt=%u/%u",
+               first_mismatch->name, first_mismatch->expected, buffer[first_mismatch->index],
+               pending_time_band_tx_.attempts_sent, kTxMaxRepeats);
+    return;
+  }
+
+  DAIKIN_WARN(TAG,
+              "Time-band not applied: first_mismatch=%s expected=0x%02X current=0x%02X attempts=%u",
+              first_mismatch->name, first_mismatch->expected, buffer[first_mismatch->index],
+              pending_time_band_tx_.attempts_sent);
+  DAIKIN_DBG(TAG, "TX timing: time_band_failed_after=%u attempts=%u",
+             millis() - tx_sent_ms_, pending_time_band_tx_.attempts_sent);
+
+  update_time_band_state_from_bus_(buffer, true, true);
+  tx_waiting_for_first_rx_ = false;
+  tx_waiting_for_first_cc_ = false;
+  reset_pending_time_band_();
+  reset_queued_time_band_();
+  flush_deferred_user_tx_();
+}
+
 bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value,
                                                 uint8_t bit_position, uint8_t bit_width) {
     return send_uart_command_(TxPacketFamily::MAIN, index, value, bit_position, bit_width);
@@ -3762,6 +4305,10 @@ bool DaikinEkhheComponent::send_uart_command_(TxPacketFamily family, uint8_t ind
     if (pending_profile_restore_.active || profile_ui_sync_.active) {
         DAIKIN_WARN(TAG, "Profile restore in progress, ignoring single-parameter write.");
         return false;
+    }
+    if (pending_time_band_tx_.active || queued_time_band_tx_.active ||
+        queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
+        return defer_single_field_tx_(family, index, value, bit_position, bit_width);
     }
     if (pending_tx_.active || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active) {
         return defer_single_field_tx_(family, index, value, bit_position, bit_width);

@@ -100,6 +100,10 @@ TYPES = [
     ELECTRIC_T_TEMPERATURE,
     VAC_DAYS,
     TX_SEND_CALIBRATION,
+    TIME_BAND_START_HOUR,
+    TIME_BAND_START_MINUTE,
+    TIME_BAND_END_HOUR,
+    TIME_BAND_END_MINUTE,
 ]
 
 CONFIG_SCHEMA = (
@@ -609,6 +613,42 @@ CONFIG_SCHEMA = (
                 cv.Optional(CONF_STEP, default=1): cv.positive_float,
                 cv.Optional(CONF_DEVICE_CLASS, default=DEVICE_CLASS_DURATION): cv.string,
                 cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_MILLISECOND): cv.string,
+            }),
+            cv.Optional(TIME_BAND_START_HOUR): number.number_schema(
+                DaikinEkhheNumber, entity_category=ENTITY_CATEGORY_CONFIG
+            ).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
+                cv.Optional(CONF_MAX_VALUE, default=23): cv.float_,
+                cv.Optional(CONF_MIN_VALUE, default=0): cv.float_,
+                cv.Optional(CONF_STEP, default=1): cv.positive_float,
+                cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_HOUR): cv.string,
+            }),
+            cv.Optional(TIME_BAND_START_MINUTE): number.number_schema(
+                DaikinEkhheNumber, entity_category=ENTITY_CATEGORY_CONFIG
+            ).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
+                cv.Optional(CONF_MAX_VALUE, default=59): cv.float_,
+                cv.Optional(CONF_MIN_VALUE, default=0): cv.float_,
+                cv.Optional(CONF_STEP, default=1): cv.positive_float,
+                cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_MINUTE): cv.string,
+            }),
+            cv.Optional(TIME_BAND_END_HOUR): number.number_schema(
+                DaikinEkhheNumber, entity_category=ENTITY_CATEGORY_CONFIG
+            ).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
+                cv.Optional(CONF_MAX_VALUE, default=23): cv.float_,
+                cv.Optional(CONF_MIN_VALUE, default=0): cv.float_,
+                cv.Optional(CONF_STEP, default=1): cv.positive_float,
+                cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_HOUR): cv.string,
+            }),
+            cv.Optional(TIME_BAND_END_MINUTE): number.number_schema(
+                DaikinEkhheNumber, entity_category=ENTITY_CATEGORY_CONFIG
+            ).extend({
+                cv.GenerateID(): cv.declare_id(DaikinEkhheNumber),
+                cv.Optional(CONF_MAX_VALUE, default=59): cv.float_,
+                cv.Optional(CONF_MIN_VALUE, default=0): cv.float_,
+                cv.Optional(CONF_STEP, default=1): cv.positive_float,
+                cv.Optional(CONF_UNIT_OF_MEASUREMENT, default=UNIT_MINUTE): cv.string,
             }),
         }
 
