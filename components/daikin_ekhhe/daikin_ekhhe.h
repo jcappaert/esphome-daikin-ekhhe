@@ -542,6 +542,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   TxPacketFamily active_tx_operation_family_() const;
   uint8_t active_tx_readback_packet_type_() const;
   bool tx_operation_active_() const;
+  void clear_tx_wait_markers_();
+  void reset_tx_lifecycle_(TxOperationKind kind, bool clear_ui_sync);
+  void reset_single_field_tx_lifecycle_(bool clear_ui_sync);
+  void reset_restore_tx_lifecycle_(bool clear_ui_sync);
+  void reset_profile_restore_tx_lifecycle_(bool clear_ui_sync);
+  void reset_time_band_tx_lifecycle_(bool clear_ui_sync);
   void reset_pending_restore_();
   void reset_queued_restore_();
   void reset_pending_profile_restore_();
