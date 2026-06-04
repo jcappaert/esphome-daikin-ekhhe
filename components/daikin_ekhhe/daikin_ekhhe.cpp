@@ -782,14 +782,7 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
     tx_waiting_for_first_rx_ = false;
   }
 
-  uint8_t tx_readback_type = D2_PACKET_START_BYTE;
-  if (pending_tx_.active) {
-    tx_readback_type = tx_packet_family_spec_(pending_tx_.family).readback_packet_type;
-  } else if (pending_restore_.active) {
-    tx_readback_type = tx_packet_family_spec_(pending_restore_.family).readback_packet_type;
-  } else if (pending_profile_restore_.active) {
-    tx_readback_type = tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type;
-  }
+  const uint8_t tx_readback_type = active_tx_readback_packet_type_();
   if (tx_operation_active_() && tx_waiting_for_first_cc_ && packet_type == tx_readback_type) {
     DAIKIN_DBG(TAG, "TX timing: first_readback_after_tx type=%s dt=%u",
                packet_type_to_string_(packet_type).c_str(), now_ms - tx_sent_ms_);
@@ -1269,9 +1262,63 @@ uint8_t DaikinEkhheComponent::tx_readback_bit_width_(TxPacketFamily family, uint
   return field != nullptr ? field->d2_bit_width : bit_width;
 }
 
+DaikinEkhheComponent::TxOperationKind DaikinEkhheComponent::active_tx_operation_kind_() const {
+  if (pending_tx_.active) {
+    return TxOperationKind::SINGLE_FIELD;
+  }
+  if (pending_restore_.active) {
+    return TxOperationKind::RESTORE_DEFAULTS;
+  }
+  if (pending_profile_restore_.active) {
+    return TxOperationKind::PROFILE_RESTORE;
+  }
+  if (pending_time_band_tx_.active) {
+    return TxOperationKind::TIME_BAND;
+  }
+  return TxOperationKind::NONE;
+}
+
+const char *DaikinEkhheComponent::tx_operation_kind_label_(TxOperationKind kind) const {
+  switch (kind) {
+    case TxOperationKind::SINGLE_FIELD:
+      return "single_field";
+    case TxOperationKind::RESTORE_DEFAULTS:
+      return "restore_defaults";
+    case TxOperationKind::PROFILE_RESTORE:
+      return "profile_restore";
+    case TxOperationKind::TIME_BAND:
+      return "time_band";
+    case TxOperationKind::NONE:
+    default:
+      return "none";
+  }
+}
+
+DaikinEkhheComponent::TxPacketFamily DaikinEkhheComponent::active_tx_operation_family_() const {
+  switch (active_tx_operation_kind_()) {
+    case TxOperationKind::SINGLE_FIELD:
+      return pending_tx_.family;
+    case TxOperationKind::RESTORE_DEFAULTS:
+      return pending_restore_.family;
+    case TxOperationKind::PROFILE_RESTORE:
+      return pending_profile_restore_.family;
+    case TxOperationKind::TIME_BAND:
+    case TxOperationKind::NONE:
+    default:
+      return TxPacketFamily::MAIN;
+  }
+}
+
+uint8_t DaikinEkhheComponent::active_tx_readback_packet_type_() const {
+  TxOperationKind kind = active_tx_operation_kind_();
+  if (kind == TxOperationKind::NONE || kind == TxOperationKind::TIME_BAND) {
+    return D2_PACKET_START_BYTE;
+  }
+  return tx_packet_family_spec_(active_tx_operation_family_()).readback_packet_type;
+}
+
 bool DaikinEkhheComponent::tx_operation_active_() const {
-  return pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
-         pending_time_band_tx_.active;
+  return active_tx_operation_kind_() != TxOperationKind::NONE;
 }
 
 void DaikinEkhheComponent::reset_pending_restore_() {

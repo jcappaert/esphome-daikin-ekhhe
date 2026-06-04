@@ -479,6 +479,13 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     RESTORE_DEFAULTS,
     TIME_BAND,
   };
+  enum class TxOperationKind : uint8_t {
+    NONE,
+    SINGLE_FIELD,
+    RESTORE_DEFAULTS,
+    PROFILE_RESTORE,
+    TIME_BAND,
+  };
   enum class TxPacketFamily : uint8_t {
     MAIN,
     EXTENDED,
@@ -530,6 +537,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void schedule_queued_profile_restore_from_d2_(const RawFrameEntry &d2_entry);
   void check_pending_time_band_(const std::vector<uint8_t> &buffer);
   void schedule_queued_time_band_from_d2_(const RawFrameEntry &d2_entry);
+  TxOperationKind active_tx_operation_kind_() const;
+  const char *tx_operation_kind_label_(TxOperationKind kind) const;
+  TxPacketFamily active_tx_operation_family_() const;
+  uint8_t active_tx_readback_packet_type_() const;
   bool tx_operation_active_() const;
   void reset_pending_restore_();
   void reset_queued_restore_();
