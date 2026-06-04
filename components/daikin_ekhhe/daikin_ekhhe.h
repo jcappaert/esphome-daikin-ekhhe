@@ -517,6 +517,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                               uint8_t bit_position, uint8_t bit_width);
   bool has_deferred_user_tx_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
+  bool schedule_tx_after_d2_(TxOperationKind kind, const RawFrameEntry &d2_entry);
+  bool tx_d2_schedule_current_(TxOperationKind kind, uint32_t generation) const;
+  void run_tx_after_d2_(TxOperationKind kind, uint32_t generation);
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
   void send_restore_defaults_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                      const std::vector<uint8_t> &packet);

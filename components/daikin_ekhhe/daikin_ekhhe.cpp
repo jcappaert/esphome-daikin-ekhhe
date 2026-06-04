@@ -1518,252 +1518,273 @@ void DaikinEkhheComponent::flush_deferred_user_tx_() {
   send_uart_command_(deferred.family, deferred.index, deferred.value, deferred.bit_position, deferred.bit_width);
 }
 
-void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry) {
-  if (!pending_tx_.active || queued_tx_.scheduled) {
-    return;
-  }
-
+bool DaikinEkhheComponent::schedule_tx_after_d2_(TxOperationKind kind, const RawFrameEntry &d2_entry) {
   const uint32_t now_ms = millis();
   const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
   const uint32_t delay_ms =
       d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
-  const uint32_t generation = queued_tx_.generation;
+  uint32_t generation = 0;
 
-  queued_tx_.active = true;
-  queued_tx_.scheduled = true;
-  queued_tx_.family = pending_tx_.family;
-  queued_tx_.index = pending_tx_.index;
-  queued_tx_.value = pending_tx_.value;
-  queued_tx_.bit_position = pending_tx_.bit_position;
-  queued_tx_.bit_width = pending_tx_.bit_width;
-  queued_tx_.anchor_ms = d2_entry.timestamp_ms;
-  queued_tx_.anchor_seq = d2_entry.seq;
+  switch (kind) {
+    case TxOperationKind::SINGLE_FIELD: {
+      if (!pending_tx_.active || queued_tx_.scheduled) {
+        return false;
+      }
+      generation = queued_tx_.generation;
+      queued_tx_.active = true;
+      queued_tx_.scheduled = true;
+      queued_tx_.family = pending_tx_.family;
+      queued_tx_.index = pending_tx_.index;
+      queued_tx_.value = pending_tx_.value;
+      queued_tx_.bit_position = pending_tx_.bit_position;
+      queued_tx_.bit_width = pending_tx_.bit_width;
+      queued_tx_.anchor_ms = d2_entry.timestamp_ms;
+      queued_tx_.anchor_seq = d2_entry.seq;
 
-  const auto &pending_spec = tx_packet_family_spec_(pending_tx_.family);
-  DAIKIN_DBG(TAG, "TX scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
-             pending_spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_tx_.request_ms);
+      const auto &spec = tx_packet_family_spec_(pending_tx_.family);
+      DAIKIN_DBG(TAG, "TX scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
+                 spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_tx_.request_ms);
+      break;
+    }
+    case TxOperationKind::RESTORE_DEFAULTS: {
+      if (!pending_restore_.active || queued_restore_.scheduled) {
+        return false;
+      }
+      generation = queued_restore_.generation;
+      const TxPacketFamily family = pending_restore_.family;
+      queued_restore_.active = true;
+      queued_restore_.scheduled = true;
+      queued_restore_.family = family;
+      queued_restore_.anchor_ms = d2_entry.timestamp_ms;
+      queued_restore_.anchor_seq = d2_entry.seq;
 
-  set_timeout(delay_ms, [this, generation]() {
-    if (!queued_tx_.active || queued_tx_.generation != generation) {
+      const auto &spec = tx_packet_family_spec_(family);
+      DAIKIN_DBG(TAG, "Restore defaults scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
+                 spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_restore_.request_ms);
+      break;
+    }
+    case TxOperationKind::PROFILE_RESTORE: {
+      if (!pending_profile_restore_.active || queued_profile_restore_.scheduled) {
+        return false;
+      }
+      generation = queued_profile_restore_.generation;
+      const TxPacketFamily family = pending_profile_restore_.family;
+      queued_profile_restore_.active = true;
+      queued_profile_restore_.scheduled = true;
+      queued_profile_restore_.known_good = pending_profile_restore_.known_good;
+      queued_profile_restore_.family = family;
+      queued_profile_restore_.anchor_ms = d2_entry.timestamp_ms;
+      queued_profile_restore_.anchor_seq = d2_entry.seq;
+
+      const auto &spec = tx_packet_family_spec_(family);
+      DAIKIN_DBG(TAG, "%s restore scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
+                 queued_profile_restore_.known_good ? "Known-good profile" : "Auto snapshot",
+                 spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_profile_restore_.request_ms);
+      break;
+    }
+    case TxOperationKind::TIME_BAND: {
+      if (!pending_time_band_tx_.active || queued_time_band_tx_.scheduled) {
+        return false;
+      }
+      generation = queued_time_band_tx_.generation;
+      queued_time_band_tx_.active = true;
+      queued_time_band_tx_.scheduled = true;
+      queued_time_band_tx_.anchor_ms = d2_entry.timestamp_ms;
+      queued_time_band_tx_.anchor_seq = d2_entry.seq;
+
+      DAIKIN_DBG(TAG, "Time-band scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
+                 d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_time_band_tx_.request_ms);
+      break;
+    }
+    case TxOperationKind::NONE:
+    default:
+      return false;
+  }
+
+  set_timeout(delay_ms, [this, kind, generation]() { this->run_tx_after_d2_(kind, generation); });
+  return true;
+}
+
+bool DaikinEkhheComponent::tx_d2_schedule_current_(TxOperationKind kind, uint32_t generation) const {
+  switch (kind) {
+    case TxOperationKind::SINGLE_FIELD:
+      return queued_tx_.active && queued_tx_.generation == generation;
+    case TxOperationKind::RESTORE_DEFAULTS:
+      return queued_restore_.active && queued_restore_.generation == generation;
+    case TxOperationKind::PROFILE_RESTORE:
+      return queued_profile_restore_.active && queued_profile_restore_.generation == generation;
+    case TxOperationKind::TIME_BAND:
+      return queued_time_band_tx_.active && queued_time_band_tx_.generation == generation;
+    case TxOperationKind::NONE:
+    default:
+      return false;
+  }
+}
+
+void DaikinEkhheComponent::run_tx_after_d2_(TxOperationKind kind, uint32_t generation) {
+  if (!tx_d2_schedule_current_(kind, generation)) {
+    return;
+  }
+
+  switch (kind) {
+    case TxOperationKind::SINGLE_FIELD: {
+      TxPacketFamily family = queued_tx_.family;
+      const auto &spec = tx_packet_family_spec_(family);
+      uint8_t index = queued_tx_.index;
+      uint8_t value = queued_tx_.value;
+      uint8_t bit_position = queued_tx_.bit_position;
+      uint8_t bit_width = queued_tx_.bit_width;
+      uint32_t anchor_seq = queued_tx_.anchor_seq;
+      uint32_t anchor_ms = queued_tx_.anchor_ms;
+
+      queued_tx_.active = false;
+      queued_tx_.scheduled = false;
+
+      std::vector<uint8_t> base_packet = family == TxPacketFamily::EXTENDED ? last_c1_packet_ : last_cc_packet_;
+      auto latest_base = latest_packets_.find(spec.base_packet_type);
+      if (latest_base != latest_packets_.end()) {
+        base_packet = latest_base->second;
+      }
+
+      pending_tx_.attempts_sent++;
+      pending_tx_.last_attempt_d2_seq = anchor_seq;
+
+      DAIKIN_DBG(TAG,
+                 "TX scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
+                 spec.label, anchor_seq, millis() - anchor_ms, pending_tx_.attempts_sent, kTxMaxRepeats,
+                 latest_base != latest_packets_.end());
+      send_uart_tx_packet_(family, base_packet, true, index, value, bit_position, bit_width);
       return;
     }
+    case TxOperationKind::RESTORE_DEFAULTS: {
+      const TxPacketFamily family = queued_restore_.family;
+      const auto &spec = tx_packet_family_spec_(family);
+      const bool extended = family == TxPacketFamily::EXTENDED;
+      const uint32_t anchor_seq = queued_restore_.anchor_seq;
+      const uint32_t anchor_ms = queued_restore_.anchor_ms;
+      queued_restore_.active = false;
+      queued_restore_.scheduled = false;
 
-    TxPacketFamily family = queued_tx_.family;
-    const auto &spec = tx_packet_family_spec_(family);
-    uint8_t index = queued_tx_.index;
-    uint8_t value = queued_tx_.value;
-    uint8_t bit_position = queued_tx_.bit_position;
-    uint8_t bit_width = queued_tx_.bit_width;
-    uint32_t anchor_seq = queued_tx_.anchor_seq;
-    uint32_t anchor_ms = queued_tx_.anchor_ms;
+      std::vector<uint8_t> base_packet = extended ? last_c1_packet_ : last_cc_packet_;
+      auto latest_base = latest_packets_.find(spec.base_packet_type);
+      if (latest_base != latest_packets_.end()) {
+        base_packet = latest_base->second;
+      }
+      if (base_packet.empty()) {
+        DAIKIN_WARN(TAG, "Restore defaults aborted: no %s base packet is available.", spec.label);
+        reset_tx_lifecycle_(TxOperationKind::RESTORE_DEFAULTS, false);
+        return;
+      }
 
-    queued_tx_.active = false;
-    queued_tx_.scheduled = false;
+      std::vector<uint8_t> packet = base_packet;
+      apply_restore_defaults_to_packet(packet, extended);
+      pending_restore_.attempts_sent++;
+      if (extended) {
+        pending_restore_.extended_write_sent = true;
+      } else {
+        pending_restore_.main_write_sent = true;
+      }
+      pending_restore_.last_attempt_d2_seq = anchor_seq;
 
-    std::vector<uint8_t> base_packet = family == TxPacketFamily::EXTENDED ? last_c1_packet_ : last_cc_packet_;
-    auto latest_base = latest_packets_.find(spec.base_packet_type);
-    if (latest_base != latest_packets_.end()) {
-      base_packet = latest_base->second;
+      DAIKIN_DBG(TAG,
+                 "Restore defaults scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
+                 spec.label, anchor_seq, millis() - anchor_ms, pending_restore_.attempts_sent, kTxMaxRepeats,
+                 latest_base != latest_packets_.end());
+      send_restore_defaults_packet_(family, base_packet, packet);
+      return;
     }
+    case TxOperationKind::PROFILE_RESTORE: {
+      const bool known_good = queued_profile_restore_.known_good;
+      const TxPacketFamily family = queued_profile_restore_.family;
+      const auto &spec = tx_packet_family_spec_(family);
+      const bool extended = family == TxPacketFamily::EXTENDED;
+      const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
+      const uint32_t anchor_seq = queued_profile_restore_.anchor_seq;
+      const uint32_t anchor_ms = queued_profile_restore_.anchor_ms;
+      queued_profile_restore_.active = false;
+      queued_profile_restore_.scheduled = false;
 
-    pending_tx_.attempts_sent++;
-    pending_tx_.last_attempt_d2_seq = anchor_seq;
+      const uint8_t profile_length = extended ? profile.extended_length : profile.main_length;
+      const uint8_t *profile_data = extended ? profile.extended_data : profile.main_data;
+      if (!profile.valid || profile_length == 0) {
+        DAIKIN_WARN(TAG, "%s restore aborted: stored profile became unavailable.",
+                    known_good ? "Known-good profile" : "Auto snapshot");
+        reset_tx_lifecycle_(TxOperationKind::PROFILE_RESTORE, false);
+        return;
+      }
 
-    DAIKIN_DBG(TAG,
-               "TX scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
-               spec.label, anchor_seq, millis() - anchor_ms, pending_tx_.attempts_sent, kTxMaxRepeats,
-               latest_base != latest_packets_.end());
-    send_uart_tx_packet_(family, base_packet, true, index, value, bit_position, bit_width);
-  });
+      std::vector<uint8_t> base_packet = extended ? last_c1_packet_ : last_cc_packet_;
+      auto latest_base = latest_packets_.find(spec.base_packet_type);
+      if (latest_base != latest_packets_.end()) {
+        base_packet = latest_base->second;
+      }
+      if (base_packet.empty()) {
+        DAIKIN_WARN(TAG, "%s restore aborted: no %s base packet is available.",
+                    known_good ? "Known-good profile" : "Auto snapshot", spec.label);
+        reset_tx_lifecycle_(TxOperationKind::PROFILE_RESTORE, false);
+        return;
+      }
+
+      std::vector<uint8_t> packet = base_packet;
+      merge_profile_managed_fields(extended, packet, profile_data, profile_length);
+      pending_profile_restore_.attempts_sent++;
+      if (extended) {
+        pending_profile_restore_.extended_write_sent = true;
+      } else {
+        pending_profile_restore_.main_write_sent = true;
+      }
+      pending_profile_restore_.last_attempt_d2_seq = anchor_seq;
+
+      DAIKIN_DBG(TAG,
+                 "%s restore scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
+                 known_good ? "Known-good profile" : "Auto snapshot", spec.label,
+                 anchor_seq, millis() - anchor_ms, pending_profile_restore_.attempts_sent, kTxMaxRepeats,
+                 latest_base != latest_packets_.end());
+      send_profile_restore_packet_(family, base_packet, packet, known_good);
+      return;
+    }
+    case TxOperationKind::TIME_BAND: {
+      const uint32_t anchor_seq = queued_time_band_tx_.anchor_seq;
+      const uint32_t anchor_ms = queued_time_band_tx_.anchor_ms;
+      queued_time_band_tx_.active = false;
+      queued_time_band_tx_.scheduled = false;
+
+      std::vector<uint8_t> base_packet = last_cc_packet_;
+      auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
+      if (latest_cc != latest_packets_.end()) {
+        base_packet = latest_cc->second;
+      }
+
+      pending_time_band_tx_.attempts_sent++;
+      pending_time_band_tx_.last_attempt_d2_seq = anchor_seq;
+
+      DAIKIN_DBG(TAG,
+                 "Time-band scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
+                 anchor_seq, millis() - anchor_ms, pending_time_band_tx_.attempts_sent, kTxMaxRepeats,
+                 latest_cc != latest_packets_.end());
+      send_time_band_packet_(base_packet);
+      return;
+    }
+    case TxOperationKind::NONE:
+    default:
+      return;
+  }
+}
+
+void DaikinEkhheComponent::schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry) {
+  schedule_tx_after_d2_(TxOperationKind::SINGLE_FIELD, d2_entry);
 }
 
 void DaikinEkhheComponent::schedule_queued_restore_from_d2_(const RawFrameEntry &d2_entry) {
-  if (!pending_restore_.active || queued_restore_.scheduled) {
-    return;
-  }
-
-  const uint32_t now_ms = millis();
-  const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
-  const uint32_t delay_ms =
-      d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
-  const uint32_t generation = queued_restore_.generation;
-  const TxPacketFamily family = pending_restore_.family;
-  const auto &spec = tx_packet_family_spec_(family);
-
-  queued_restore_.active = true;
-  queued_restore_.scheduled = true;
-  queued_restore_.family = family;
-  queued_restore_.anchor_ms = d2_entry.timestamp_ms;
-  queued_restore_.anchor_seq = d2_entry.seq;
-
-  DAIKIN_DBG(TAG, "Restore defaults scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
-             spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_restore_.request_ms);
-
-  set_timeout(delay_ms, [this, generation]() {
-    if (!queued_restore_.active || queued_restore_.generation != generation) {
-      return;
-    }
-
-    const TxPacketFamily family = queued_restore_.family;
-    const auto &spec = tx_packet_family_spec_(family);
-    const bool extended = family == TxPacketFamily::EXTENDED;
-    const uint32_t anchor_seq = queued_restore_.anchor_seq;
-    const uint32_t anchor_ms = queued_restore_.anchor_ms;
-    queued_restore_.active = false;
-    queued_restore_.scheduled = false;
-
-    std::vector<uint8_t> base_packet = extended ? last_c1_packet_ : last_cc_packet_;
-    auto latest_base = latest_packets_.find(spec.base_packet_type);
-    if (latest_base != latest_packets_.end()) {
-      base_packet = latest_base->second;
-    }
-    if (base_packet.empty()) {
-      DAIKIN_WARN(TAG, "Restore defaults aborted: no %s base packet is available.", spec.label);
-      reset_tx_lifecycle_(TxOperationKind::RESTORE_DEFAULTS, false);
-      return;
-    }
-
-    std::vector<uint8_t> packet = base_packet;
-    apply_restore_defaults_to_packet(packet, extended);
-    pending_restore_.attempts_sent++;
-    if (extended) {
-      pending_restore_.extended_write_sent = true;
-    } else {
-      pending_restore_.main_write_sent = true;
-    }
-    pending_restore_.last_attempt_d2_seq = anchor_seq;
-
-    DAIKIN_DBG(TAG,
-               "Restore defaults scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
-               spec.label, anchor_seq, millis() - anchor_ms, pending_restore_.attempts_sent, kTxMaxRepeats,
-               latest_base != latest_packets_.end());
-    send_restore_defaults_packet_(family, base_packet, packet);
-  });
+  schedule_tx_after_d2_(TxOperationKind::RESTORE_DEFAULTS, d2_entry);
 }
 
 void DaikinEkhheComponent::schedule_queued_profile_restore_from_d2_(const RawFrameEntry &d2_entry) {
-  if (!pending_profile_restore_.active || queued_profile_restore_.scheduled) {
-    return;
-  }
-
-  const uint32_t now_ms = millis();
-  const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
-  const uint32_t delay_ms =
-      d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
-  const uint32_t generation = queued_profile_restore_.generation;
-  const TxPacketFamily family = pending_profile_restore_.family;
-  const auto &spec = tx_packet_family_spec_(family);
-
-  queued_profile_restore_.active = true;
-  queued_profile_restore_.scheduled = true;
-  queued_profile_restore_.known_good = pending_profile_restore_.known_good;
-  queued_profile_restore_.family = family;
-  queued_profile_restore_.anchor_ms = d2_entry.timestamp_ms;
-  queued_profile_restore_.anchor_seq = d2_entry.seq;
-
-  DAIKIN_DBG(TAG, "%s restore scheduling: family=%s d2_seq=%u d2_age=%u delay=%u request_age=%u",
-             queued_profile_restore_.known_good ? "Known-good profile" : "Auto snapshot",
-             spec.label, d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_profile_restore_.request_ms);
-
-  set_timeout(delay_ms, [this, generation]() {
-    if (!queued_profile_restore_.active || queued_profile_restore_.generation != generation) {
-      return;
-    }
-
-    const bool known_good = queued_profile_restore_.known_good;
-    const TxPacketFamily family = queued_profile_restore_.family;
-    const auto &spec = tx_packet_family_spec_(family);
-    const bool extended = family == TxPacketFamily::EXTENDED;
-    const ProfileState &profile = known_good ? known_good_profile_ : auto_snapshot_;
-    const uint32_t anchor_seq = queued_profile_restore_.anchor_seq;
-    const uint32_t anchor_ms = queued_profile_restore_.anchor_ms;
-    queued_profile_restore_.active = false;
-    queued_profile_restore_.scheduled = false;
-
-    const uint8_t profile_length = extended ? profile.extended_length : profile.main_length;
-    const uint8_t *profile_data = extended ? profile.extended_data : profile.main_data;
-    if (!profile.valid || profile_length == 0) {
-      DAIKIN_WARN(TAG, "%s restore aborted: stored profile became unavailable.",
-                  known_good ? "Known-good profile" : "Auto snapshot");
-      reset_tx_lifecycle_(TxOperationKind::PROFILE_RESTORE, false);
-      return;
-    }
-
-    std::vector<uint8_t> base_packet = extended ? last_c1_packet_ : last_cc_packet_;
-    auto latest_base = latest_packets_.find(spec.base_packet_type);
-    if (latest_base != latest_packets_.end()) {
-      base_packet = latest_base->second;
-    }
-    if (base_packet.empty()) {
-      DAIKIN_WARN(TAG, "%s restore aborted: no %s base packet is available.",
-                  known_good ? "Known-good profile" : "Auto snapshot", spec.label);
-      reset_tx_lifecycle_(TxOperationKind::PROFILE_RESTORE, false);
-      return;
-    }
-
-    std::vector<uint8_t> packet = base_packet;
-    merge_profile_managed_fields(extended, packet, profile_data, profile_length);
-    pending_profile_restore_.attempts_sent++;
-    if (extended) {
-      pending_profile_restore_.extended_write_sent = true;
-    } else {
-      pending_profile_restore_.main_write_sent = true;
-    }
-    pending_profile_restore_.last_attempt_d2_seq = anchor_seq;
-
-    DAIKIN_DBG(TAG,
-               "%s restore scheduling: family=%s sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_base=%u",
-               known_good ? "Known-good profile" : "Auto snapshot", spec.label,
-               anchor_seq, millis() - anchor_ms, pending_profile_restore_.attempts_sent, kTxMaxRepeats,
-               latest_base != latest_packets_.end());
-    send_profile_restore_packet_(family, base_packet, packet, known_good);
-  });
+  schedule_tx_after_d2_(TxOperationKind::PROFILE_RESTORE, d2_entry);
 }
 
 void DaikinEkhheComponent::schedule_queued_time_band_from_d2_(const RawFrameEntry &d2_entry) {
-  if (!pending_time_band_tx_.active || queued_time_band_tx_.scheduled) {
-    return;
-  }
-
-  const uint32_t now_ms = millis();
-  const uint32_t d2_age_ms = now_ms - d2_entry.timestamp_ms;
-  const uint32_t delay_ms =
-      d2_age_ms >= tx_delay_after_d2_ms_ ? 0 : (tx_delay_after_d2_ms_ - d2_age_ms);
-  const uint32_t generation = queued_time_band_tx_.generation;
-
-  queued_time_band_tx_.active = true;
-  queued_time_band_tx_.scheduled = true;
-  queued_time_band_tx_.anchor_ms = d2_entry.timestamp_ms;
-  queued_time_band_tx_.anchor_seq = d2_entry.seq;
-
-  DAIKIN_DBG(TAG, "Time-band scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
-             d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_time_band_tx_.request_ms);
-
-  set_timeout(delay_ms, [this, generation]() {
-    if (!queued_time_band_tx_.active || queued_time_band_tx_.generation != generation) {
-      return;
-    }
-
-    const uint32_t anchor_seq = queued_time_band_tx_.anchor_seq;
-    const uint32_t anchor_ms = queued_time_band_tx_.anchor_ms;
-    queued_time_band_tx_.active = false;
-    queued_time_band_tx_.scheduled = false;
-
-    std::vector<uint8_t> base_packet = last_cc_packet_;
-    auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
-    if (latest_cc != latest_packets_.end()) {
-      base_packet = latest_cc->second;
-    }
-
-    pending_time_band_tx_.attempts_sent++;
-    pending_time_band_tx_.last_attempt_d2_seq = anchor_seq;
-
-    DAIKIN_DBG(TAG,
-               "Time-band scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
-               anchor_seq, millis() - anchor_ms, pending_time_band_tx_.attempts_sent, kTxMaxRepeats,
-               latest_cc != latest_packets_.end());
-    send_time_band_packet_(base_packet);
-  });
+  schedule_tx_after_d2_(TxOperationKind::TIME_BAND, d2_entry);
 }
 
 const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_family_spec_(
