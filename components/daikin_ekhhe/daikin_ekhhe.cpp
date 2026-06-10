@@ -2030,9 +2030,15 @@ void DaikinEkhheComponent::process_packet_set() {
                cycle_framing_errors_);
   }
   if (cycle_framing_errors_ > 0 && !cycle_timeout_logged_) {
-    DAIKIN_WARN(TAG, "Cycle warn: framing=%u last_start=0x%02X bytes=%u packets=%u",
-                cycle_framing_errors_, cycle_framing_error_start_, cycle_bytes_read_,
-                cycle_packets_seen_);
+    if (has_required) {
+      DAIKIN_DBG(TAG, "Cycle resync: framing=%u last_start=0x%02X bytes=%u packets=%u",
+                 cycle_framing_errors_, cycle_framing_error_start_, cycle_bytes_read_,
+                 cycle_packets_seen_);
+    } else {
+      DAIKIN_WARN(TAG, "Cycle warn: framing=%u last_start=0x%02X bytes=%u packets=%u",
+                  cycle_framing_errors_, cycle_framing_error_start_, cycle_bytes_read_,
+                  cycle_packets_seen_);
+    }
   }
   if (!has_required && cycle_checksum_errors_ > 0) {
     std::string types = packet_mask_to_string_(cycle_packet_types_seen_);
