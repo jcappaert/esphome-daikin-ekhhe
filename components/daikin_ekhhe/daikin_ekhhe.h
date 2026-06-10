@@ -427,8 +427,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void start_uart_cycle();
   void process_packet_set();
   bool packet_set_complete();
-  void store_latest_packet(uint8_t byte);
-  bool read_packet_bytes_(uint8_t *dest, size_t length, uint32_t timeout_ms);
+  uint8_t read_rx_byte_();
+  void reset_rx_frame_();
+  void consume_uart_byte_(uint8_t byte, uint32_t now_ms);
+  void check_rx_frame_timeout_(uint32_t now_ms);
+  void handle_complete_packet_(uint8_t packet_type, const uint8_t *data, size_t length);
   void store_raw_frame_(uint8_t packet_type, const uint8_t *data, size_t length, uint8_t flags);
   void reset_cycle_stats_();
   uint8_t packet_mask_for_start_(uint8_t start_byte) const;
@@ -568,6 +571,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool cycle_timeout_logged_ = false;
   bool cycle_publish_allowed_ = true;
   bool cycle_synced_ = false;
+  bool rx_frame_active_ = false;
+  uint32_t rx_frame_start_ms_ = 0;
+  uint8_t rx_frame_type_ = 0;
+  uint8_t rx_frame_expected_len_ = 0;
+  size_t rx_frame_offset_ = 0;
+  uint8_t rx_frame_buffer_[kRawFrameMaxLen] = {};
   struct StoredProfileBlob {
     uint32_t magic = 0;
     uint8_t version = 0;

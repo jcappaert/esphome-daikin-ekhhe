@@ -724,15 +724,15 @@ void DaikinEkhheComponent::loop() {
 
     // Receive bytes
     while (this->available()) {
-      uint8_t byte = this->read();
-      cycle_bytes_read_++;
-      store_latest_packet(byte);
+      uint8_t byte = read_rx_byte_();
+      consume_uart_byte_(byte, millis());
       if (packet_set_complete()) {
         break;
       }
     }
 
     now = millis();
+    check_rx_frame_timeout_(now);
     if (uart_active_ && cycle_synced_ && !packet_set_complete()) {
       if (last_rx_time_ > 0 && (now - last_rx_time_) > kCycleTimeoutMs && !cycle_timeout_logged_) {
         cycle_timeouts_++;
@@ -751,29 +751,9 @@ void DaikinEkhheComponent::loop() {
     }
 }
 
-void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
-  last_rx_time_ = millis();
-
-  // Wait for a start byte
-  if (PACKET_SIZES.find(byte) == PACKET_SIZES.end()) {
-    return;
-  }
-
-  // Read the expected packet size
-  uint8_t expected_length = PACKET_SIZES.at(byte);
-  std::vector<uint8_t> packet(expected_length);
-  packet[0] = byte;
-
-  // Read the rest of the packet
-  if (!read_packet_bytes_(packet.data() + 1, expected_length - 1, kFrameReadTimeoutMs)) {
-    if (cycle_synced_) {
-      cycle_framing_errors_++;
-      cycle_framing_error_start_ = byte;
-    }
-    return;
-  }
-
-  uint8_t packet_mask = packet_mask_for_start_(byte);
+void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const uint8_t *data, size_t length) {
+  std::vector<uint8_t> packet(data, data + length);
+  uint8_t packet_mask = packet_mask_for_start_(packet_type);
   uint8_t flags = 0;
   bool crc_ok = true;
   if ((packet_mask & kChecksumPacketMask) != 0) {
@@ -783,11 +763,11 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     }
   }
 
-  store_raw_frame_(byte, packet.data(), expected_length, flags);
+  store_raw_frame_(packet_type, packet.data(), length, flags);
 
   if (!crc_ok) {
     if (cycle_synced_) {
-      if (latest_packets_.count(byte) == 0) {
+      if (latest_packets_.count(packet_type) == 0) {
         cycle_checksum_errors_++;
         cycle_checksum_error_mask_ |= packet_mask;
       }
@@ -798,7 +778,7 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   const uint32_t now_ms = millis();
   if (tx_operation_active_() && tx_waiting_for_first_rx_) {
     DAIKIN_DBG(TAG, "TX timing: first_rx_after_tx type=%s dt=%u",
-               packet_type_to_string_(byte).c_str(), now_ms - tx_sent_ms_);
+               packet_type_to_string_(packet_type).c_str(), now_ms - tx_sent_ms_);
     tx_waiting_for_first_rx_ = false;
   }
 
@@ -810,35 +790,35 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
   } else if (pending_profile_restore_.active) {
     tx_readback_type = tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type;
   }
-  if (tx_operation_active_() && tx_waiting_for_first_cc_ && byte == tx_readback_type) {
+  if (tx_operation_active_() && tx_waiting_for_first_cc_ && packet_type == tx_readback_type) {
     DAIKIN_DBG(TAG, "TX timing: first_readback_after_tx type=%s dt=%u",
-               packet_type_to_string_(byte).c_str(), now_ms - tx_sent_ms_);
+               packet_type_to_string_(packet_type).c_str(), now_ms - tx_sent_ms_);
     tx_waiting_for_first_cc_ = false;
   }
 
   last_frame_profile_ms_ = now_ms;
-  last_frame_profile_type_ = byte;
-  if (byte == CC_PACKET_START_BYTE) {
+  last_frame_profile_type_ = packet_type;
+  if (packet_type == CC_PACKET_START_BYTE) {
     last_cc_profile_ms_ = now_ms;
   }
-  if (byte == C2_PACKET_START_BYTE) {
+  if (packet_type == C2_PACKET_START_BYTE) {
     last_c2_packet_ = packet;
   }
   if (pending_restore_.active &&
-      byte == tx_packet_family_spec_(pending_restore_.family).readback_packet_type) {
+      packet_type == tx_packet_family_spec_(pending_restore_.family).readback_packet_type) {
     check_pending_restore_(packet);
   }
   if (pending_profile_restore_.active &&
-      byte == tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type) {
+      packet_type == tx_packet_family_spec_(pending_profile_restore_.family).readback_packet_type) {
     check_pending_profile_restore_(packet);
   }
-  if (byte == D2_PACKET_START_BYTE && pending_time_band_tx_.active) {
+  if (packet_type == D2_PACKET_START_BYTE && pending_time_band_tx_.active) {
     check_pending_time_band_(packet);
   }
-  if (pending_tx_.active && byte == tx_packet_family_spec_(pending_tx_.family).readback_packet_type) {
+  if (pending_tx_.active && packet_type == tx_packet_family_spec_(pending_tx_.family).readback_packet_type) {
     check_pending_tx_(packet);
   }
-  if (byte == D2_PACKET_START_BYTE &&
+  if (packet_type == D2_PACKET_START_BYTE &&
       (pending_tx_.active || pending_restore_.active || pending_profile_restore_.active ||
        pending_time_band_tx_.active)) {
     size_t d2_index = 0;
@@ -865,33 +845,76 @@ void DaikinEkhheComponent::store_latest_packet(uint8_t byte) {
     cycle_checksum_error_mask_ = 0;
     cycle_framing_errors_ = 0;
     cycle_framing_error_start_ = 0;
-    cycle_bytes_read_ = expected_length;
+    cycle_bytes_read_ = length;
   }
 
-  if (cycle_synced_ && latest_packets_.count(byte) > 0) {
+  if (cycle_synced_ && latest_packets_.count(packet_type) > 0) {
     return;
   }
 
   // Store only the latest version of each valid packet
-  latest_packets_[byte] = packet;
+  latest_packets_[packet_type] = packet;
   cycle_packets_seen_++;
   cycle_packet_types_seen_ |= packet_mask;
 }
 
-bool DaikinEkhheComponent::read_packet_bytes_(uint8_t *dest, size_t length, uint32_t timeout_ms) {
-  uint32_t start_ms = millis();
-  size_t offset = 0;
+uint8_t DaikinEkhheComponent::read_rx_byte_() {
+  cycle_bytes_read_++;
+  return this->read();
+}
 
-  while (offset < length) {
-    if (this->available()) {
-      dest[offset++] = this->read();
-      cycle_bytes_read_++;
-    } else if (millis() - start_ms >= timeout_ms) {
-      return false;
+void DaikinEkhheComponent::reset_rx_frame_() {
+  rx_frame_active_ = false;
+  rx_frame_start_ms_ = 0;
+  rx_frame_type_ = 0;
+  rx_frame_expected_len_ = 0;
+  rx_frame_offset_ = 0;
+}
+
+void DaikinEkhheComponent::consume_uart_byte_(uint8_t byte, uint32_t now_ms) {
+  last_rx_time_ = now_ms;
+
+  if (!rx_frame_active_) {
+    auto size_it = PACKET_SIZES.find(byte);
+    if (size_it == PACKET_SIZES.end()) {
+      return;
     }
+
+    rx_frame_active_ = true;
+    rx_frame_start_ms_ = now_ms;
+    rx_frame_type_ = byte;
+    rx_frame_expected_len_ = size_it->second;
+    rx_frame_offset_ = 1;
+    rx_frame_buffer_[0] = byte;
+
+    if (rx_frame_expected_len_ == rx_frame_offset_) {
+      handle_complete_packet_(rx_frame_type_, rx_frame_buffer_, rx_frame_expected_len_);
+      reset_rx_frame_();
+    }
+    return;
   }
 
-  return true;
+  if (rx_frame_offset_ < kRawFrameMaxLen) {
+    rx_frame_buffer_[rx_frame_offset_] = byte;
+  }
+  rx_frame_offset_++;
+
+  if (rx_frame_offset_ >= rx_frame_expected_len_) {
+    handle_complete_packet_(rx_frame_type_, rx_frame_buffer_, rx_frame_expected_len_);
+    reset_rx_frame_();
+  }
+}
+
+void DaikinEkhheComponent::check_rx_frame_timeout_(uint32_t now_ms) {
+  if (!rx_frame_active_ || (now_ms - rx_frame_start_ms_) < kFrameReadTimeoutMs) {
+    return;
+  }
+
+  if (cycle_synced_) {
+    cycle_framing_errors_++;
+    cycle_framing_error_start_ = rx_frame_type_;
+  }
+  reset_rx_frame_();
 }
 
 void DaikinEkhheComponent::store_raw_frame_(uint8_t packet_type, const uint8_t *data, size_t length, uint8_t flags) {
@@ -1976,6 +1999,7 @@ bool DaikinEkhheComponent::packet_set_complete() {
 void DaikinEkhheComponent::start_uart_cycle() {
     uart_active_ = true;
     latest_packets_.clear();
+    reset_rx_frame_();
     reset_cycle_stats_();
 }
 
@@ -2006,9 +2030,15 @@ void DaikinEkhheComponent::process_packet_set() {
                cycle_framing_errors_);
   }
   if (cycle_framing_errors_ > 0 && !cycle_timeout_logged_) {
-    DAIKIN_WARN(TAG, "Cycle warn: framing=%u last_start=0x%02X bytes=%u packets=%u",
-                cycle_framing_errors_, cycle_framing_error_start_, cycle_bytes_read_,
-                cycle_packets_seen_);
+    if (has_required) {
+      DAIKIN_DBG(TAG, "Cycle resync: framing=%u last_start=0x%02X bytes=%u packets=%u",
+                 cycle_framing_errors_, cycle_framing_error_start_, cycle_bytes_read_,
+                 cycle_packets_seen_);
+    } else {
+      DAIKIN_WARN(TAG, "Cycle warn: framing=%u last_start=0x%02X bytes=%u packets=%u",
+                  cycle_framing_errors_, cycle_framing_error_start_, cycle_bytes_read_,
+                  cycle_packets_seen_);
+    }
   }
   if (!has_required && cycle_checksum_errors_ > 0) {
     std::string types = packet_mask_to_string_(cycle_packet_types_seen_);
