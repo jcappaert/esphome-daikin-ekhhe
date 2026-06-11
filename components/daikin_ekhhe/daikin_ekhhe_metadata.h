@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "daikin_ekhhe.h"
+#include "daikin_ekhhe_internal.h"
 
 namespace esphome {
 namespace daikin_ekkhe {
