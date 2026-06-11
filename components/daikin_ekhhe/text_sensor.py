@@ -1,5 +1,4 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import text_sensor
 from esphome.const import DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
 
@@ -11,27 +10,32 @@ from .const import (
     J_POWER_FW_VERSION,
     L_UI_FW_VERSION,
 )
+from .schema_helpers import (
+    TextSensorSchemaSpec,
+    optional_schema_entries,
+    platform_schema,
+    text_sensor_schema,
+)
 
 
-CONFIG_SCHEMA = cv.Schema(
-    {
-        cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
-        cv.Optional(CURRENT_TIME): text_sensor.text_sensor_schema(
-            device_class=DEVICE_CLASS_TIMESTAMP,
-        ),
-        cv.Optional(J_POWER_FW_VERSION): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(L_UI_FW_VERSION): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(DAIKIN_KNOWN_GOOD_PROFILE_STATUS): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-        cv.Optional(DAIKIN_AUTO_SNAPSHOT_STATUS): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-        ),
-    }
+TEXT_SENSOR_SPECS = [
+    TextSensorSchemaSpec(CURRENT_TIME, device_class=DEVICE_CLASS_TIMESTAMP),
+    TextSensorSchemaSpec(J_POWER_FW_VERSION, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+    TextSensorSchemaSpec(L_UI_FW_VERSION, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+    TextSensorSchemaSpec(
+        DAIKIN_KNOWN_GOOD_PROFILE_STATUS,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    TextSensorSchemaSpec(
+        DAIKIN_AUTO_SNAPSHOT_STATUS,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+]
+
+CONFIG_SCHEMA = platform_schema(
+    CONF_EKHHE_ID,
+    DaikinEkhhe,
+    optional_schema_entries(TEXT_SENSOR_SPECS, text_sensor_schema),
 )
 
 

@@ -1,5 +1,4 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import button
 from esphome.const import CONF_ID, ENTITY_CATEGORY_CONFIG
 
@@ -12,101 +11,81 @@ from .const import (
     DAIKIN_APPLY_TIME_BAND,
     DAIKIN_CLEAR_TIME_BAND,
 )
+from .schema_helpers import (
+    ButtonSchemaSpec,
+    button_schema,
+    optional_schema_entries,
+    platform_schema,
+)
 
 DaikinEkhheActionButton = daikin_ekhhe_ns.class_(
     "DaikinEkhheActionButton", button.Button, cg.Component
 )
 
-CONFIG_SCHEMA = cv.Schema(
-    {
-        cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
-        cv.Optional(DAIKIN_RESTORE_DEFAULT_SETTINGS): button.button_schema(
-            DaikinEkhheActionButton,
-            entity_category=ENTITY_CATEGORY_CONFIG,
-            icon="mdi:backup-restore",
-        ),
-        cv.Optional(DAIKIN_SAVE_KNOWN_GOOD_PROFILE): button.button_schema(
-            DaikinEkhheActionButton,
-            entity_category=ENTITY_CATEGORY_CONFIG,
-            icon="mdi:content-save-check",
-        ),
-        cv.Optional(DAIKIN_RESTORE_KNOWN_GOOD_PROFILE): button.button_schema(
-            DaikinEkhheActionButton,
-            entity_category=ENTITY_CATEGORY_CONFIG,
-            icon="mdi:restore",
-        ),
-        cv.Optional(DAIKIN_RESTORE_AUTO_SNAPSHOT): button.button_schema(
-            DaikinEkhheActionButton,
-            entity_category=ENTITY_CATEGORY_CONFIG,
-            icon="mdi:restore-clock",
-        ),
-        cv.Optional(DAIKIN_APPLY_TIME_BAND): button.button_schema(
-            DaikinEkhheActionButton,
-            entity_category=ENTITY_CATEGORY_CONFIG,
-            icon="mdi:clock-check-outline",
-        ),
-        cv.Optional(DAIKIN_CLEAR_TIME_BAND): button.button_schema(
-            DaikinEkhheActionButton,
-            entity_category=ENTITY_CATEGORY_CONFIG,
-            icon="mdi:clock-remove-outline",
-        ),
-    }
+BUTTON_SPECS = [
+    ButtonSchemaSpec(
+        DAIKIN_RESTORE_DEFAULT_SETTINGS,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+        icon="mdi:backup-restore",
+    ),
+    ButtonSchemaSpec(
+        DAIKIN_SAVE_KNOWN_GOOD_PROFILE,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+        icon="mdi:content-save-check",
+    ),
+    ButtonSchemaSpec(
+        DAIKIN_RESTORE_KNOWN_GOOD_PROFILE,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+        icon="mdi:restore",
+    ),
+    ButtonSchemaSpec(
+        DAIKIN_RESTORE_AUTO_SNAPSHOT,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+        icon="mdi:restore-clock",
+    ),
+    ButtonSchemaSpec(
+        DAIKIN_APPLY_TIME_BAND,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+        icon="mdi:clock-check-outline",
+    ),
+    ButtonSchemaSpec(
+        DAIKIN_CLEAR_TIME_BAND,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+        icon="mdi:clock-remove-outline",
+    ),
+]
+
+BUTTON_ACTIONS = {
+    DAIKIN_RESTORE_DEFAULT_SETTINGS: "RESTORE_DEFAULT_SETTINGS",
+    DAIKIN_SAVE_KNOWN_GOOD_PROFILE: "SAVE_KNOWN_GOOD_PROFILE",
+    DAIKIN_RESTORE_KNOWN_GOOD_PROFILE: "RESTORE_KNOWN_GOOD_PROFILE",
+    DAIKIN_RESTORE_AUTO_SNAPSHOT: "RESTORE_AUTO_SNAPSHOT",
+    DAIKIN_APPLY_TIME_BAND: "APPLY_TIME_BAND",
+    DAIKIN_CLEAR_TIME_BAND: "CLEAR_TIME_BAND",
+}
+
+CONFIG_SCHEMA = platform_schema(
+    CONF_EKHHE_ID,
+    DaikinEkhhe,
+    optional_schema_entries(
+        BUTTON_SPECS, lambda spec: button_schema(DaikinEkhheActionButton, spec)
+    ),
 )
 
 
 async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
 
-    if DAIKIN_RESTORE_DEFAULT_SETTINGS in config:
-        conf = config[DAIKIN_RESTORE_DEFAULT_SETTINGS]
+    for spec in BUTTON_SPECS:
+        if spec.key not in config:
+            continue
+        conf = config[spec.key]
+        action = BUTTON_ACTIONS[spec.key]
         var = cg.new_Pvariable(
             conf[CONF_ID],
-            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::RESTORE_DEFAULT_SETTINGS"),
-        )
-        await button.register_button(var, conf)
-        cg.add(var.set_parent(hub))
-
-    if DAIKIN_SAVE_KNOWN_GOOD_PROFILE in config:
-        conf = config[DAIKIN_SAVE_KNOWN_GOOD_PROFILE]
-        var = cg.new_Pvariable(
-            conf[CONF_ID],
-            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::SAVE_KNOWN_GOOD_PROFILE"),
-        )
-        await button.register_button(var, conf)
-        cg.add(var.set_parent(hub))
-
-    if DAIKIN_RESTORE_KNOWN_GOOD_PROFILE in config:
-        conf = config[DAIKIN_RESTORE_KNOWN_GOOD_PROFILE]
-        var = cg.new_Pvariable(
-            conf[CONF_ID],
-            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::RESTORE_KNOWN_GOOD_PROFILE"),
-        )
-        await button.register_button(var, conf)
-        cg.add(var.set_parent(hub))
-
-    if DAIKIN_RESTORE_AUTO_SNAPSHOT in config:
-        conf = config[DAIKIN_RESTORE_AUTO_SNAPSHOT]
-        var = cg.new_Pvariable(
-            conf[CONF_ID],
-            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::RESTORE_AUTO_SNAPSHOT"),
-        )
-        await button.register_button(var, conf)
-        cg.add(var.set_parent(hub))
-
-    if DAIKIN_APPLY_TIME_BAND in config:
-        conf = config[DAIKIN_APPLY_TIME_BAND]
-        var = cg.new_Pvariable(
-            conf[CONF_ID],
-            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::APPLY_TIME_BAND"),
-        )
-        await button.register_button(var, conf)
-        cg.add(var.set_parent(hub))
-
-    if DAIKIN_CLEAR_TIME_BAND in config:
-        conf = config[DAIKIN_CLEAR_TIME_BAND]
-        var = cg.new_Pvariable(
-            conf[CONF_ID],
-            cg.RawExpression("esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::CLEAR_TIME_BAND"),
+            cg.RawExpression(
+                f"esphome::daikin_ekkhe::DaikinEkhheActionButton::Action::{action}"
+            ),
         )
         await button.register_button(var, conf)
         cg.add(var.set_parent(hub))

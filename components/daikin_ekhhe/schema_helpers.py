@@ -100,6 +100,10 @@ def platform_schema(hub_conf_key: str, hub_cls: Any, entries: Mapping[Any, Any])
     )
 
 
+def optional_schema_entries(specs: list[Any], schema_factory: Any) -> dict[Any, Any]:
+    return {cv.Optional(spec.key): schema_factory(spec) for spec in specs}
+
+
 def number_schema(entity_cls: Any, spec: NumberSchemaSpec) -> cv.Schema:
     schema_kwargs = {}
     if spec.entity_category is not None:
