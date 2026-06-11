@@ -587,6 +587,13 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool time_band_tx_active_() const;
   TimeBandTxPayload &time_band_tx_();
   const TimeBandTxPayload &time_band_tx_() const;
+  bool single_field_tx_busy_() const;
+  bool restore_tx_busy_() const;
+  bool profile_restore_tx_busy_() const;
+  bool time_band_tx_sending_() const;
+  bool time_band_tx_busy_() const;
+  bool any_write_busy_() const;
+  bool any_tx_or_ui_sync_active_() const;
   void clear_tx_wait_markers_();
   void reset_tx_operation_();
   void reset_tx_lifecycle_(TxOperationKind kind, bool clear_ui_sync);

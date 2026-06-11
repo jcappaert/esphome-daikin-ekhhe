@@ -812,9 +812,7 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
       packet_type == tx_packet_family_spec_(single_field_tx_().family).readback_packet_type) {
     check_pending_tx_(packet);
   }
-  if (packet_type == D2_PACKET_START_BYTE &&
-      (single_field_tx_active_() || restore_tx_active_() || profile_restore_tx_active_() ||
-       time_band_tx_active_())) {
+  if (packet_type == D2_PACKET_START_BYTE && tx_operation_active_()) {
     size_t d2_index = 0;
     const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
     if (d2_entry != nullptr) {
@@ -1373,6 +1371,36 @@ const DaikinEkhheComponent::TimeBandTxPayload &DaikinEkhheComponent::time_band_t
   return tx_operation_.time_band;
 }
 
+bool DaikinEkhheComponent::single_field_tx_busy_() const {
+  return single_field_tx_active_() || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active;
+}
+
+bool DaikinEkhheComponent::restore_tx_busy_() const {
+  return restore_tx_active_() || restore_ui_sync_.active;
+}
+
+bool DaikinEkhheComponent::profile_restore_tx_busy_() const {
+  return profile_restore_tx_active_() || profile_ui_sync_.active;
+}
+
+bool DaikinEkhheComponent::time_band_tx_sending_() const {
+  return time_band_tx_active_() || queued_time_band_tx_.active || queued_time_band_tx_.scheduled;
+}
+
+bool DaikinEkhheComponent::time_band_tx_busy_() const {
+  return time_band_tx_sending_() || time_band_ui_sync_.active;
+}
+
+bool DaikinEkhheComponent::any_write_busy_() const {
+  return single_field_tx_busy_() || restore_tx_busy_() || profile_restore_tx_busy_() ||
+         time_band_tx_busy_();
+}
+
+bool DaikinEkhheComponent::any_tx_or_ui_sync_active_() const {
+  return tx_operation_active_() || tx_ui_sync_.active || restore_ui_sync_.active ||
+         profile_ui_sync_.active || time_band_ui_sync_.active;
+}
+
 void DaikinEkhheComponent::clear_tx_wait_markers_() {
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
@@ -1539,11 +1567,7 @@ void DaikinEkhheComponent::flush_deferred_user_tx_() {
   if (deferred_user_txs_.empty()) {
     return;
   }
-  if (single_field_tx_active_() || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active ||
-      restore_tx_active_() || restore_ui_sync_.active ||
-      profile_restore_tx_active_() || profile_ui_sync_.active ||
-      time_band_tx_active_() || queued_time_band_tx_.active ||
-      queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
+  if (any_write_busy_()) {
     return;
   }
 
@@ -2104,14 +2128,12 @@ void DaikinEkhheComponent::restore_profile_(bool known_good) {
                 known_good ? "Known-good profile" : "Auto snapshot");
     return;
   }
-  if (profile_restore_tx_active_() || profile_ui_sync_.active) {
+  if (profile_restore_tx_busy_()) {
     DAIKIN_WARN(TAG, "%s restore already in progress.",
                 known_good ? "Known-good profile" : "Auto snapshot");
     return;
   }
-  if (restore_tx_active_() || restore_ui_sync_.active || single_field_tx_active_() || tx_ui_sync_.active ||
-      time_band_tx_active_() || queued_time_band_tx_.active ||
-      queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
+  if (restore_tx_busy_() || single_field_tx_busy_() || time_band_tx_busy_()) {
     DAIKIN_WARN(TAG, "%s restore blocked: another write is currently active.",
                 known_good ? "Known-good profile" : "Auto snapshot");
     return;
@@ -2231,11 +2253,7 @@ void DaikinEkhheComponent::process_packet_set() {
   // Reset UART cycle
   processing_updates_ = false;
   last_process_time_ = millis();
-  if (single_field_tx_active_() || restore_tx_active_() || profile_restore_tx_active_() ||
-      time_band_tx_active_() ||
-      tx_ui_sync_.active || restore_ui_sync_.active || profile_ui_sync_.active ||
-      time_band_ui_sync_.active ||
-      continuous_rx_) {
+  if (any_tx_or_ui_sync_active_() || continuous_rx_) {
     start_uart_cycle();
   } else {
     uart_active_ = false;
@@ -3249,12 +3267,12 @@ void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hou
   }
   DAIKIN_DBG(TAG, "Time-band command validated: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
              flag, start_hour, start_minute, end_hour, end_minute, mode);
-  if (time_band_tx_active_() || queued_time_band_tx_.active || queued_time_band_tx_.scheduled) {
+  if (time_band_tx_sending_()) {
     DAIKIN_WARN(TAG, "Time-band command already in progress.");
     return;
   }
-  if (single_field_tx_active_() || tx_ui_sync_.active || restore_tx_active_() || restore_ui_sync_.active ||
-      profile_restore_tx_active_() || profile_ui_sync_.active || time_band_ui_sync_.active) {
+  if (single_field_tx_busy_() || restore_tx_busy_() || profile_restore_tx_busy_() ||
+      time_band_ui_sync_.active) {
     DAIKIN_WARN(TAG, "Time-band command blocked: another write is currently active.");
     return;
   }
@@ -3310,17 +3328,15 @@ void DaikinEkhheComponent::restore_default_settings() {
     DAIKIN_WARN(TAG, "Restore defaults requested before any C1 packet was captured.");
     return;
   }
-  if (profile_restore_tx_active_() || profile_ui_sync_.active) {
+  if (profile_restore_tx_busy_()) {
     DAIKIN_WARN(TAG, "Restore defaults blocked: a profile restore is currently active.");
     return;
   }
-  if (restore_tx_active_() || restore_ui_sync_.active) {
+  if (restore_tx_busy_()) {
     DAIKIN_WARN(TAG, "Restore defaults already in progress.");
     return;
   }
-  if (single_field_tx_active_() || tx_ui_sync_.active ||
-      time_band_tx_active_() || queued_time_band_tx_.active ||
-      queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
+  if (single_field_tx_busy_() || time_band_tx_busy_()) {
     DAIKIN_WARN(TAG, "Restore defaults blocked: another write is currently active.");
     return;
   }
@@ -4432,19 +4448,18 @@ bool DaikinEkhheComponent::send_uart_command_(TxPacketFamily family, uint8_t ind
                     packet_type_to_string_(spec.base_packet_type).c_str());
         return false;
     }
-    if (restore_tx_active_() || restore_ui_sync_.active) {
+    if (restore_tx_busy_()) {
         DAIKIN_WARN(TAG, "Restore defaults in progress, ignoring single-parameter write.");
         return false;
     }
-    if (profile_restore_tx_active_() || profile_ui_sync_.active) {
+    if (profile_restore_tx_busy_()) {
         DAIKIN_WARN(TAG, "Profile restore in progress, ignoring single-parameter write.");
         return false;
     }
-    if (time_band_tx_active_() || queued_time_band_tx_.active ||
-        queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
+    if (time_band_tx_busy_()) {
         return defer_single_field_tx_(family, index, value, bit_position, bit_width);
     }
-    if (single_field_tx_active_() || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active) {
+    if (single_field_tx_busy_()) {
         return defer_single_field_tx_(family, index, value, bit_position, bit_width);
     }
 
