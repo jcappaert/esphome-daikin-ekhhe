@@ -505,6 +505,21 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t bit_position = kBitPositionNoBitmask;
     uint8_t bit_width = 1;
   };
+  struct RestoreTxPayload {
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    bool main_applied = false;
+    bool extended_applied = false;
+    bool main_write_sent = false;
+    bool extended_write_sent = false;
+  };
+  struct ProfileRestoreTxPayload {
+    bool known_good = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    bool main_applied = false;
+    bool extended_applied = false;
+    bool main_write_sent = false;
+    bool extended_write_sent = false;
+  };
   const TxPacketFamilySpec &tx_packet_family_spec_(TxPacketFamily family) const;
   void send_prebuilt_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &command, TxPacketKind kind,
                                 uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width,
@@ -555,6 +570,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool single_field_tx_active_() const;
   const SingleFieldTxPayload &single_field_tx_() const;
   bool single_field_tx_matches_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
+  bool restore_tx_active_() const;
+  RestoreTxPayload &restore_tx_();
+  const RestoreTxPayload &restore_tx_() const;
+  bool profile_restore_tx_active_() const;
+  ProfileRestoreTxPayload &profile_restore_tx_();
+  const ProfileRestoreTxPayload &profile_restore_tx_() const;
   void clear_tx_wait_markers_();
   void reset_tx_operation_();
   void reset_tx_lifecycle_(TxOperationKind kind, bool clear_ui_sync);
@@ -650,33 +671,12 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   struct TxOperationState {
     TxOperationKind kind = TxOperationKind::NONE;
     SingleFieldTxPayload single_field;
+    RestoreTxPayload restore;
+    ProfileRestoreTxPayload profile_restore;
     uint8_t attempts_sent = 0;
     uint32_t last_attempt_d2_seq = 0;
   };
   TxOperationState tx_operation_;
-  struct PendingRestore {
-    bool active = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    bool main_applied = false;
-    bool extended_applied = false;
-    bool main_write_sent = false;
-    bool extended_write_sent = false;
-    uint8_t attempts_sent = 0;
-    uint32_t last_attempt_d2_seq = 0;
-  };
-  PendingRestore pending_restore_;
-  struct PendingProfileRestore {
-    bool active = false;
-    bool known_good = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    bool main_applied = false;
-    bool extended_applied = false;
-    bool main_write_sent = false;
-    bool extended_write_sent = false;
-    uint8_t attempts_sent = 0;
-    uint32_t last_attempt_d2_seq = 0;
-  };
-  PendingProfileRestore pending_profile_restore_;
   struct PendingTimeBandTx {
     bool active = false;
     uint8_t flag = 0;
