@@ -1,6 +1,6 @@
 # Development
 
-This page documents the repository workflow for component development, validation, and protocol work.
+This page documents the repository workflow for component development and validation.
 
 ## Repository Layout
 
@@ -24,6 +24,7 @@ The GitHub Actions workflow validates and compiles two fixture configurations:
 Useful local commands:
 
 ```bash
+python3 scripts/check_component_metadata.py
 esphome config .github/fixtures/minimal/ci.yaml
 esphome compile .github/fixtures/minimal/ci.yaml
 esphome config .github/fixtures/production/ci.yaml
@@ -32,17 +33,37 @@ esphome compile .github/fixtures/production/ci.yaml
 
 Run at least the relevant fixture when changing optional entities, schema, packet write logic, receive-cycle behavior, or recovery/profile features.
 
-## Protocol Work
+`scripts/check_component_metadata.py` is intentionally dependency-light. It can run before ESPHome is installed and checks mirrored Python/C++ constants, schema table references, number ranges, select options, and representative production fixture coverage.
 
-Protocol notes live in [protocol](protocol.md). Keep that file focused on durable findings, confidence levels, packet families, and implementation implications.
+## Adding Entities And Parameters
 
-When adding newly decoded fields:
+Most user-facing entities are defined in small Python spec tables under `components/daikin_ekhhe/`.
 
-- Update Python entity definitions and C++ packet mappings together.
-- Add or update CI fixture coverage for optional entity compilation.
-- Update `docs/configuration.md` if the user-facing entity set changes.
-- Update `docs/protocol.md` if the finding changes packet-family understanding.
+- Add sensors in `sensor.py` with `SensorSchemaSpec`.
+- Add binary sensors in `binary_sensor.py` with `BinarySensorSchemaSpec`.
+- Add text sensors in `text_sensor.py` with `TextSensorSchemaSpec`.
+- Add buttons in `button.py` with `ButtonSchemaSpec` and a matching action enum mapping.
+- Add switches in `switch.py` with `SwitchSchemaSpec`.
+- Add numbers in `number.py` with `NumberSchemaSpec`, including min/max/step and units.
+- Add selects in `select.py` with `SelectSchemaSpec`, using stable integer values and unique labels.
+
+For any key that is also used by C++, add the same string constant to both `const.py` and `daikin_ekhhe_const.h`. If Python wires a key through a dedicated setter or enum action and C++ does not need the string key, add it to the explicit allowlist in `scripts/check_component_metadata.py`.
+
+Runtime packet mapping lives in C++ descriptors and helper tables:
+
+- Use number/select field descriptors in `daikin_ekhhe.h` for single-parameter writes.
+- Use restore/profile field descriptors in `daikin_ekhhe.cpp` for bulk restore and profile operations.
+- Keep packet offsets, bit positions, bit widths, signedness, defaults, and readback locations easy to audit.
+- Avoid combining unrelated concepts into one broad table; schema metadata and runtime packet metadata serve different jobs.
+
+When adding or changing an entity:
+
+1. Update the Python schema table.
+2. Update C++ constants and runtime descriptors if the value is read, written, restored, or published by C++.
+3. Add representative coverage to `.github/fixtures/production/ci.yaml`.
+4. Update `docs/configuration.md` if users can configure or observe the new entity.
+5. Run `python3 scripts/check_component_metadata.py` plus the relevant ESPHome config/compile checks.
 
 ## CI Notes
 
-The workflow caches Python dependencies and PlatformIO packages to keep ESPHome compilation reasonably fast. The minimal fixture is especially important because it catches accidental hard dependencies on optional entities.
+The workflow caches Python dependencies and PlatformIO packages to keep ESPHome compilation reasonably fast. The metadata validator runs before installing ESPHome so simple table mistakes fail quickly. The minimal fixture is especially important because it catches accidental hard dependencies on optional entities.
