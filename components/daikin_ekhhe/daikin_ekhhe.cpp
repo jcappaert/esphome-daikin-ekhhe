@@ -805,7 +805,7 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
       packet_type == tx_packet_family_spec_(profile_restore_tx_().family).readback_packet_type) {
     check_pending_profile_restore_(packet);
   }
-  if (packet_type == D2_PACKET_START_BYTE && pending_time_band_tx_.active) {
+  if (packet_type == D2_PACKET_START_BYTE && time_band_tx_active_()) {
     check_pending_time_band_(packet);
   }
   if (single_field_tx_active_() &&
@@ -814,7 +814,7 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
   }
   if (packet_type == D2_PACKET_START_BYTE &&
       (single_field_tx_active_() || restore_tx_active_() || profile_restore_tx_active_() ||
-       pending_time_band_tx_.active)) {
+       time_band_tx_active_())) {
     size_t d2_index = 0;
     const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
     if (d2_entry != nullptr) {
@@ -822,7 +822,7 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
         schedule_queued_restore_from_d2_(*d2_entry);
       } else if (profile_restore_tx_active_()) {
         schedule_queued_profile_restore_from_d2_(*d2_entry);
-      } else if (pending_time_band_tx_.active) {
+      } else if (time_band_tx_active_()) {
         schedule_queued_time_band_from_d2_(*d2_entry);
       } else if (single_field_tx_active_()) {
         schedule_queued_tx_from_d2_(*d2_entry);
@@ -1273,7 +1273,7 @@ DaikinEkhheComponent::TxOperationKind DaikinEkhheComponent::active_tx_operation_
   if (profile_restore_tx_active_()) {
     return TxOperationKind::PROFILE_RESTORE;
   }
-  if (pending_time_band_tx_.active) {
+  if (time_band_tx_active_()) {
     return TxOperationKind::TIME_BAND;
   }
   return TxOperationKind::NONE;
@@ -1361,6 +1361,18 @@ const DaikinEkhheComponent::ProfileRestoreTxPayload &DaikinEkhheComponent::profi
   return tx_operation_.profile_restore;
 }
 
+bool DaikinEkhheComponent::time_band_tx_active_() const {
+  return tx_operation_.kind == TxOperationKind::TIME_BAND;
+}
+
+DaikinEkhheComponent::TimeBandTxPayload &DaikinEkhheComponent::time_band_tx_() {
+  return tx_operation_.time_band;
+}
+
+const DaikinEkhheComponent::TimeBandTxPayload &DaikinEkhheComponent::time_band_tx_() const {
+  return tx_operation_.time_band;
+}
+
 void DaikinEkhheComponent::clear_tx_wait_markers_() {
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
@@ -1371,6 +1383,7 @@ void DaikinEkhheComponent::reset_tx_operation_() {
   tx_operation_.single_field = SingleFieldTxPayload{};
   tx_operation_.restore = RestoreTxPayload{};
   tx_operation_.profile_restore = ProfileRestoreTxPayload{};
+  tx_operation_.time_band = TimeBandTxPayload{};
   tx_operation_.attempts_sent = 0;
   tx_operation_.last_attempt_d2_seq = 0;
 }
@@ -1462,10 +1475,7 @@ void DaikinEkhheComponent::reset_queued_profile_restore_() {
 }
 
 void DaikinEkhheComponent::reset_pending_time_band_() {
-  pending_time_band_tx_.active = false;
-  pending_time_band_tx_.flag = 0;
-  pending_time_band_tx_.attempts_sent = 0;
-  pending_time_band_tx_.last_attempt_d2_seq = 0;
+  reset_tx_operation_();
 }
 
 void DaikinEkhheComponent::reset_queued_time_band_() {
@@ -1532,7 +1542,7 @@ void DaikinEkhheComponent::flush_deferred_user_tx_() {
   if (single_field_tx_active_() || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active ||
       restore_tx_active_() || restore_ui_sync_.active ||
       profile_restore_tx_active_() || profile_ui_sync_.active ||
-      pending_time_band_tx_.active || queued_time_band_tx_.active ||
+      time_band_tx_active_() || queued_time_band_tx_.active ||
       queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
     return;
   }
@@ -1616,7 +1626,7 @@ bool DaikinEkhheComponent::schedule_tx_after_d2_(TxOperationKind kind, const Raw
       break;
     }
     case TxOperationKind::TIME_BAND: {
-      if (!pending_time_band_tx_.active || queued_time_band_tx_.scheduled) {
+      if (!time_band_tx_active_() || queued_time_band_tx_.scheduled) {
         return false;
       }
       generation = queued_time_band_tx_.generation;
@@ -1790,12 +1800,12 @@ void DaikinEkhheComponent::run_tx_after_d2_(TxOperationKind kind, uint32_t gener
         base_packet = latest_cc->second;
       }
 
-      pending_time_band_tx_.attempts_sent++;
-      pending_time_band_tx_.last_attempt_d2_seq = anchor_seq;
+      tx_operation_.attempts_sent++;
+      tx_operation_.last_attempt_d2_seq = anchor_seq;
 
       DAIKIN_DBG(TAG,
                  "Time-band scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
-                 anchor_seq, millis() - anchor_ms, pending_time_band_tx_.attempts_sent, kTxMaxRepeats,
+                 anchor_seq, millis() - anchor_ms, tx_operation_.attempts_sent, kTxMaxRepeats,
                  latest_cc != latest_packets_.end());
       send_time_band_packet_(base_packet);
       return;
@@ -2100,7 +2110,7 @@ void DaikinEkhheComponent::restore_profile_(bool known_good) {
     return;
   }
   if (restore_tx_active_() || restore_ui_sync_.active || single_field_tx_active_() || tx_ui_sync_.active ||
-      pending_time_band_tx_.active || queued_time_band_tx_.active ||
+      time_band_tx_active_() || queued_time_band_tx_.active ||
       queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
     DAIKIN_WARN(TAG, "%s restore blocked: another write is currently active.",
                 known_good ? "Known-good profile" : "Auto snapshot");
@@ -2222,7 +2232,7 @@ void DaikinEkhheComponent::process_packet_set() {
   processing_updates_ = false;
   last_process_time_ = millis();
   if (single_field_tx_active_() || restore_tx_active_() || profile_restore_tx_active_() ||
-      pending_time_band_tx_.active ||
+      time_band_tx_active_() ||
       tx_ui_sync_.active || restore_ui_sync_.active || profile_ui_sync_.active ||
       time_band_ui_sync_.active ||
       continuous_rx_) {
@@ -3239,7 +3249,7 @@ void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hou
   }
   DAIKIN_DBG(TAG, "Time-band command validated: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
              flag, start_hour, start_minute, end_hour, end_minute, mode);
-  if (pending_time_band_tx_.active || queued_time_band_tx_.active || queued_time_band_tx_.scheduled) {
+  if (time_band_tx_active_() || queued_time_band_tx_.active || queued_time_band_tx_.scheduled) {
     DAIKIN_WARN(TAG, "Time-band command already in progress.");
     return;
   }
@@ -3250,15 +3260,15 @@ void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hou
   }
 
   tx_request_ms_ = millis();
-  pending_time_band_tx_.active = true;
-  pending_time_band_tx_.flag = flag;
-  pending_time_band_tx_.start_hour = start_hour;
-  pending_time_band_tx_.start_minute = start_minute;
-  pending_time_band_tx_.end_hour = end_hour;
-  pending_time_band_tx_.end_minute = end_minute;
-  pending_time_band_tx_.mode = mode;
-  pending_time_band_tx_.attempts_sent = 0;
-  pending_time_band_tx_.last_attempt_d2_seq = 0;
+  reset_tx_operation_();
+  tx_operation_.kind = TxOperationKind::TIME_BAND;
+  auto &target = time_band_tx_();
+  target.flag = flag;
+  target.start_hour = start_hour;
+  target.start_minute = start_minute;
+  target.end_hour = end_hour;
+  target.end_minute = end_minute;
+  target.mode = mode;
   time_band_ui_sync_.active = false;
   time_band_ui_sync_.cycles_waited = 0;
 
@@ -3309,7 +3319,7 @@ void DaikinEkhheComponent::restore_default_settings() {
     return;
   }
   if (single_field_tx_active_() || tx_ui_sync_.active ||
-      pending_time_band_tx_.active || queued_time_band_tx_.active ||
+      time_band_tx_active_() || queued_time_band_tx_.active ||
       queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
     DAIKIN_WARN(TAG, "Restore defaults blocked: another write is currently active.");
     return;
@@ -3606,10 +3616,9 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(TxPacketFamily family, const
     DAIKIN_DBG(TAG, "TX timing: restore_request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
   } else if (kind == TxPacketKind::TIME_BAND) {
+    const auto &target = time_band_tx_();
     ESP_LOGI(TAG, "TX time band sent: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u attempt=%u/%u len=%u",
-             pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
-             pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
-             pending_time_band_tx_.end_minute, pending_time_band_tx_.mode,
+             target.flag, target.start_hour, target.start_minute, target.end_hour, target.end_minute, target.mode,
              attempts_sent, kTxMaxRepeats, static_cast<unsigned>(command.size()));
     DAIKIN_DBG(TAG, "TX timing: time_band_request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
@@ -3894,9 +3903,10 @@ void DaikinEkhheComponent::send_profile_restore_packet_(TxPacketFamily family,
 }
 
 void DaikinEkhheComponent::send_time_band_packet_(const std::vector<uint8_t> &base_packet) {
-  if (!pending_time_band_tx_.active) {
+  if (!time_band_tx_active_()) {
     return;
   }
+  const auto &target = time_band_tx_();
   if (base_packet.empty()) {
     DAIKIN_WARN(TAG, "Time-band TX blocked: base CC packet empty.");
     reset_tx_lifecycle_(TxOperationKind::TIME_BAND, false);
@@ -3911,12 +3921,12 @@ void DaikinEkhheComponent::send_time_band_packet_(const std::vector<uint8_t> &ba
 
   std::vector<uint8_t> command = base_packet;
   command[0] = CD_PACKET_START_BYTE;
-  command[CC_PACKET_TIME_BAND_FLAG_IDX] = pending_time_band_tx_.flag;
-  command[CC_PACKET_TIME_BAND_START_HOUR_IDX] = pending_time_band_tx_.start_hour;
-  command[CC_PACKET_TIME_BAND_START_MINUTE_IDX] = pending_time_band_tx_.start_minute;
-  command[CC_PACKET_TIME_BAND_END_HOUR_IDX] = pending_time_band_tx_.end_hour;
-  command[CC_PACKET_TIME_BAND_END_MINUTE_IDX] = pending_time_band_tx_.end_minute;
-  command[CC_PACKET_TIME_BAND_MODE_IDX] = pending_time_band_tx_.mode;
+  command[CC_PACKET_TIME_BAND_FLAG_IDX] = target.flag;
+  command[CC_PACKET_TIME_BAND_START_HOUR_IDX] = target.start_hour;
+  command[CC_PACKET_TIME_BAND_START_MINUTE_IDX] = target.start_minute;
+  command[CC_PACKET_TIME_BAND_END_HOUR_IDX] = target.end_hour;
+  command[CC_PACKET_TIME_BAND_END_MINUTE_IDX] = target.end_minute;
+  command[CC_PACKET_TIME_BAND_MODE_IDX] = target.mode;
   command.back() = ekhhe_checksum(command);
 
   std::string validation_error;
@@ -3932,7 +3942,7 @@ void DaikinEkhheComponent::send_time_band_packet_(const std::vector<uint8_t> &ba
   }
 
   send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::TIME_BAND, 0, 0,
-                           BIT_POSITION_NO_BITMASK, 0, pending_time_band_tx_.attempts_sent);
+                           BIT_POSITION_NO_BITMASK, 0, tx_operation_.attempts_sent);
 }
 
 void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer) {
@@ -4306,9 +4316,10 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
 }
 
 void DaikinEkhheComponent::check_pending_time_band_(const std::vector<uint8_t> &buffer) {
-  if (!pending_time_band_tx_.active) {
+  if (!time_band_tx_active_()) {
     return;
   }
+  const auto &target = time_band_tx_();
   if (buffer.size() <= D2_PACKET_TIME_BAND_MODE_IDX) {
     DAIKIN_WARN(TAG, "Time-band readback packet too short: len=%u", static_cast<unsigned>(buffer.size()));
     clear_tx_wait_markers_();
@@ -4323,12 +4334,12 @@ void DaikinEkhheComponent::check_pending_time_band_(const std::vector<uint8_t> &
     uint8_t expected;
   };
   const FieldCheck fields[] = {
-      {"flag", D2_PACKET_TIME_BAND_FLAG_IDX, pending_time_band_tx_.flag},
-      {"start_hour", D2_PACKET_TIME_BAND_START_HOUR_IDX, pending_time_band_tx_.start_hour},
-      {"start_minute", D2_PACKET_TIME_BAND_START_MINUTE_IDX, pending_time_band_tx_.start_minute},
-      {"end_hour", D2_PACKET_TIME_BAND_END_HOUR_IDX, pending_time_band_tx_.end_hour},
-      {"end_minute", D2_PACKET_TIME_BAND_END_MINUTE_IDX, pending_time_band_tx_.end_minute},
-      {"mode", D2_PACKET_TIME_BAND_MODE_IDX, pending_time_band_tx_.mode},
+      {"flag", D2_PACKET_TIME_BAND_FLAG_IDX, target.flag},
+      {"start_hour", D2_PACKET_TIME_BAND_START_HOUR_IDX, target.start_hour},
+      {"start_minute", D2_PACKET_TIME_BAND_START_MINUTE_IDX, target.start_minute},
+      {"end_hour", D2_PACKET_TIME_BAND_END_HOUR_IDX, target.end_hour},
+      {"end_minute", D2_PACKET_TIME_BAND_END_MINUTE_IDX, target.end_minute},
+      {"mode", D2_PACKET_TIME_BAND_MODE_IDX, target.mode},
   };
 
   const FieldCheck *first_mismatch = nullptr;
@@ -4340,38 +4351,34 @@ void DaikinEkhheComponent::check_pending_time_band_(const std::vector<uint8_t> &
   }
 
   if (first_mismatch == nullptr) {
-    if (pending_time_band_tx_.attempts_sent == 0) {
+    if (tx_operation_.attempts_sent == 0) {
       DAIKIN_DBG(TAG, "Time-band already current: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
-                 pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
-                 pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
-                 pending_time_band_tx_.end_minute, pending_time_band_tx_.mode);
-    } else if (pending_time_band_tx_.attempts_sent > 1) {
+                 target.flag, target.start_hour, target.start_minute, target.end_hour, target.end_minute,
+                 target.mode);
+    } else if (tx_operation_.attempts_sent > 1) {
       DAIKIN_WARN(TAG,
                   "Time-band applied after retries: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u attempts=%u",
-                  pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
-                  pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
-                  pending_time_band_tx_.end_minute, pending_time_band_tx_.mode,
-                  pending_time_band_tx_.attempts_sent);
+                  target.flag, target.start_hour, target.start_minute, target.end_hour, target.end_minute,
+                  target.mode, tx_operation_.attempts_sent);
       DAIKIN_DBG(TAG, "TX timing: time_band_applied_after=%u attempts=%u",
-                 millis() - tx_sent_ms_, pending_time_band_tx_.attempts_sent);
+                 millis() - tx_sent_ms_, tx_operation_.attempts_sent);
     } else {
       ESP_LOGI(TAG, "Time-band applied: flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u",
-               pending_time_band_tx_.flag, pending_time_band_tx_.start_hour,
-               pending_time_band_tx_.start_minute, pending_time_band_tx_.end_hour,
-               pending_time_band_tx_.end_minute, pending_time_band_tx_.mode);
+               target.flag, target.start_hour, target.start_minute, target.end_hour, target.end_minute,
+               target.mode);
       DAIKIN_DBG(TAG, "TX timing: time_band_applied_after=%u attempts=%u",
-                 millis() - tx_sent_ms_, pending_time_band_tx_.attempts_sent);
+                 millis() - tx_sent_ms_, tx_operation_.attempts_sent);
     }
 
     update_time_band_state_from_bus_(buffer, true, true);
-    if (pending_time_band_tx_.attempts_sent > 0) {
+    if (tx_operation_.attempts_sent > 0) {
       time_band_ui_sync_.active = true;
-      time_band_ui_sync_.flag = pending_time_band_tx_.flag;
-      time_band_ui_sync_.start_hour = pending_time_band_tx_.start_hour;
-      time_band_ui_sync_.start_minute = pending_time_band_tx_.start_minute;
-      time_band_ui_sync_.end_hour = pending_time_band_tx_.end_hour;
-      time_band_ui_sync_.end_minute = pending_time_band_tx_.end_minute;
-      time_band_ui_sync_.mode = pending_time_band_tx_.mode;
+      time_band_ui_sync_.flag = target.flag;
+      time_band_ui_sync_.start_hour = target.start_hour;
+      time_band_ui_sync_.start_minute = target.start_minute;
+      time_band_ui_sync_.end_hour = target.end_hour;
+      time_band_ui_sync_.end_minute = target.end_minute;
+      time_band_ui_sync_.mode = target.mode;
       time_band_ui_sync_.cycles_waited = 0;
     }
     clear_tx_wait_markers_();
@@ -4380,24 +4387,24 @@ void DaikinEkhheComponent::check_pending_time_band_(const std::vector<uint8_t> &
     return;
   }
 
-  if (pending_time_band_tx_.attempts_sent == 0) {
+  if (tx_operation_.attempts_sent == 0) {
     return;
   }
 
-  if (pending_time_band_tx_.attempts_sent < kTxMaxRepeats) {
+  if (tx_operation_.attempts_sent < kTxMaxRepeats) {
     DAIKIN_DBG(TAG,
                "Time-band retry pending: first_mismatch=%s expected=0x%02X current=0x%02X attempt=%u/%u",
                first_mismatch->name, first_mismatch->expected, buffer[first_mismatch->index],
-               pending_time_band_tx_.attempts_sent, kTxMaxRepeats);
+               tx_operation_.attempts_sent, kTxMaxRepeats);
     return;
   }
 
   DAIKIN_WARN(TAG,
               "Time-band not applied: first_mismatch=%s expected=0x%02X current=0x%02X attempts=%u",
               first_mismatch->name, first_mismatch->expected, buffer[first_mismatch->index],
-              pending_time_band_tx_.attempts_sent);
+              tx_operation_.attempts_sent);
   DAIKIN_DBG(TAG, "TX timing: time_band_failed_after=%u attempts=%u",
-             millis() - tx_sent_ms_, pending_time_band_tx_.attempts_sent);
+             millis() - tx_sent_ms_, tx_operation_.attempts_sent);
 
   update_time_band_state_from_bus_(buffer, true, true);
   clear_tx_wait_markers_();
@@ -4433,7 +4440,7 @@ bool DaikinEkhheComponent::send_uart_command_(TxPacketFamily family, uint8_t ind
         DAIKIN_WARN(TAG, "Profile restore in progress, ignoring single-parameter write.");
         return false;
     }
-    if (pending_time_band_tx_.active || queued_time_band_tx_.active ||
+    if (time_band_tx_active_() || queued_time_band_tx_.active ||
         queued_time_band_tx_.scheduled || time_band_ui_sync_.active) {
         return defer_single_field_tx_(family, index, value, bit_position, bit_width);
     }
