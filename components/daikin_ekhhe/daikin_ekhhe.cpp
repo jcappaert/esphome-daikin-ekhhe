@@ -27,6 +27,28 @@ static const uint8_t CC_PACKET_START_BYTE = 0xCC;
 static const uint8_t CD_PACKET_START_BYTE = 0xCD;
 static const uint8_t SILENT_MODE_BIT_POSITION = 6;
 
+static bool field_is_extended(WritablePacketFamily family) {
+  return family == WritablePacketFamily::EXTENDED;
+}
+
+static float decode_number_field_value(uint8_t value, const NumberFieldSpec &field) {
+  if (field.encoding == NumberFieldEncoding::INT8) {
+    return static_cast<int8_t>(value);
+  }
+  return value;
+}
+
+static float decode_number_field(const std::vector<uint8_t> &buffer, const NumberFieldSpec &field) {
+  return decode_number_field_value(buffer[field.index], field);
+}
+
+static uint8_t encode_number_field(float value, const NumberFieldSpec &field) {
+  if (field.encoding == NumberFieldEncoding::INT8) {
+    return static_cast<uint8_t>(static_cast<int8_t>(value));
+  }
+  return static_cast<uint8_t>(value);
+}
+
 
 // Packet definitions
 static const std::map<uint8_t, uint8_t> PACKET_SIZES = {
@@ -39,15 +61,26 @@ static const std::map<uint8_t, uint8_t> PACKET_SIZES = {
     {CD_PACKET_START_BYTE, DaikinEkhheComponent::CD_PACKET_SIZE},
 };
 
+struct PacketFieldRef {
+  uint8_t index;
+  uint8_t bit_position;
+  uint8_t bit_width;
+};
+
 struct RestoreFieldSpec {
   const char *name;
-  uint8_t cc_index;
-  uint8_t cc_bit_position;
-  uint8_t cc_bit_width;
-  uint8_t d2_index;
-  uint8_t d2_bit_position;
-  uint8_t d2_bit_width;
+  PacketFieldRef write;
+  PacketFieldRef readback;
   uint8_t value;
+
+  constexpr RestoreFieldSpec(const char *name, uint8_t write_index, uint8_t write_bit_position,
+                             uint8_t write_bit_width, uint8_t readback_index,
+                             uint8_t readback_bit_position, uint8_t readback_bit_width,
+                             uint8_t value)
+      : name(name),
+        write{write_index, write_bit_position, write_bit_width},
+        readback{readback_index, readback_bit_position, readback_bit_width},
+        value(value) {}
 };
 
 constexpr uint8_t encode_i8(int value) {
@@ -58,6 +91,9 @@ uint8_t extract_field_value(const std::vector<uint8_t> &data, uint8_t index,
                             uint8_t bit_position, uint8_t bit_width);
 void apply_field_value(std::vector<uint8_t> &packet, uint8_t index, uint8_t bit_position,
                        uint8_t bit_width, uint8_t value);
+uint8_t extract_field_value(const uint8_t *data, size_t size, const PacketFieldRef &field);
+uint8_t extract_field_value(const std::vector<uint8_t> &data, const PacketFieldRef &field);
+void apply_field_value(std::vector<uint8_t> &packet, const PacketFieldRef &field, uint8_t value);
 uint8_t field_value_mask(uint8_t index, uint8_t bit_position, uint8_t bit_width);
 
 static const RestoreFieldSpec RESTORE_DEFAULT_FIELDS[] = {
@@ -236,17 +272,15 @@ const RestoreFieldSpec *restore_default_fields(bool extended, size_t &count) {
 
 bool restore_scope_field_matches(const RestoreFieldSpec &field, const std::vector<uint8_t> &buffer,
                                  bool use_d2_indices) {
-  const uint8_t index = use_d2_indices ? field.d2_index : field.cc_index;
-  const uint8_t bit_position = use_d2_indices ? field.d2_bit_position : field.cc_bit_position;
-  const uint8_t bit_width = use_d2_indices ? field.d2_bit_width : field.cc_bit_width;
-  if (index >= buffer.size()) {
+  const PacketFieldRef &location = use_d2_indices ? field.readback : field.write;
+  if (location.index >= buffer.size()) {
     return false;
   }
-  if (bit_position == BIT_POSITION_NO_BITMASK) {
-    return buffer[index] == field.value;
+  if (location.bit_position == BIT_POSITION_NO_BITMASK) {
+    return buffer[location.index] == field.value;
   }
-  return extract_field_value(buffer, index, bit_position, bit_width) ==
-         (field.value & field_value_mask(index, bit_position, bit_width));
+  return extract_field_value(buffer, location) ==
+         (field.value & field_value_mask(location.index, location.bit_position, location.bit_width));
 }
 
 void apply_restore_defaults_to_packet(std::vector<uint8_t> &packet, bool extended = false) {
@@ -254,10 +288,10 @@ void apply_restore_defaults_to_packet(std::vector<uint8_t> &packet, bool extende
   const RestoreFieldSpec *fields = restore_default_fields(extended, count);
   for (size_t i = 0; i < count; ++i) {
     const RestoreFieldSpec &field = fields[i];
-    if (field.cc_index >= packet.size()) {
+    if (field.write.index >= packet.size()) {
       continue;
     }
-    apply_field_value(packet, field.cc_index, field.cc_bit_position, field.cc_bit_width, field.value);
+    apply_field_value(packet, field.write, field.value);
   }
 }
 
@@ -283,15 +317,13 @@ const RestoreFieldSpec *first_restore_mismatch(const std::vector<uint8_t> &buffe
     if (restore_scope_field_matches(field, buffer, use_d2_indices)) {
       continue;
     }
-    const uint8_t index = use_d2_indices ? field.d2_index : field.cc_index;
-    const uint8_t bit_position = use_d2_indices ? field.d2_bit_position : field.cc_bit_position;
-    const uint8_t bit_width = use_d2_indices ? field.d2_bit_width : field.cc_bit_width;
-    if (index >= buffer.size()) {
+    const PacketFieldRef &location = use_d2_indices ? field.readback : field.write;
+    if (location.index >= buffer.size()) {
       current_value = 0;
-    } else if (bit_position == BIT_POSITION_NO_BITMASK) {
-      current_value = buffer[index];
+    } else if (location.bit_position == BIT_POSITION_NO_BITMASK) {
+      current_value = buffer[location.index];
     } else {
-      current_value = extract_field_value(buffer, index, bit_position, bit_width);
+      current_value = extract_field_value(buffer, location);
     }
     return &field;
   }
@@ -304,7 +336,7 @@ bool is_restore_scope_field(uint8_t cc_index, uint8_t bit_position, bool extende
   const RestoreFieldSpec *fields = restore_default_fields(extended, count);
   for (size_t i = 0; i < count; ++i) {
     const RestoreFieldSpec &field = fields[i];
-    if (field.cc_index == cc_index && field.cc_bit_position == bit_position) {
+    if (field.write.index == cc_index && field.write.bit_position == bit_position) {
       return true;
     }
   }
@@ -313,12 +345,15 @@ bool is_restore_scope_field(uint8_t cc_index, uint8_t bit_position, bool extende
 
 struct ManagedFieldSpec {
   const char *name;
-  uint8_t cc_index;
-  uint8_t cc_bit_position;
-  uint8_t cc_bit_width;
-  uint8_t d2_index;
-  uint8_t d2_bit_position;
-  uint8_t d2_bit_width;
+  PacketFieldRef write;
+  PacketFieldRef readback;
+
+  constexpr ManagedFieldSpec(const char *name, uint8_t write_index, uint8_t write_bit_position,
+                             uint8_t write_bit_width, uint8_t readback_index,
+                             uint8_t readback_bit_position, uint8_t readback_bit_width)
+      : name(name),
+        write{write_index, write_bit_position, write_bit_width},
+        readback{readback_index, readback_bit_position, readback_bit_width} {}
 };
 
 static const ManagedFieldSpec PROFILE_MANAGED_FIELDS[] = {
@@ -508,7 +543,7 @@ bool is_profile_managed_field(bool extended, uint8_t cc_index, uint8_t bit_posit
   const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
   for (size_t i = 0; i < count; ++i) {
     const ManagedFieldSpec &field = fields[i];
-    if (field.cc_index == cc_index && field.cc_bit_position == bit_position) {
+    if (field.write.index == cc_index && field.write.bit_position == bit_position) {
       return true;
     }
   }
@@ -517,13 +552,13 @@ bool is_profile_managed_field(bool extended, uint8_t cc_index, uint8_t bit_posit
 
 const ManagedFieldSpec *find_managed_field_by_cc(uint8_t cc_index, uint8_t bit_position) {
   for (const auto &field : PROFILE_MANAGED_FIELDS) {
-    if (field.cc_index != cc_index) {
+    if (field.write.index != cc_index) {
       continue;
     }
-    if (bit_position == BIT_POSITION_NO_BITMASK && field.cc_bit_position == BIT_POSITION_NO_BITMASK) {
+    if (bit_position == BIT_POSITION_NO_BITMASK && field.write.bit_position == BIT_POSITION_NO_BITMASK) {
       return &field;
     }
-    if (bit_position != BIT_POSITION_NO_BITMASK && field.cc_bit_position == bit_position) {
+    if (bit_position != BIT_POSITION_NO_BITMASK && field.write.bit_position == bit_position) {
       return &field;
     }
   }
@@ -590,6 +625,14 @@ uint8_t extract_field_value(const std::vector<uint8_t> &data, uint8_t index,
   return extract_field_value(data.data(), data.size(), index, bit_position, bit_width);
 }
 
+uint8_t extract_field_value(const uint8_t *data, size_t size, const PacketFieldRef &field) {
+  return extract_field_value(data, size, field.index, field.bit_position, field.bit_width);
+}
+
+uint8_t extract_field_value(const std::vector<uint8_t> &data, const PacketFieldRef &field) {
+  return extract_field_value(data.data(), data.size(), field);
+}
+
 void apply_field_value(std::vector<uint8_t> &packet, uint8_t index, uint8_t bit_position,
                        uint8_t bit_width, uint8_t value) {
   if (index >= packet.size()) {
@@ -618,6 +661,10 @@ void apply_field_value(std::vector<uint8_t> &packet, uint8_t index, uint8_t bit_
   packet[index] = current;
 }
 
+void apply_field_value(std::vector<uint8_t> &packet, const PacketFieldRef &field, uint8_t value) {
+  apply_field_value(packet, field.index, field.bit_position, field.bit_width, value);
+}
+
 uint32_t profile_data_hash(const uint8_t *data, size_t length) {
   uint32_t hash = 2166136261u;
   for (size_t i = 0; i < length; i++) {
@@ -633,13 +680,9 @@ bool profile_matches_packet(bool extended, const uint8_t *profile_data, size_t p
   const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
   for (size_t i = 0; i < count; ++i) {
     const ManagedFieldSpec &field = fields[i];
-    const uint8_t expected = extract_field_value(profile_data, profile_len, field.cc_index,
-                                                 field.cc_bit_position, field.cc_bit_width);
-    const uint8_t actual = use_d2_indices
-                               ? extract_field_value(buffer, field.d2_index, field.d2_bit_position,
-                                                     field.d2_bit_width)
-                               : extract_field_value(buffer, field.cc_index, field.cc_bit_position,
-                                                     field.cc_bit_width);
+    const PacketFieldRef &actual_location = use_d2_indices ? field.readback : field.write;
+    const uint8_t expected = extract_field_value(profile_data, profile_len, field.write);
+    const uint8_t actual = extract_field_value(buffer, actual_location);
     if (expected != actual) {
       return false;
     }
@@ -655,13 +698,9 @@ const ManagedFieldSpec *first_profile_mismatch(bool extended,
   const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
   for (size_t i = 0; i < count; ++i) {
     const ManagedFieldSpec &field = fields[i];
-    expected_value = extract_field_value(profile_data, profile_len, field.cc_index,
-                                         field.cc_bit_position, field.cc_bit_width);
-    current_value = use_d2_indices
-                        ? extract_field_value(buffer, field.d2_index, field.d2_bit_position,
-                                              field.d2_bit_width)
-                        : extract_field_value(buffer, field.cc_index, field.cc_bit_position,
-                                              field.cc_bit_width);
+    const PacketFieldRef &current_location = use_d2_indices ? field.readback : field.write;
+    expected_value = extract_field_value(profile_data, profile_len, field.write);
+    current_value = extract_field_value(buffer, current_location);
     if (expected_value != current_value) {
       return &field;
     }
@@ -677,9 +716,8 @@ void merge_profile_managed_fields(bool extended, std::vector<uint8_t> &packet, c
   const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
   for (size_t i = 0; i < count; ++i) {
     const ManagedFieldSpec &field = fields[i];
-    const uint8_t value = extract_field_value(profile_data, profile_len, field.cc_index,
-                                              field.cc_bit_position, field.cc_bit_width);
-    apply_field_value(packet, field.cc_index, field.cc_bit_position, field.cc_bit_width, value);
+    const uint8_t value = extract_field_value(profile_data, profile_len, field.write);
+    apply_field_value(packet, field.write, value);
   }
 }
 
@@ -689,8 +727,8 @@ bool managed_fields_equal_between_packets(bool extended, const uint8_t *lhs, siz
   const ManagedFieldSpec *fields = profile_managed_fields(extended, count);
   for (size_t i = 0; i < count; ++i) {
     const ManagedFieldSpec &field = fields[i];
-    if (extract_field_value(lhs, lhs_len, field.cc_index, field.cc_bit_position, field.cc_bit_width) !=
-        extract_field_value(rhs, rhs_len, field.cc_index, field.cc_bit_position, field.cc_bit_width)) {
+    if (extract_field_value(lhs, lhs_len, field.write) !=
+        extract_field_value(rhs, rhs_len, field.write)) {
       return false;
     }
   }
@@ -1238,7 +1276,7 @@ uint8_t DaikinEkhheComponent::tx_readback_index_(TxPacketFamily family, uint8_t 
   }
 
   const ManagedFieldSpec *field = find_managed_field_by_cc(write_index, bit_position);
-  return field != nullptr ? field->d2_index : write_index;
+  return field != nullptr ? field->readback.index : write_index;
 }
 
 uint8_t DaikinEkhheComponent::tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index,
@@ -1248,7 +1286,7 @@ uint8_t DaikinEkhheComponent::tx_readback_bit_position_(TxPacketFamily family, u
   }
 
   const ManagedFieldSpec *field = find_managed_field_by_cc(write_index, bit_position);
-  return field != nullptr ? field->d2_bit_position : bit_position;
+  return field != nullptr ? field->readback.bit_position : bit_position;
 }
 
 uint8_t DaikinEkhheComponent::tx_readback_bit_width_(TxPacketFamily family, uint8_t write_index,
@@ -1258,7 +1296,7 @@ uint8_t DaikinEkhheComponent::tx_readback_bit_width_(TxPacketFamily family, uint
   }
 
   const ManagedFieldSpec *field = find_managed_field_by_cc(write_index, bit_position);
-  return field != nullptr ? field->d2_bit_width : bit_width;
+  return field != nullptr ? field->readback.bit_width : bit_width;
 }
 
 DaikinEkhheComponent::TxOperationKind DaikinEkhheComponent::active_tx_operation_kind_() const {
@@ -2461,9 +2499,12 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
     set_select_value(entry.first, entry.second);
   }
 
-  for (const auto &entry : SELECT_BITMASKS) {
+  for (const auto &entry : SELECT_FIELD_SPECS) {
     const std::string &param_name = entry.first;
-    const SelectBitmaskSpec &field = entry.second;
+    const SelectFieldSpec &field = entry.second;
+    if (field_is_extended(field.family) || field.bit_position == BIT_POSITION_NO_BITMASK) {
+      continue;
+    }
     if (field.index >= buffer.size()) {
       continue;
     }
@@ -2501,9 +2542,13 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
                              profile_sync_profile.extended_length, buffer, true);
   const bool pending_profile_active = profile_restore_tx_active_();
 
-  for (const auto &entry : U_NUMBER_EXTENDED_PARAM_INDEX) {
+  for (const auto &entry : NUMBER_FIELD_SPECS) {
     const std::string &param_name = entry.first;
-    uint8_t param_index = entry.second;
+    const NumberFieldSpec &field = entry.second;
+    if (!field_is_extended(field.family)) {
+      continue;
+    }
+    uint8_t param_index = field.index;
     if (param_index >= buffer.size()) {
       continue;
     }
@@ -2515,11 +2560,15 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
         is_profile_managed_field(true, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    set_number_value(param_name, buffer[param_index]);
+    set_number_value(param_name, decode_number_field(buffer, field));
   }
-  for (const auto &entry : SELECT_EXTENDED_PARAM_INDEX) {
+  for (const auto &entry : SELECT_FIELD_SPECS) {
     const std::string &param_name = entry.first;
-    uint8_t param_index = entry.second;
+    const SelectFieldSpec &field = entry.second;
+    if (!field_is_extended(field.family)) {
+      continue;
+    }
+    uint8_t param_index = field.index;
     if (param_index >= buffer.size()) {
       continue;
     }
@@ -2618,10 +2667,13 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
 
   update_time_band_state_from_bus_(buffer, false, time_band_cc_sync_matched);
 
-  // update numbers, unsigned and signed separately
-  for (const auto &entry : U_NUMBER_PARAM_INDEX) {
+  for (const auto &entry : NUMBER_FIELD_SPECS) {
     const std::string &param_name = entry.first;
-    uint8_t param_index = entry.second;
+    const NumberFieldSpec &field = entry.second;
+    if (field_is_extended(field.family)) {
+      continue;
+    }
+    uint8_t param_index = field.index;
     if (single_field_tx_matches_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK) ||
         has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
@@ -2638,61 +2690,15 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    uint8_t value = buffer[param_index];
-    set_number_value(param_name, value);
+    set_number_value(param_name, decode_number_field(buffer, field));
   }
 
-  for (const auto &entry : I_NUMBER_PARAM_INDEX) {
+  for (const auto &entry : SELECT_FIELD_SPECS) {
     const std::string &param_name = entry.first;
-    uint8_t param_index = entry.second;
-    if (single_field_tx_matches_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK) ||
-        has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
+    const SelectFieldSpec &field = entry.second;
+    if (field_is_extended(field.family)) {
       continue;
     }
-    if (single_field_main_ui_sync_active && single_field_sync.index == param_index &&
-        single_field_sync.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
-      continue;
-    }
-    if ((restore_tx_active_() || (restore_ui_sync_active && !restore_cc_sync_matched)) &&
-        is_restore_scope_field(param_index, BIT_POSITION_NO_BITMASK)) {
-      continue;
-    }
-    if ((pending_profile_active || (profile_ui_sync_active && !profile_cc_sync_matched)) &&
-        is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
-      continue;
-    }
-    int8_t value = static_cast<int8_t>(buffer[param_index]);  // cast as signed
-    set_number_value(param_name, value);
-  }
-
-  // Process Standard Selects (Full-Byte Values)
-  for (const auto &entry : SELECT_PARAM_INDEX) {
-    const std::string &param_name = entry.first;
-    uint8_t param_index = entry.second;
-    if (single_field_tx_matches_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK) ||
-        has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
-      continue;
-    }
-    if (single_field_main_ui_sync_active && single_field_sync.index == param_index &&
-        single_field_sync.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
-      continue;
-    }
-    if ((restore_tx_active_() || (restore_ui_sync_active && !restore_cc_sync_matched)) &&
-        is_restore_scope_field(param_index, BIT_POSITION_NO_BITMASK)) {
-      continue;
-    }
-    if ((pending_profile_active || (profile_ui_sync_active && !profile_cc_sync_matched)) &&
-        is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
-      continue;
-    }
-    uint8_t value = buffer[param_index];
-    set_select_value(param_name, value);
-  }
-
-  // Process Bitmask-Based Selects (Modify Only One Bit)
-  for (const auto &entry : SELECT_BITMASKS) {
-    const std::string &param_name = entry.first;
-    const SelectBitmaskSpec &field = entry.second;
     uint8_t param_index = field.index;
     uint8_t bit_position = field.bit_position;
     uint8_t bit_width = field.bit_width;
@@ -2712,8 +2718,10 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         is_profile_managed_field(false, param_index, bit_position)) {
       continue;
     }
-    uint8_t value = extract_field_value(buffer, param_index, bit_position,
-                                        effective_bit_width(bit_position, bit_width));
+    uint8_t value = bit_position == BIT_POSITION_NO_BITMASK
+                        ? buffer[param_index]
+                        : extract_field_value(buffer, param_index, bit_position,
+                                              effective_bit_width(bit_position, bit_width));
     set_select_value(param_name, value);
   }
 
@@ -3454,33 +3462,20 @@ void DaikinEkhheNumber::control(float value) {
         return;
     }
 
-    // Get the CC array index from map, send UART command and update UI state
-    auto it_u = U_NUMBER_PARAM_INDEX.find(name);
-    auto it_i = I_NUMBER_PARAM_INDEX.find(name);
-    auto it_ext = U_NUMBER_EXTENDED_PARAM_INDEX.find(name);
-    if (it_u != U_NUMBER_PARAM_INDEX.end()) {
-        uint8_t index = it_u->second;
-        if (this->parent_->send_uart_cc_command(index, (uint8_t)value, BIT_POSITION_NO_BITMASK)) {
-            this->parent_->update_number_cache(name, value);
-            this->publish_state(value);
-        }
-    }
-    else if (it_i != I_NUMBER_PARAM_INDEX.end()) {
-        uint8_t index = it_i->second;
-        if (this->parent_->send_uart_cc_command(index, (int8_t)value, BIT_POSITION_NO_BITMASK)) {
-            this->parent_->update_number_cache(name, value);
-            this->publish_state(value);
-        }
-    }
-    else if (it_ext != U_NUMBER_EXTENDED_PARAM_INDEX.end()) {
-        uint8_t index = it_ext->second;
-        if (this->parent_->send_uart_c2_command(index, (uint8_t)value, BIT_POSITION_NO_BITMASK)) {
-            this->parent_->update_number_cache(name, value);
-            this->publish_state(value);
-        }
-    }
-    else {
+    auto field_it = NUMBER_FIELD_SPECS.find(name);
+    if (field_it == NUMBER_FIELD_SPECS.end()) {
         DAIKIN_WARN(TAG, "No matching UART command for Number: %s", name.c_str());
+        return;
+    }
+
+    const NumberFieldSpec &field = field_it->second;
+    const uint8_t uart_value = encode_number_field(value, field);
+    const bool sent = field_is_extended(field.family)
+                          ? this->parent_->send_uart_c2_command(field.index, uart_value, BIT_POSITION_NO_BITMASK)
+                          : this->parent_->send_uart_cc_command(field.index, uart_value, BIT_POSITION_NO_BITMASK);
+    if (sent) {
+        this->parent_->update_number_cache(name, value);
+        this->publish_state(value);
     }
 }
 
@@ -3515,43 +3510,17 @@ void DaikinEkhheSelect::control(const std::string &value) {
         return;
     }
 
-    bool extended_family = false;
-
-    // Look up the packet index for this select entity
-    auto index_it = SELECT_PARAM_INDEX.find(name);
-    uint8_t param_index = PARAM_INDEX_INVALID;
-    if (index_it != SELECT_PARAM_INDEX.end()) {
-      param_index = index_it->second;
-    } else {
-      auto extended_index_it = SELECT_EXTENDED_PARAM_INDEX.find(name);
-      if (extended_index_it != SELECT_EXTENDED_PARAM_INDEX.end()) {
-        param_index = extended_index_it->second;
-        extended_family = true;
-      }
-    }
-
-    // Look up if this select is part of a bitmask
-    uint8_t bit_position = BIT_POSITION_NO_BITMASK;  // Default to no bitmask
-    uint8_t bit_width = 1;
-    auto bitmask_it = SELECT_BITMASKS.find(name);
-    if (bitmask_it != SELECT_BITMASKS.end()) {
-        param_index = bitmask_it->second.index;
-        bit_position = bitmask_it->second.bit_position;
-        bit_width = bitmask_it->second.bit_width;
-        extended_family = false;
-    } else {
-            DAIKIN_DBG(TAG, "Select %s not in SELECT_BITMASKS", name.c_str());
-    }
-
-    if (param_index == PARAM_INDEX_INVALID) {
+    auto field_it = SELECT_FIELD_SPECS.find(name);
+    if (field_it == SELECT_FIELD_SPECS.end()) {
         DAIKIN_WARN(TAG, "No matching UART command for Select: %s", name.c_str());
         return;
     }
 
+    const SelectFieldSpec &field = field_it->second;
     // Update value in ESPHome
-    bool sent = extended_family
-                    ? this->parent_->send_uart_c2_command(param_index, uart_value, bit_position, bit_width)
-                    : this->parent_->send_uart_cc_command(param_index, uart_value, bit_position, bit_width);
+    bool sent = field_is_extended(field.family)
+                    ? this->parent_->send_uart_c2_command(field.index, uart_value, field.bit_position, field.bit_width)
+                    : this->parent_->send_uart_cc_command(field.index, uart_value, field.bit_position, field.bit_width);
     if (sent) {
         this->parent_->update_select_cache(name, value);
         this->publish_state(value);
@@ -4058,40 +4027,28 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
              tx_operation_.attempts_sent);
   uint8_t index = target.index;
   if (target.bit_position == BIT_POSITION_NO_BITMASK) {
-    if (target.family == TxPacketFamily::EXTENDED) {
-      for (const auto &entry : U_NUMBER_EXTENDED_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_number_value(entry.first, buffer[readback_index]);
-        }
+    const bool extended = target.family == TxPacketFamily::EXTENDED;
+    for (const auto &entry : NUMBER_FIELD_SPECS) {
+      const NumberFieldSpec &field = entry.second;
+      if (field_is_extended(field.family) == extended && field.index == index) {
+        set_number_value(entry.first, decode_number_field_value(buffer[readback_index], field));
       }
-      for (const auto &entry : SELECT_EXTENDED_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_select_value(entry.first, buffer[readback_index]);
-        }
-      }
-    } else {
-      for (const auto &entry : U_NUMBER_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_number_value(entry.first, buffer[readback_index]);
-        }
-      }
-      for (const auto &entry : I_NUMBER_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_number_value(entry.first, static_cast<int8_t>(buffer[readback_index]));
-        }
-      }
-      for (const auto &entry : SELECT_PARAM_INDEX) {
-        if (entry.second == index) {
-          set_select_value(entry.first, buffer[readback_index]);
-        }
+    }
+    for (const auto &entry : SELECT_FIELD_SPECS) {
+      const SelectFieldSpec &field = entry.second;
+      if (field_is_extended(field.family) == extended && field.index == index &&
+          field.bit_position == BIT_POSITION_NO_BITMASK) {
+        set_select_value(entry.first, buffer[readback_index]);
       }
     }
   } else {
     uint8_t field_value = extract_field_value(buffer, readback_index, readback_bit_position,
                                               effective_bit_width(readback_bit_position, readback_bit_width));
-    for (const auto &entry : SELECT_BITMASKS) {
-      const SelectBitmaskSpec &field = entry.second;
-      if (field.index == index && field.bit_position == target.bit_position) {
+    const bool extended = target.family == TxPacketFamily::EXTENDED;
+    for (const auto &entry : SELECT_FIELD_SPECS) {
+      const SelectFieldSpec &field = entry.second;
+      if (field_is_extended(field.family) == extended && field.index == index &&
+          field.bit_position == target.bit_position) {
         set_select_value(entry.first, field_value);
       }
     }

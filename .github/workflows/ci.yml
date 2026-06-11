@@ -19,6 +19,9 @@ jobs:
           cache: "pip"
           cache-dependency-path: .github/requirements-ci.txt
 
+      - name: Validate component metadata
+        run: python3 scripts/check_component_metadata.py
+
       - name: Install ESPHome
         run: pip install -r .github/requirements-ci.txt
 

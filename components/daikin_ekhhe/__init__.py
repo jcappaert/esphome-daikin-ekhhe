@@ -3,9 +3,7 @@ import logging
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import uart
-from esphome.const import (
-    CONF_ID
-)
+from esphome.const import CONF_ID
 
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_MODE = "mode"
@@ -43,7 +41,7 @@ async def to_code(config):
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
 
-    update_interval_ms = config[CONF_UPDATE_INTERVAL] * 1000 
+    update_interval_ms = config[CONF_UPDATE_INTERVAL] * 1000
     cg.add(var.set_update_interval(update_interval_ms))
     cg.add(var.set_tx_delay_after_d2_ms(config[CONF_TX_SEND_CALIBRATION]))
     cg.add(var.set_continuous_rx(config[CONF_CONTINUOUS_RX]))

@@ -1,5 +1,4 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import binary_sensor
 from esphome.const import DEVICE_CLASS_PROBLEM, ENTITY_CATEGORY_DIAGNOSTIC
 
@@ -9,26 +8,42 @@ from . import (
 )
 
 from .const import *
+from .schema_helpers import (
+    BinarySensorSchemaSpec,
+    binary_sensor_schema,
+    optional_schema_entries,
+    platform_schema,
+)
 
-
-TYPES =[
-    DIG1_CONFIG,
-    DIG2_CONFIG,
-    DIG3_CONFIG,
-    MASTER_FAULT,
-    P01_TANK_LOWER_PROBE_FAULT,
-    P02_TANK_UPPER_PROBE_FAULT,
-    P03_DEFROST_PROBE_FAULT,
-    P04_INLET_AIR_PROBE_FAULT,
-    P05_EVAPORATOR_INLET_PROBE_FAULT,
-    P06_EVAPORATOR_OUTLET_PROBE_FAULT,
-    P07_COMPRESSOR_FLOW_PROBE_FAULT,
-    P08_SOLAR_COLLECTOR_PROBE_FAULT,
-    E01_HIGH_PRESSURE_PROTECTION,
-    E02_SOLAR_RECIRCULATION_ALARM,
-    E03_ELECTRONIC_FAN_FAULT,
-    PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM,
+BINARY_SENSOR_SPECS = [
+    BinarySensorSchemaSpec(DIG1_CONFIG, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+    BinarySensorSchemaSpec(DIG2_CONFIG, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+    BinarySensorSchemaSpec(DIG3_CONFIG, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+    BinarySensorSchemaSpec(
+        MASTER_FAULT,
+        device_class=DEVICE_CLASS_PROBLEM,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    *[
+        BinarySensorSchemaSpec(key, entity_category=ENTITY_CATEGORY_DIAGNOSTIC)
+        for key in [
+            P01_TANK_LOWER_PROBE_FAULT,
+            P02_TANK_UPPER_PROBE_FAULT,
+            P03_DEFROST_PROBE_FAULT,
+            P04_INLET_AIR_PROBE_FAULT,
+            P05_EVAPORATOR_INLET_PROBE_FAULT,
+            P06_EVAPORATOR_OUTLET_PROBE_FAULT,
+            P07_COMPRESSOR_FLOW_PROBE_FAULT,
+            P08_SOLAR_COLLECTOR_PROBE_FAULT,
+            E01_HIGH_PRESSURE_PROTECTION,
+            E02_SOLAR_RECIRCULATION_ALARM,
+            E03_ELECTRONIC_FAN_FAULT,
+            PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM,
+        ]
+    ],
 ]
+
+TYPES = [spec.key for spec in BINARY_SENSOR_SPECS]
 
 RUNTIME_DD_TYPES = {
     HEATING_DEMAND: "set_heating_demand",
@@ -36,73 +51,18 @@ RUNTIME_DD_TYPES = {
     EH_ACTIVE: "set_eh_active",
 }
 
-CONFIG_SCHEMA = (
-    cv.Schema(
-        {
-            cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
-            cv.Optional(DIG1_CONFIG): binary_sensor.binary_sensor_schema(
-                #device_class=DEVICE_CLASS_NONE,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
-            ),
-            cv.Optional(DIG2_CONFIG): binary_sensor.binary_sensor_schema(
-                #device_class=DEVICE_CLASS_NONE,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
-            ),
-            cv.Optional(DIG3_CONFIG): binary_sensor.binary_sensor_schema(
-                #device_class=DEVICE_CLASS_NONE,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,  		
-            ),
-            cv.Optional(MASTER_FAULT): binary_sensor.binary_sensor_schema(
-                device_class=DEVICE_CLASS_PROBLEM,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P01_TANK_LOWER_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P02_TANK_UPPER_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P03_DEFROST_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P04_INLET_AIR_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P05_EVAPORATOR_INLET_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P06_EVAPORATOR_OUTLET_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P07_COMPRESSOR_FLOW_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(P08_SOLAR_COLLECTOR_PROBE_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(E01_HIGH_PRESSURE_PROTECTION): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(E02_SOLAR_RECIRCULATION_ALARM): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(E03_ELECTRONIC_FAN_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(PA_HEAT_PUMP_TEMP_UNSUITABLE_ALARM): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(HEATING_DEMAND): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(HP_ACTIVE): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(EH_ACTIVE): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-        }
-    )
+RUNTIME_DD_SPECS = [
+    BinarySensorSchemaSpec(key, entity_category=ENTITY_CATEGORY_DIAGNOSTIC)
+    for key in RUNTIME_DD_TYPES
+]
+
+CONFIG_SCHEMA = platform_schema(
+    CONF_EKHHE_ID,
+    DaikinEkhhe,
+    {
+        **optional_schema_entries(BINARY_SENSOR_SPECS, binary_sensor_schema),
+        **optional_schema_entries(RUNTIME_DD_SPECS, binary_sensor_schema),
+    },
 )
 
 async def setup_conf(config, key, hub):

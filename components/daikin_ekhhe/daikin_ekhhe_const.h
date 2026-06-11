@@ -5,8 +5,7 @@
 namespace esphome {
 namespace daikin_ekhhe {
 
-// Define names as static constants
-// this should match what is in const.py on the Python side
+// Entity keys mirrored from Python are checked by scripts/check_component_metadata.py.
 static const std::string A_LOW_WAT_T_PROBE       = "low_water_temp_probe";
 static const std::string B_UP_WAT_T_PROBE        = "upper_water_temp_probe";
 static const std::string C_DEFROST_T_PROBE       = "defrost_temp_probe";

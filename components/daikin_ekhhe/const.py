@@ -1,5 +1,4 @@
-# parameters
-# this should match what's in daikin_ekhhe_const.h on the cpp side
+# Entity keys mirrored into C++ are checked by scripts/check_component_metadata.py.
 A_LOW_WAT_T_PROBE       = "low_water_temp_probe"
 B_UP_WAT_T_PROBE        = "upper_water_temp_probe"
 C_DEFROST_T_PROBE       = "defrost_temp_probe"
