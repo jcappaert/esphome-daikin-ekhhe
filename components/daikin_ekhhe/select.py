@@ -1,5 +1,4 @@
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import select
 from esphome.const import CONF_OPTIONS, ENTITY_CATEGORY_CONFIG
 
@@ -8,109 +7,82 @@ from . import (
     DaikinEkhhe,
     daikin_ekhhe_ns,
 )
-
 from .const import *
-from .schema_helpers import ensure_option_map
+from .schema_helpers import (
+    SelectSchemaSpec,
+    optional_schema_entries,
+    platform_schema,
+    select_schema,
+)
 
 CODEOWNERS = ["@jcappaert"]
-
-TYPES = [
-    POWER_STATUS,
-    OPERATIONAL_MODE,
-    P5_DEFROST_MODE,
-    P6_EHEATER_DEFROSTING,
-    P11_DISP_WAT_T_PROBE,
-    P12_EXT_PUMP_MODE,
-    P13_HW_CIRC_PUMP_MODE,
-    P14_EVA_BLOWER_TYPE,
-    P15_SAFETY_SW_TYPE,
-    P16_SOLAR_MODE_INT,
-    P23_PV_MODE_INT,
-    P24_OFF_PEAK_MODE,
-    P33_EEV_CONTROL,
-    P39_EEV_MODE,
-    P58_EVA_FAN_COMP_OFF,
-    TIME_BAND_MODE,
-]
-
 
 DaikinEkhheSelect = daikin_ekhhe_ns.class_(
     "DaikinEkhheSelect", select.Select, cg.Component
 )
 
-
-CONFIG_SCHEMA = (
-    cv.Schema(
+SELECT_SPECS = [
+    SelectSchemaSpec(POWER_STATUS, {0: "Standby", 1: "On"}),
+    SelectSchemaSpec(
+        OPERATIONAL_MODE,
         {
-            cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
-            cv.Optional(POWER_STATUS): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Standby', 1: 'On'}): ensure_option_map
-            }),
-            cv.Optional(OPERATIONAL_MODE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Auto', 1: 'Eco', 2: 'Boost', 3: 'Electric', 4: 'Fan', 5: 'Vacation'}): ensure_option_map
-            }),
-            cv.Optional(P5_DEFROST_MODE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Compressor-stop', 1: 'Hot-gas'}): ensure_option_map
-            }),
-            cv.Optional(P6_EHEATER_DEFROSTING): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Off', 1: 'On'}): ensure_option_map
-            }),
-            cv.Optional(P11_DISP_WAT_T_PROBE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Lower', 1: 'Upper'}): ensure_option_map
-            }),
-            cv.Optional(P12_EXT_PUMP_MODE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Always-off', 1: 'Hot water recirculation', 2: 'Thermal Solar System'}): ensure_option_map
-            }),
-            cv.Optional(P13_HW_CIRC_PUMP_MODE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'With heat pump', 1: 'Always on'}): ensure_option_map
-            }),
-            cv.Optional(P14_EVA_BLOWER_TYPE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'EC', 1: 'AC', 2: 'AC double speed', 3: 'EC dynamic speed control'}): ensure_option_map
-            }),
-            cv.Optional(P15_SAFETY_SW_TYPE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'NC', 1: 'NO', 2: 'Low pressure selection switch'}): ensure_option_map
-            }),
-            cv.Optional(P16_SOLAR_MODE_INT): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'DIG1', 2: 'direct control'}): ensure_option_map
-            }),
-            cv.Optional(P23_PV_MODE_INT): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'activated'}): ensure_option_map
-            }),
-            cv.Optional(P24_OFF_PEAK_MODE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'activated with eco', 2: 'activated with auto'}): ensure_option_map
-            }),
-            cv.Optional(P33_EEV_CONTROL): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Permanently deactivated', 1: 'activated'}): ensure_option_map
-            }),
-            cv.Optional(P39_EEV_MODE): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'automatic', 1: 'manual'}): ensure_option_map
-            }),
-            cv.Optional(P58_EVA_FAN_COMP_OFF): select.select_schema(DaikinEkhheSelect).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Disabled', 1: 'Enabled', 2: 'Auto'}): ensure_option_map
-            }),
-            cv.Optional(TIME_BAND_MODE): select.select_schema(
-                DaikinEkhheSelect, entity_category=ENTITY_CATEGORY_CONFIG
-            ).extend({
-                cv.GenerateID(): cv.declare_id(DaikinEkhheSelect),
-                cv.Optional(CONF_OPTIONS, default={0: 'Auto', 1: 'Eco', 2: 'Boost', 3: 'Electric', 4: 'Fan'}): ensure_option_map
-            }),
-        }
-    )
+            0: "Auto",
+            1: "Eco",
+            2: "Boost",
+            3: "Electric",
+            4: "Fan",
+            5: "Vacation",
+        },
+    ),
+    SelectSchemaSpec(P5_DEFROST_MODE, {0: "Compressor-stop", 1: "Hot-gas"}),
+    SelectSchemaSpec(P6_EHEATER_DEFROSTING, {0: "Off", 1: "On"}),
+    SelectSchemaSpec(P11_DISP_WAT_T_PROBE, {0: "Lower", 1: "Upper"}),
+    SelectSchemaSpec(
+        P12_EXT_PUMP_MODE,
+        {0: "Always-off", 1: "Hot water recirculation", 2: "Thermal Solar System"},
+    ),
+    SelectSchemaSpec(P13_HW_CIRC_PUMP_MODE, {0: "With heat pump", 1: "Always on"}),
+    SelectSchemaSpec(
+        P14_EVA_BLOWER_TYPE,
+        {0: "EC", 1: "AC", 2: "AC double speed", 3: "EC dynamic speed control"},
+    ),
+    SelectSchemaSpec(
+        P15_SAFETY_SW_TYPE,
+        {0: "NC", 1: "NO", 2: "Low pressure selection switch"},
+    ),
+    SelectSchemaSpec(
+        P16_SOLAR_MODE_INT,
+        {0: "Permanently deactivated", 1: "DIG1", 2: "direct control"},
+    ),
+    SelectSchemaSpec(
+        P23_PV_MODE_INT,
+        {0: "Permanently deactivated", 1: "activated"},
+    ),
+    SelectSchemaSpec(
+        P24_OFF_PEAK_MODE,
+        {0: "Permanently deactivated", 1: "activated with eco", 2: "activated with auto"},
+    ),
+    SelectSchemaSpec(
+        P33_EEV_CONTROL,
+        {0: "Permanently deactivated", 1: "activated"},
+    ),
+    SelectSchemaSpec(P39_EEV_MODE, {0: "automatic", 1: "manual"}),
+    SelectSchemaSpec(P58_EVA_FAN_COMP_OFF, {0: "Disabled", 1: "Enabled", 2: "Auto"}),
+    SelectSchemaSpec(
+        TIME_BAND_MODE,
+        {0: "Auto", 1: "Eco", 2: "Boost", 3: "Electric", 4: "Fan"},
+        entity_category=ENTITY_CATEGORY_CONFIG,
+    ),
+]
+
+TYPES = [spec.key for spec in SELECT_SPECS]
+
+CONFIG_SCHEMA = platform_schema(
+    CONF_EKHHE_ID,
+    DaikinEkhhe,
+    optional_schema_entries(
+        SELECT_SPECS, lambda spec: select_schema(DaikinEkhheSelect, spec)
+    ),
 )
 
 
@@ -130,6 +102,7 @@ async def setup_conf(config, key, hub):
         cg.add(getattr(hub, f"register_select")(key, sens))
         cg.add(sens.set_parent(hub))
         cg.add(sens.set_internal_id(key))
+
 
 async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
