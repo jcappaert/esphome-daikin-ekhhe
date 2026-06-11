@@ -10,6 +10,7 @@ from . import (
 )
 
 from .const import *
+from .schema_helpers import ensure_option_map
 
 CODEOWNERS = ["@jcappaert"]
 
@@ -36,22 +37,6 @@ TYPES = [
 DaikinEkhheSelect = daikin_ekhhe_ns.class_(
     "DaikinEkhheSelect", select.Select, cg.Component
 )
-
-
-# taken from tuya select
-def ensure_option_map(value):
-    cv.check_not_templatable(value)
-    option = cv.All(cv.int_range(0, 2**8 - 1))
-    mapping = cv.All(cv.string_strict)
-    options_map_schema = cv.Schema({option: mapping})
-    value = options_map_schema(value)
-
-    all_values = list(value.keys())
-    unique_values = set(value.keys())
-    if len(all_values) != len(unique_values):
-        raise cv.Invalid("Mapping values must be unique.")
-
-    return value
 
 
 CONFIG_SCHEMA = (
