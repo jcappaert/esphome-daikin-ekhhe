@@ -583,7 +583,7 @@ const ManagedFieldSpec *find_managed_field_by_cc(uint8_t cc_index, uint8_t bit_p
 }
 
 
-bool is_p15_stepped_field(uint8_t index, uint8_t bit_position, uint8_t bit_width) {
+static bool is_p15_stepped_field(uint8_t index, uint8_t bit_position, uint8_t bit_width) {
   return index == DaikinEkhheComponent::CC_PACKET_MASK2_IDX && bit_position == 1 &&
          bit_width == BIT_WIDTH_P15_STEPPED;
 }
