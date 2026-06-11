@@ -8,10 +8,7 @@ from esphome.const import (
     ENTITY_CATEGORY_DIAGNOSTIC,
 )
 
-from . import (
-    CONF_EKHHE_ID,
-    DaikinEkhhe
-)
+from . import CONF_EKHHE_ID, DaikinEkhhe
 
 from .const import *
 from .schema_helpers import (
@@ -75,7 +72,6 @@ async def setup_conf(config, key, hub):
 
         sens = await sensor.new_sensor(conf)
         cg.add(hub.register_sensor(key, sens))
-        #cg.add(getattr(hub, f"register_sensor")(cg.RawExpression("EKHHE::" + key), sens))
 
 
 async def to_code(config):
