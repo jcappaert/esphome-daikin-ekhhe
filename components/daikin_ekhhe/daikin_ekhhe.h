@@ -479,6 +479,13 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     RESTORE_DEFAULTS,
     TIME_BAND,
   };
+  enum class TxOperationKind : uint8_t {
+    NONE,
+    SINGLE_FIELD,
+    RESTORE_DEFAULTS,
+    PROFILE_RESTORE,
+    TIME_BAND,
+  };
   enum class TxPacketFamily : uint8_t {
     MAIN,
     EXTENDED,
@@ -490,6 +497,36 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t readback_packet_type;
     uint8_t packet_size;
     const char *label;
+  };
+  struct SingleFieldTxPayload {
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    uint8_t index = 0;
+    uint8_t value = 0;
+    uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t bit_width = 1;
+  };
+  struct RestoreTxPayload {
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    bool main_applied = false;
+    bool extended_applied = false;
+    bool main_write_sent = false;
+    bool extended_write_sent = false;
+  };
+  struct ProfileRestoreTxPayload {
+    bool known_good = false;
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    bool main_applied = false;
+    bool extended_applied = false;
+    bool main_write_sent = false;
+    bool extended_write_sent = false;
+  };
+  struct TimeBandTxPayload {
+    uint8_t flag = 0;
+    uint8_t start_hour = 0;
+    uint8_t start_minute = 0;
+    uint8_t end_hour = 0;
+    uint8_t end_minute = 0;
+    uint8_t mode = 0;
   };
   const TxPacketFamilySpec &tx_packet_family_spec_(TxPacketFamily family) const;
   void send_prebuilt_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &command, TxPacketKind kind,
@@ -510,6 +547,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
                               uint8_t bit_position, uint8_t bit_width);
   bool has_deferred_user_tx_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
   void flush_deferred_user_tx_();
+  bool schedule_tx_after_d2_(TxOperationKind kind, const RawFrameEntry &d2_entry);
+  bool tx_d2_schedule_current_(TxOperationKind kind, uint32_t generation) const;
+  void run_tx_after_d2_(TxOperationKind kind, uint32_t generation);
   void schedule_queued_tx_from_d2_(const RawFrameEntry &d2_entry);
   void send_restore_defaults_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                      const std::vector<uint8_t> &packet);
@@ -530,7 +570,44 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void schedule_queued_profile_restore_from_d2_(const RawFrameEntry &d2_entry);
   void check_pending_time_band_(const std::vector<uint8_t> &buffer);
   void schedule_queued_time_band_from_d2_(const RawFrameEntry &d2_entry);
+  TxOperationKind active_tx_operation_kind_() const;
+  const char *tx_operation_kind_label_(TxOperationKind kind) const;
+  TxPacketFamily active_tx_operation_family_() const;
+  uint8_t active_tx_readback_packet_type_() const;
   bool tx_operation_active_() const;
+  bool single_field_tx_active_() const;
+  const SingleFieldTxPayload &single_field_tx_() const;
+  bool single_field_tx_matches_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
+  bool restore_tx_active_() const;
+  RestoreTxPayload &restore_tx_();
+  const RestoreTxPayload &restore_tx_() const;
+  bool profile_restore_tx_active_() const;
+  ProfileRestoreTxPayload &profile_restore_tx_();
+  const ProfileRestoreTxPayload &profile_restore_tx_() const;
+  bool time_band_tx_active_() const;
+  TimeBandTxPayload &time_band_tx_();
+  const TimeBandTxPayload &time_band_tx_() const;
+  bool single_field_tx_busy_() const;
+  bool restore_tx_busy_() const;
+  bool profile_restore_tx_busy_() const;
+  bool time_band_tx_sending_() const;
+  bool time_band_tx_busy_() const;
+  bool any_write_busy_() const;
+  bool any_tx_or_ui_sync_active_() const;
+  bool tx_ui_sync_active_() const;
+  bool tx_ui_sync_active_(TxOperationKind kind) const;
+  void reset_tx_ui_sync_();
+  void start_single_field_ui_sync_(const SingleFieldTxPayload &target);
+  void start_restore_ui_sync_();
+  void start_profile_restore_ui_sync_(bool known_good);
+  void start_time_band_ui_sync_(const TimeBandTxPayload &target);
+  void clear_tx_wait_markers_();
+  void reset_tx_operation_();
+  void reset_tx_lifecycle_(TxOperationKind kind, bool clear_ui_sync);
+  void reset_single_field_tx_lifecycle_(bool clear_ui_sync);
+  void reset_restore_tx_lifecycle_(bool clear_ui_sync);
+  void reset_profile_restore_tx_lifecycle_(bool clear_ui_sync);
+  void reset_time_band_tx_lifecycle_(bool clear_ui_sync);
   void reset_pending_restore_();
   void reset_queued_restore_();
   void reset_pending_profile_restore_();
@@ -616,88 +693,26 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   TimeBandState time_band_state_;
   uint32_t auto_snapshot_last_write_ms_ = 0;
 
-  struct PendingTx {
-    bool active = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    uint8_t index = 0;
-    uint8_t value = 0;
-    uint8_t bit_position = kBitPositionNoBitmask;
-    uint8_t bit_width = 1;
+  struct TxOperationState {
+    TxOperationKind kind = TxOperationKind::NONE;
+    SingleFieldTxPayload single_field;
+    RestoreTxPayload restore;
+    ProfileRestoreTxPayload profile_restore;
+    TimeBandTxPayload time_band;
     uint8_t attempts_sent = 0;
     uint32_t last_attempt_d2_seq = 0;
   };
-  PendingTx pending_tx_;
-  struct PendingRestore {
-    bool active = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    bool main_applied = false;
-    bool extended_applied = false;
-    bool main_write_sent = false;
-    bool extended_write_sent = false;
-    uint8_t attempts_sent = 0;
-    uint32_t last_attempt_d2_seq = 0;
-  };
-  PendingRestore pending_restore_;
-  struct PendingProfileRestore {
-    bool active = false;
-    bool known_good = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    bool main_applied = false;
-    bool extended_applied = false;
-    bool main_write_sent = false;
-    bool extended_write_sent = false;
-    uint8_t attempts_sent = 0;
-    uint32_t last_attempt_d2_seq = 0;
-  };
-  PendingProfileRestore pending_profile_restore_;
-  struct PendingTimeBandTx {
-    bool active = false;
-    uint8_t flag = 0;
-    uint8_t start_hour = 0;
-    uint8_t start_minute = 0;
-    uint8_t end_hour = 0;
-    uint8_t end_minute = 0;
-    uint8_t mode = 0;
-    uint8_t attempts_sent = 0;
-    uint32_t last_attempt_d2_seq = 0;
-  };
-  PendingTimeBandTx pending_time_band_tx_;
-  struct TxUiSync {
-    bool active = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    uint8_t index = 0;
-    uint8_t value = 0;
-    uint8_t bit_position = kBitPositionNoBitmask;
-    uint8_t bit_width = 1;
-    uint8_t cycles_waited = 0;
-  };
-  TxUiSync tx_ui_sync_;
-  struct RestoreUiSync {
-    bool active = false;
-    bool main_synced = false;
-    bool extended_synced = false;
-    uint8_t cycles_waited = 0;
-  };
-  RestoreUiSync restore_ui_sync_;
-  struct ProfileUiSync {
-    bool active = false;
+  TxOperationState tx_operation_;
+  struct TxUiSyncState {
+    TxOperationKind kind = TxOperationKind::NONE;
+    SingleFieldTxPayload single_field;
+    TimeBandTxPayload time_band;
     bool known_good = false;
     bool main_synced = false;
     bool extended_synced = false;
     uint8_t cycles_waited = 0;
   };
-  ProfileUiSync profile_ui_sync_;
-  struct TimeBandUiSync {
-    bool active = false;
-    uint8_t flag = 0;
-    uint8_t start_hour = 0;
-    uint8_t start_minute = 0;
-    uint8_t end_hour = 0;
-    uint8_t end_minute = 0;
-    uint8_t mode = 0;
-    uint8_t cycles_waited = 0;
-  };
-  TimeBandUiSync time_band_ui_sync_;
+  TxUiSyncState tx_ui_sync_;
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;

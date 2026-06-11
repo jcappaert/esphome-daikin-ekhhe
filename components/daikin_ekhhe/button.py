@@ -21,22 +21,34 @@ CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_EKHHE_ID): cv.use_id(DaikinEkhhe),
         cv.Optional(DAIKIN_RESTORE_DEFAULT_SETTINGS): button.button_schema(
-            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+            DaikinEkhheActionButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:backup-restore",
         ),
         cv.Optional(DAIKIN_SAVE_KNOWN_GOOD_PROFILE): button.button_schema(
-            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+            DaikinEkhheActionButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:content-save-check",
         ),
         cv.Optional(DAIKIN_RESTORE_KNOWN_GOOD_PROFILE): button.button_schema(
-            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+            DaikinEkhheActionButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:restore",
         ),
         cv.Optional(DAIKIN_RESTORE_AUTO_SNAPSHOT): button.button_schema(
-            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+            DaikinEkhheActionButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:restore-clock",
         ),
         cv.Optional(DAIKIN_APPLY_TIME_BAND): button.button_schema(
-            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+            DaikinEkhheActionButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:clock-check-outline",
         ),
         cv.Optional(DAIKIN_CLEAR_TIME_BAND): button.button_schema(
-            DaikinEkhheActionButton, entity_category=ENTITY_CATEGORY_CONFIG
+            DaikinEkhheActionButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon="mdi:clock-remove-outline",
         ),
     }
 )
