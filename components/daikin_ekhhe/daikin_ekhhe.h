@@ -498,6 +498,13 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint8_t packet_size;
     const char *label;
   };
+  struct SingleFieldTxPayload {
+    TxPacketFamily family = TxPacketFamily::MAIN;
+    uint8_t index = 0;
+    uint8_t value = 0;
+    uint8_t bit_position = kBitPositionNoBitmask;
+    uint8_t bit_width = 1;
+  };
   const TxPacketFamilySpec &tx_packet_family_spec_(TxPacketFamily family) const;
   void send_prebuilt_cd_packet_(TxPacketFamily family, const std::vector<uint8_t> &command, TxPacketKind kind,
                                 uint8_t index, uint8_t value, uint8_t bit_position, uint8_t bit_width,
@@ -545,7 +552,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   TxPacketFamily active_tx_operation_family_() const;
   uint8_t active_tx_readback_packet_type_() const;
   bool tx_operation_active_() const;
+  bool single_field_tx_active_() const;
+  const SingleFieldTxPayload &single_field_tx_() const;
+  bool single_field_tx_matches_(TxPacketFamily family, uint8_t index, uint8_t bit_position) const;
   void clear_tx_wait_markers_();
+  void reset_tx_operation_();
   void reset_tx_lifecycle_(TxOperationKind kind, bool clear_ui_sync);
   void reset_single_field_tx_lifecycle_(bool clear_ui_sync);
   void reset_restore_tx_lifecycle_(bool clear_ui_sync);
@@ -636,17 +647,13 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   TimeBandState time_band_state_;
   uint32_t auto_snapshot_last_write_ms_ = 0;
 
-  struct PendingTx {
-    bool active = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    uint8_t index = 0;
-    uint8_t value = 0;
-    uint8_t bit_position = kBitPositionNoBitmask;
-    uint8_t bit_width = 1;
+  struct TxOperationState {
+    TxOperationKind kind = TxOperationKind::NONE;
+    SingleFieldTxPayload single_field;
     uint8_t attempts_sent = 0;
     uint32_t last_attempt_d2_seq = 0;
   };
-  PendingTx pending_tx_;
+  TxOperationState tx_operation_;
   struct PendingRestore {
     bool active = false;
     TxPacketFamily family = TxPacketFamily::MAIN;
