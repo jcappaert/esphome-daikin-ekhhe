@@ -594,6 +594,13 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool time_band_tx_busy_() const;
   bool any_write_busy_() const;
   bool any_tx_or_ui_sync_active_() const;
+  bool tx_ui_sync_active_() const;
+  bool tx_ui_sync_active_(TxOperationKind kind) const;
+  void reset_tx_ui_sync_();
+  void start_single_field_ui_sync_(const SingleFieldTxPayload &target);
+  void start_restore_ui_sync_();
+  void start_profile_restore_ui_sync_(bool known_good);
+  void start_time_band_ui_sync_(const TimeBandTxPayload &target);
   void clear_tx_wait_markers_();
   void reset_tx_operation_();
   void reset_tx_lifecycle_(TxOperationKind kind, bool clear_ui_sync);
@@ -696,42 +703,16 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t last_attempt_d2_seq = 0;
   };
   TxOperationState tx_operation_;
-  struct TxUiSync {
-    bool active = false;
-    TxPacketFamily family = TxPacketFamily::MAIN;
-    uint8_t index = 0;
-    uint8_t value = 0;
-    uint8_t bit_position = kBitPositionNoBitmask;
-    uint8_t bit_width = 1;
-    uint8_t cycles_waited = 0;
-  };
-  TxUiSync tx_ui_sync_;
-  struct RestoreUiSync {
-    bool active = false;
-    bool main_synced = false;
-    bool extended_synced = false;
-    uint8_t cycles_waited = 0;
-  };
-  RestoreUiSync restore_ui_sync_;
-  struct ProfileUiSync {
-    bool active = false;
+  struct TxUiSyncState {
+    TxOperationKind kind = TxOperationKind::NONE;
+    SingleFieldTxPayload single_field;
+    TimeBandTxPayload time_band;
     bool known_good = false;
     bool main_synced = false;
     bool extended_synced = false;
     uint8_t cycles_waited = 0;
   };
-  ProfileUiSync profile_ui_sync_;
-  struct TimeBandUiSync {
-    bool active = false;
-    uint8_t flag = 0;
-    uint8_t start_hour = 0;
-    uint8_t start_minute = 0;
-    uint8_t end_hour = 0;
-    uint8_t end_minute = 0;
-    uint8_t mode = 0;
-    uint8_t cycles_waited = 0;
-  };
-  TimeBandUiSync time_band_ui_sync_;
+  TxUiSyncState tx_ui_sync_;
   struct QueuedTx {
     bool active = false;
     bool scheduled = false;

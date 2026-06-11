@@ -1372,15 +1372,16 @@ const DaikinEkhheComponent::TimeBandTxPayload &DaikinEkhheComponent::time_band_t
 }
 
 bool DaikinEkhheComponent::single_field_tx_busy_() const {
-  return single_field_tx_active_() || queued_tx_.active || queued_tx_.scheduled || tx_ui_sync_.active;
+  return single_field_tx_active_() || queued_tx_.active || queued_tx_.scheduled ||
+         tx_ui_sync_active_(TxOperationKind::SINGLE_FIELD);
 }
 
 bool DaikinEkhheComponent::restore_tx_busy_() const {
-  return restore_tx_active_() || restore_ui_sync_.active;
+  return restore_tx_active_() || tx_ui_sync_active_(TxOperationKind::RESTORE_DEFAULTS);
 }
 
 bool DaikinEkhheComponent::profile_restore_tx_busy_() const {
-  return profile_restore_tx_active_() || profile_ui_sync_.active;
+  return profile_restore_tx_active_() || tx_ui_sync_active_(TxOperationKind::PROFILE_RESTORE);
 }
 
 bool DaikinEkhheComponent::time_band_tx_sending_() const {
@@ -1388,7 +1389,7 @@ bool DaikinEkhheComponent::time_band_tx_sending_() const {
 }
 
 bool DaikinEkhheComponent::time_band_tx_busy_() const {
-  return time_band_tx_sending_() || time_band_ui_sync_.active;
+  return time_band_tx_sending_() || tx_ui_sync_active_(TxOperationKind::TIME_BAND);
 }
 
 bool DaikinEkhheComponent::any_write_busy_() const {
@@ -1397,8 +1398,42 @@ bool DaikinEkhheComponent::any_write_busy_() const {
 }
 
 bool DaikinEkhheComponent::any_tx_or_ui_sync_active_() const {
-  return tx_operation_active_() || tx_ui_sync_.active || restore_ui_sync_.active ||
-         profile_ui_sync_.active || time_band_ui_sync_.active;
+  return tx_operation_active_() || tx_ui_sync_active_();
+}
+
+bool DaikinEkhheComponent::tx_ui_sync_active_() const {
+  return tx_ui_sync_.kind != TxOperationKind::NONE;
+}
+
+bool DaikinEkhheComponent::tx_ui_sync_active_(TxOperationKind kind) const {
+  return tx_ui_sync_.kind == kind;
+}
+
+void DaikinEkhheComponent::reset_tx_ui_sync_() {
+  tx_ui_sync_ = TxUiSyncState{};
+}
+
+void DaikinEkhheComponent::start_single_field_ui_sync_(const SingleFieldTxPayload &target) {
+  reset_tx_ui_sync_();
+  tx_ui_sync_.kind = TxOperationKind::SINGLE_FIELD;
+  tx_ui_sync_.single_field = target;
+}
+
+void DaikinEkhheComponent::start_restore_ui_sync_() {
+  reset_tx_ui_sync_();
+  tx_ui_sync_.kind = TxOperationKind::RESTORE_DEFAULTS;
+}
+
+void DaikinEkhheComponent::start_profile_restore_ui_sync_(bool known_good) {
+  reset_tx_ui_sync_();
+  tx_ui_sync_.kind = TxOperationKind::PROFILE_RESTORE;
+  tx_ui_sync_.known_good = known_good;
+}
+
+void DaikinEkhheComponent::start_time_band_ui_sync_(const TimeBandTxPayload &target) {
+  reset_tx_ui_sync_();
+  tx_ui_sync_.kind = TxOperationKind::TIME_BAND;
+  tx_ui_sync_.time_band = target;
 }
 
 void DaikinEkhheComponent::clear_tx_wait_markers_() {
@@ -1420,40 +1455,32 @@ void DaikinEkhheComponent::reset_single_field_tx_lifecycle_(bool clear_ui_sync) 
   reset_tx_operation_();
   queued_tx_.active = false;
   queued_tx_.scheduled = false;
-  if (clear_ui_sync) {
-    tx_ui_sync_.active = false;
-    tx_ui_sync_.cycles_waited = 0;
+  if (clear_ui_sync && tx_ui_sync_active_(TxOperationKind::SINGLE_FIELD)) {
+    reset_tx_ui_sync_();
   }
 }
 
 void DaikinEkhheComponent::reset_restore_tx_lifecycle_(bool clear_ui_sync) {
   reset_pending_restore_();
   reset_queued_restore_();
-  if (clear_ui_sync) {
-    restore_ui_sync_.active = false;
-    restore_ui_sync_.main_synced = false;
-    restore_ui_sync_.extended_synced = false;
-    restore_ui_sync_.cycles_waited = 0;
+  if (clear_ui_sync && tx_ui_sync_active_(TxOperationKind::RESTORE_DEFAULTS)) {
+    reset_tx_ui_sync_();
   }
 }
 
 void DaikinEkhheComponent::reset_profile_restore_tx_lifecycle_(bool clear_ui_sync) {
   reset_pending_profile_restore_();
   reset_queued_profile_restore_();
-  if (clear_ui_sync) {
-    profile_ui_sync_.active = false;
-    profile_ui_sync_.main_synced = false;
-    profile_ui_sync_.extended_synced = false;
-    profile_ui_sync_.cycles_waited = 0;
+  if (clear_ui_sync && tx_ui_sync_active_(TxOperationKind::PROFILE_RESTORE)) {
+    reset_tx_ui_sync_();
   }
 }
 
 void DaikinEkhheComponent::reset_time_band_tx_lifecycle_(bool clear_ui_sync) {
   reset_pending_time_band_();
   reset_queued_time_band_();
-  if (clear_ui_sync) {
-    time_band_ui_sync_.active = false;
-    time_band_ui_sync_.cycles_waited = 0;
+  if (clear_ui_sync && tx_ui_sync_active_(TxOperationKind::TIME_BAND)) {
+    reset_tx_ui_sync_();
   }
 }
 
@@ -2147,11 +2174,7 @@ void DaikinEkhheComponent::restore_profile_(bool known_good) {
   target.family = TxPacketFamily::MAIN;
   tx_operation_.attempts_sent = 0;
   tx_operation_.last_attempt_d2_seq = 0;
-  profile_ui_sync_.active = false;
-  profile_ui_sync_.known_good = known_good;
-  profile_ui_sync_.main_synced = false;
-  profile_ui_sync_.extended_synced = false;
-  profile_ui_sync_.cycles_waited = 0;
+  reset_tx_ui_sync_();
 
   reset_queued_profile_restore_();
   queued_profile_restore_.active = true;
@@ -2345,7 +2368,7 @@ void DaikinEkhheComponent::update_time_band_state_from_bus_(const std::vector<ui
   if (buffer.size() <= mode_idx) {
     return;
   }
-  if ((time_band_state_.staged_dirty || time_band_ui_sync_.active) && !force) {
+  if ((time_band_state_.staged_dirty || tx_ui_sync_active_(TxOperationKind::TIME_BAND)) && !force) {
     return;
   }
 
@@ -2469,10 +2492,11 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
 }
 
 void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
+  const bool profile_ui_sync_active = tx_ui_sync_active_(TxOperationKind::PROFILE_RESTORE);
   const ProfileState &profile_sync_profile =
-      profile_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
+      tx_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
   const bool profile_d4_sync_matched =
-      profile_ui_sync_.active && profile_sync_profile.valid &&
+      profile_ui_sync_active && profile_sync_profile.valid &&
       profile_matches_packet(true, profile_sync_profile.extended_data,
                              profile_sync_profile.extended_length, buffer, true);
   const bool pending_profile_active = profile_restore_tx_active_();
@@ -2487,7 +2511,7 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
         has_deferred_user_tx_(TxPacketFamily::EXTENDED, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if ((pending_profile_active || (profile_ui_sync_.active && !profile_d4_sync_matched)) &&
+    if ((pending_profile_active || (profile_ui_sync_active && !profile_d4_sync_matched)) &&
         is_profile_managed_field(true, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
@@ -2503,7 +2527,7 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
         has_deferred_user_tx_(TxPacketFamily::EXTENDED, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if ((pending_profile_active || (profile_ui_sync_.active && !profile_d4_sync_matched)) &&
+    if ((pending_profile_active || (profile_ui_sync_active && !profile_d4_sync_matched)) &&
         is_profile_managed_field(true, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
@@ -2512,83 +2536,84 @@ void DaikinEkhheComponent::parse_d4_packet(std::vector<uint8_t> buffer) {
 }
 
 void DaikinEkhheComponent::parse_c1_packet(std::vector<uint8_t> buffer) {
-  if (restore_ui_sync_.active &&
+  if (tx_ui_sync_active_(TxOperationKind::RESTORE_DEFAULTS) &&
       restore_defaults_match_packet(buffer, false, true)) {
-    restore_ui_sync_.extended_synced = true;
-    if (restore_ui_sync_.main_synced) {
+    tx_ui_sync_.extended_synced = true;
+    if (tx_ui_sync_.main_synced) {
       DAIKIN_DBG(TAG, "Restore defaults UI synced: cc_c1_cycles=%u",
-                 restore_ui_sync_.cycles_waited + 1);
-      restore_ui_sync_.active = false;
-      restore_ui_sync_.main_synced = false;
-      restore_ui_sync_.extended_synced = false;
-      restore_ui_sync_.cycles_waited = 0;
+                 tx_ui_sync_.cycles_waited + 1);
+      reset_tx_ui_sync_();
     }
   }
 
-  if (profile_ui_sync_.active) {
+  if (tx_ui_sync_active_(TxOperationKind::PROFILE_RESTORE)) {
     const ProfileState &profile_sync_profile =
-        profile_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
+        tx_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
     if (profile_sync_profile.valid &&
         profile_matches_packet(true, profile_sync_profile.extended_data,
                                profile_sync_profile.extended_length, buffer, false)) {
-      profile_ui_sync_.extended_synced = true;
-      if (profile_ui_sync_.main_synced) {
+      tx_ui_sync_.extended_synced = true;
+      if (tx_ui_sync_.main_synced) {
         DAIKIN_DBG(TAG, "%s UI synced: cc_c1_cycles=%u",
-                   profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
-                   profile_ui_sync_.cycles_waited + 1);
-        profile_ui_sync_.active = false;
-        profile_ui_sync_.main_synced = false;
-        profile_ui_sync_.extended_synced = false;
-        profile_ui_sync_.cycles_waited = 0;
+                   tx_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
+                   tx_ui_sync_.cycles_waited + 1);
+        reset_tx_ui_sync_();
       }
     }
   }
 
-  if (!tx_ui_sync_.active || tx_ui_sync_.family != TxPacketFamily::EXTENDED) {
+  if (!tx_ui_sync_active_(TxOperationKind::SINGLE_FIELD) ||
+      tx_ui_sync_.single_field.family != TxPacketFamily::EXTENDED) {
     return;
   }
 
+  const auto &target = tx_ui_sync_.single_field;
   const bool c1_sync_matched =
-      field_matches_target_(buffer, tx_ui_sync_.index, tx_ui_sync_.value,
-                            tx_ui_sync_.bit_position, tx_ui_sync_.bit_width);
+      field_matches_target_(buffer, target.index, target.value, target.bit_position, target.bit_width);
   if (c1_sync_matched) {
     DAIKIN_DBG(TAG, "TX UI synced: family=extended index=%u bit=%u value=0x%02X c1_cycles=%u",
-               tx_ui_sync_.index, tx_ui_sync_.bit_position, tx_ui_sync_.value,
+               target.index, target.bit_position, target.value,
                tx_ui_sync_.cycles_waited + 1);
-    tx_ui_sync_.active = false;
-    tx_ui_sync_.cycles_waited = 0;
+    reset_tx_ui_sync_();
     return;
   }
 
   tx_ui_sync_.cycles_waited++;
   if (tx_ui_sync_.cycles_waited >= kTxUiSyncMaxCycles) {
     DAIKIN_WARN(TAG, "TX UI sync timeout: family=extended index=%u bit=%u value=0x%02X cycles=%u",
-                tx_ui_sync_.index, tx_ui_sync_.bit_position, tx_ui_sync_.value,
+                target.index, target.bit_position, target.value,
                 tx_ui_sync_.cycles_waited);
-    tx_ui_sync_.active = false;
-    tx_ui_sync_.cycles_waited = 0;
+    reset_tx_ui_sync_();
   }
 }
 
 void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
+  const bool single_field_ui_sync_active = tx_ui_sync_active_(TxOperationKind::SINGLE_FIELD);
+  const bool single_field_main_ui_sync_active =
+      single_field_ui_sync_active && tx_ui_sync_.single_field.family == TxPacketFamily::MAIN;
+  const auto &single_field_sync = tx_ui_sync_.single_field;
+  const bool restore_ui_sync_active = tx_ui_sync_active_(TxOperationKind::RESTORE_DEFAULTS);
+  const bool profile_ui_sync_active = tx_ui_sync_active_(TxOperationKind::PROFILE_RESTORE);
+  const bool time_band_ui_sync_active = tx_ui_sync_active_(TxOperationKind::TIME_BAND);
+  const auto &time_band_sync = tx_ui_sync_.time_band;
   const bool cc_sync_matched =
-      tx_ui_sync_.active && tx_ui_sync_.family == TxPacketFamily::MAIN &&
-      field_matches_target_(buffer, tx_ui_sync_.index, tx_ui_sync_.value,
-                            tx_ui_sync_.bit_position, tx_ui_sync_.bit_width);
+      single_field_main_ui_sync_active &&
+      field_matches_target_(buffer, single_field_sync.index, single_field_sync.value,
+                            single_field_sync.bit_position, single_field_sync.bit_width);
   const bool restore_cc_sync_matched =
-      restore_ui_sync_.active && restore_defaults_match_packet(buffer, false, false);
+      restore_ui_sync_active && restore_defaults_match_packet(buffer, false, false);
   const ProfileState &profile_sync_profile =
-      profile_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
+      tx_ui_sync_.known_good ? known_good_profile_ : auto_snapshot_;
   const bool profile_cc_sync_matched =
-      profile_ui_sync_.active && profile_sync_profile.valid &&
+      profile_ui_sync_active && profile_sync_profile.valid &&
       profile_matches_packet(false, profile_sync_profile.main_data,
                              profile_sync_profile.main_length, buffer, false);
   const bool time_band_cc_sync_matched =
-      time_band_ui_sync_.active &&
-      time_band_matches_packet_(buffer, false, time_band_ui_sync_.flag,
-                                time_band_ui_sync_.start_hour, time_band_ui_sync_.start_minute,
-                                time_band_ui_sync_.end_hour, time_band_ui_sync_.end_minute,
-                                time_band_ui_sync_.mode);
+      time_band_ui_sync_active &&
+      time_band_matches_packet_(buffer, false, time_band_sync.flag,
+                                time_band_sync.start_hour, time_band_sync.start_minute,
+                                time_band_sync.end_hour, time_band_sync.end_minute,
+                                time_band_sync.mode);
   const bool pending_profile_active = profile_restore_tx_active_();
 
   update_time_band_state_from_bus_(buffer, false, time_band_cc_sync_matched);
@@ -2601,15 +2626,15 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
-        tx_ui_sync_.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
+    if (single_field_main_ui_sync_active && single_field_sync.index == param_index &&
+        single_field_sync.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
       continue;
     }
-    if ((restore_tx_active_() || (restore_ui_sync_.active && !restore_cc_sync_matched)) &&
+    if ((restore_tx_active_() || (restore_ui_sync_active && !restore_cc_sync_matched)) &&
         is_restore_scope_field(param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
+    if ((pending_profile_active || (profile_ui_sync_active && !profile_cc_sync_matched)) &&
         is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
@@ -2624,15 +2649,15 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
-        tx_ui_sync_.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
+    if (single_field_main_ui_sync_active && single_field_sync.index == param_index &&
+        single_field_sync.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
       continue;
     }
-    if ((restore_tx_active_() || (restore_ui_sync_.active && !restore_cc_sync_matched)) &&
+    if ((restore_tx_active_() || (restore_ui_sync_active && !restore_cc_sync_matched)) &&
         is_restore_scope_field(param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
+    if ((pending_profile_active || (profile_ui_sync_active && !profile_cc_sync_matched)) &&
         is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
@@ -2648,15 +2673,15 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
-        tx_ui_sync_.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
+    if (single_field_main_ui_sync_active && single_field_sync.index == param_index &&
+        single_field_sync.bit_position == BIT_POSITION_NO_BITMASK && !cc_sync_matched) {
       continue;
     }
-    if ((restore_tx_active_() || (restore_ui_sync_.active && !restore_cc_sync_matched)) &&
+    if ((restore_tx_active_() || (restore_ui_sync_active && !restore_cc_sync_matched)) &&
         is_restore_scope_field(param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
-    if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
+    if ((pending_profile_active || (profile_ui_sync_active && !profile_cc_sync_matched)) &&
         is_profile_managed_field(false, param_index, BIT_POSITION_NO_BITMASK)) {
       continue;
     }
@@ -2675,15 +2700,15 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         has_deferred_user_tx_(TxPacketFamily::MAIN, param_index, bit_position)) {
       continue;
     }
-    if (tx_ui_sync_.active && tx_ui_sync_.index == param_index &&
-        tx_ui_sync_.bit_position == bit_position && !cc_sync_matched) {
+    if (single_field_main_ui_sync_active && single_field_sync.index == param_index &&
+        single_field_sync.bit_position == bit_position && !cc_sync_matched) {
       continue;
     }
-    if ((restore_tx_active_() || (restore_ui_sync_.active && !restore_cc_sync_matched)) &&
+    if ((restore_tx_active_() || (restore_ui_sync_active && !restore_cc_sync_matched)) &&
         is_restore_scope_field(param_index, bit_position)) {
       continue;
     }
-    if ((pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
+    if ((pending_profile_active || (profile_ui_sync_active && !profile_cc_sync_matched)) &&
         is_profile_managed_field(false, param_index, bit_position)) {
       continue;
     }
@@ -2699,11 +2724,11 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
     const bool deferred_silent_write =
         has_deferred_user_tx_(TxPacketFamily::MAIN, CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION);
     const bool waiting_for_silent_ui_sync =
-        tx_ui_sync_.active && tx_ui_sync_.family == TxPacketFamily::MAIN &&
-        tx_ui_sync_.index == CC_PACKET_MASK2_IDX &&
-        tx_ui_sync_.bit_position == SILENT_MODE_BIT_POSITION && !cc_sync_matched;
+        single_field_main_ui_sync_active &&
+        single_field_sync.index == CC_PACKET_MASK2_IDX &&
+        single_field_sync.bit_position == SILENT_MODE_BIT_POSITION && !cc_sync_matched;
     const bool waiting_for_silent_profile_sync =
-        (pending_profile_active || (profile_ui_sync_.active && !profile_cc_sync_matched)) &&
+        (pending_profile_active || (profile_ui_sync_active && !profile_cc_sync_matched)) &&
         is_profile_managed_field(false, CC_PACKET_MASK2_IDX, SILENT_MODE_BIT_POSITION);
     if (!pending_silent_write && !deferred_silent_write && !waiting_for_silent_ui_sync &&
         !waiting_for_silent_profile_sync) {
@@ -2717,40 +2742,35 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
 
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
 
-  if (tx_ui_sync_.active && tx_ui_sync_.family == TxPacketFamily::MAIN) {
+  if (single_field_main_ui_sync_active) {
     if (cc_sync_matched) {
       DAIKIN_DBG(TAG, "TX UI synced: index=%u bit=%u value=0x%02X cc_cycles=%u",
-                 tx_ui_sync_.index, tx_ui_sync_.bit_position, tx_ui_sync_.value,
+                 single_field_sync.index, single_field_sync.bit_position, single_field_sync.value,
                  tx_ui_sync_.cycles_waited + 1);
-      tx_ui_sync_.active = false;
-      tx_ui_sync_.cycles_waited = 0;
+      reset_tx_ui_sync_();
     } else {
       tx_ui_sync_.cycles_waited++;
       if (tx_ui_sync_.cycles_waited >= kTxUiSyncMaxCycles) {
         DAIKIN_WARN(TAG, "TX UI sync timeout: index=%u bit=%u value=0x%02X cycles=%u",
-                    tx_ui_sync_.index, tx_ui_sync_.bit_position, tx_ui_sync_.value,
+                    single_field_sync.index, single_field_sync.bit_position, single_field_sync.value,
                     tx_ui_sync_.cycles_waited);
-        tx_ui_sync_.active = false;
-        tx_ui_sync_.cycles_waited = 0;
+        reset_tx_ui_sync_();
       }
     }
   }
 
-  if (restore_ui_sync_.active) {
+  if (restore_ui_sync_active) {
     if (restore_cc_sync_matched) {
-      restore_ui_sync_.main_synced = true;
+      tx_ui_sync_.main_synced = true;
     }
-    if (restore_ui_sync_.main_synced && restore_ui_sync_.extended_synced) {
-      DAIKIN_DBG(TAG, "Restore defaults UI synced: cc_c1_cycles=%u", restore_ui_sync_.cycles_waited + 1);
-      restore_ui_sync_.active = false;
-      restore_ui_sync_.main_synced = false;
-      restore_ui_sync_.extended_synced = false;
-      restore_ui_sync_.cycles_waited = 0;
+    if (tx_ui_sync_.main_synced && tx_ui_sync_.extended_synced) {
+      DAIKIN_DBG(TAG, "Restore defaults UI synced: cc_c1_cycles=%u", tx_ui_sync_.cycles_waited + 1);
+      reset_tx_ui_sync_();
     } else {
-      restore_ui_sync_.cycles_waited++;
-      if (restore_ui_sync_.cycles_waited >= kRestoreUiSyncMaxCycles) {
+      tx_ui_sync_.cycles_waited++;
+      if (tx_ui_sync_.cycles_waited >= kRestoreUiSyncMaxCycles) {
         uint8_t current_value = 0;
-        const bool extended_pending = restore_ui_sync_.main_synced && !restore_ui_sync_.extended_synced;
+        const bool extended_pending = tx_ui_sync_.main_synced && !tx_ui_sync_.extended_synced;
         const std::vector<uint8_t> &sync_buffer = extended_pending ? last_c1_packet_ : buffer;
         const RestoreFieldSpec *field = first_restore_mismatch(sync_buffer, false, current_value,
                                                                extended_pending);
@@ -2758,39 +2778,33 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
           DAIKIN_WARN(TAG,
                       "Restore defaults UI sync timeout: family=%s first_mismatch=%s expected=0x%02X current=0x%02X cc_c1_cycles=%u",
                       extended_pending ? "extended" : "main",
-                      field->name, field->value, current_value, restore_ui_sync_.cycles_waited);
+                      field->name, field->value, current_value, tx_ui_sync_.cycles_waited);
         } else {
           DAIKIN_WARN(TAG,
                       "Restore defaults UI sync timeout: main_synced=%u extended_synced=%u cc_c1_cycles=%u",
-                      restore_ui_sync_.main_synced, restore_ui_sync_.extended_synced,
-                      restore_ui_sync_.cycles_waited);
+                      tx_ui_sync_.main_synced, tx_ui_sync_.extended_synced,
+                      tx_ui_sync_.cycles_waited);
         }
-        restore_ui_sync_.active = false;
-        restore_ui_sync_.main_synced = false;
-        restore_ui_sync_.extended_synced = false;
-        restore_ui_sync_.cycles_waited = 0;
+        reset_tx_ui_sync_();
       }
     }
   }
 
-  if (profile_ui_sync_.active) {
+  if (profile_ui_sync_active) {
     if (profile_cc_sync_matched) {
-      profile_ui_sync_.main_synced = true;
+      tx_ui_sync_.main_synced = true;
     }
-    if (profile_ui_sync_.main_synced && profile_ui_sync_.extended_synced) {
+    if (tx_ui_sync_.main_synced && tx_ui_sync_.extended_synced) {
       DAIKIN_DBG(TAG, "%s UI synced: cc_c1_cycles=%u",
-                 profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
-                 profile_ui_sync_.cycles_waited + 1);
-      profile_ui_sync_.active = false;
-      profile_ui_sync_.main_synced = false;
-      profile_ui_sync_.extended_synced = false;
-      profile_ui_sync_.cycles_waited = 0;
+                 tx_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
+                 tx_ui_sync_.cycles_waited + 1);
+      reset_tx_ui_sync_();
     } else {
-      profile_ui_sync_.cycles_waited++;
-      if (profile_ui_sync_.cycles_waited >= kProfileUiSyncMaxCycles) {
+      tx_ui_sync_.cycles_waited++;
+      if (tx_ui_sync_.cycles_waited >= kProfileUiSyncMaxCycles) {
         uint8_t expected_value = 0;
         uint8_t current_value = 0;
-        const bool extended_pending = profile_ui_sync_.main_synced && !profile_ui_sync_.extended_synced;
+        const bool extended_pending = tx_ui_sync_.main_synced && !tx_ui_sync_.extended_synced;
         const std::vector<uint8_t> &sync_buffer = extended_pending ? last_c1_packet_ : buffer;
         const uint8_t *profile_data = extended_pending ? profile_sync_profile.extended_data
                                                        : profile_sync_profile.main_data;
@@ -2802,39 +2816,34 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
         if (field != nullptr) {
           DAIKIN_WARN(TAG,
                       "%s UI sync timeout: family=%s first_mismatch=%s expected=0x%02X current=0x%02X cc_c1_cycles=%u",
-                      profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
+                      tx_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
                       extended_pending ? "extended" : "main",
-                      field->name, expected_value, current_value, profile_ui_sync_.cycles_waited);
+                      field->name, expected_value, current_value, tx_ui_sync_.cycles_waited);
         } else {
           DAIKIN_WARN(TAG, "%s UI sync timeout: main_synced=%u extended_synced=%u cc_c1_cycles=%u",
-                      profile_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
-                      profile_ui_sync_.main_synced, profile_ui_sync_.extended_synced,
-                      profile_ui_sync_.cycles_waited);
+                      tx_ui_sync_.known_good ? "Known-good profile" : "Auto snapshot",
+                      tx_ui_sync_.main_synced, tx_ui_sync_.extended_synced,
+                      tx_ui_sync_.cycles_waited);
         }
-        profile_ui_sync_.active = false;
-        profile_ui_sync_.main_synced = false;
-        profile_ui_sync_.extended_synced = false;
-        profile_ui_sync_.cycles_waited = 0;
+        reset_tx_ui_sync_();
       }
     }
   }
 
-  if (time_band_ui_sync_.active) {
+  if (time_band_ui_sync_active) {
     if (time_band_cc_sync_matched) {
-      DAIKIN_DBG(TAG, "Time-band UI synced: cc_cycles=%u", time_band_ui_sync_.cycles_waited + 1);
-      time_band_ui_sync_.active = false;
-      time_band_ui_sync_.cycles_waited = 0;
+      DAIKIN_DBG(TAG, "Time-band UI synced: cc_cycles=%u", tx_ui_sync_.cycles_waited + 1);
+      reset_tx_ui_sync_();
     } else {
-      time_band_ui_sync_.cycles_waited++;
-      if (time_band_ui_sync_.cycles_waited >= kTimeBandUiSyncMaxCycles) {
+      tx_ui_sync_.cycles_waited++;
+      if (tx_ui_sync_.cycles_waited >= kTimeBandUiSyncMaxCycles) {
         DAIKIN_WARN(TAG,
                     "Time-band UI sync timeout: expected flag=0x%02X start=%02u:%02u end=%02u:%02u mode=%u cc_cycles=%u",
-                    time_band_ui_sync_.flag, time_band_ui_sync_.start_hour,
-                    time_band_ui_sync_.start_minute, time_band_ui_sync_.end_hour,
-                    time_band_ui_sync_.end_minute, time_band_ui_sync_.mode,
-                    time_band_ui_sync_.cycles_waited);
-        time_band_ui_sync_.active = false;
-        time_band_ui_sync_.cycles_waited = 0;
+                    time_band_sync.flag, time_band_sync.start_hour,
+                    time_band_sync.start_minute, time_band_sync.end_hour,
+                    time_band_sync.end_minute, time_band_sync.mode,
+                    tx_ui_sync_.cycles_waited);
+        reset_tx_ui_sync_();
       }
     }
   }
@@ -3272,7 +3281,7 @@ void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hou
     return;
   }
   if (single_field_tx_busy_() || restore_tx_busy_() || profile_restore_tx_busy_() ||
-      time_band_ui_sync_.active) {
+      tx_ui_sync_active_(TxOperationKind::TIME_BAND)) {
     DAIKIN_WARN(TAG, "Time-band command blocked: another write is currently active.");
     return;
   }
@@ -3287,8 +3296,7 @@ void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hou
   target.end_hour = end_hour;
   target.end_minute = end_minute;
   target.mode = mode;
-  time_band_ui_sync_.active = false;
-  time_band_ui_sync_.cycles_waited = 0;
+  reset_tx_ui_sync_();
 
   reset_queued_time_band_();
   queued_time_band_tx_.active = true;
@@ -3347,10 +3355,7 @@ void DaikinEkhheComponent::restore_default_settings() {
   restore_tx_().family = TxPacketFamily::MAIN;
   tx_operation_.attempts_sent = 0;
   tx_operation_.last_attempt_d2_seq = 0;
-  restore_ui_sync_.active = false;
-  restore_ui_sync_.main_synced = false;
-  restore_ui_sync_.extended_synced = false;
-  restore_ui_sync_.cycles_waited = 0;
+  reset_tx_ui_sync_();
 
   reset_queued_restore_();
   queued_restore_.active = true;
@@ -4016,13 +4021,7 @@ void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer)
       }
       DAIKIN_DBG(TAG, "TX timing: applied_after=%u attempts=%u", millis() - tx_sent_ms_,
                  tx_operation_.attempts_sent);
-      tx_ui_sync_.active = true;
-      tx_ui_sync_.family = target.family;
-      tx_ui_sync_.index = target.index;
-      tx_ui_sync_.value = target.value;
-      tx_ui_sync_.bit_position = target.bit_position;
-      tx_ui_sync_.bit_width = target.bit_width;
-      tx_ui_sync_.cycles_waited = 0;
+      start_single_field_ui_sync_(target);
     }
     clear_tx_wait_markers_();
     reset_tx_lifecycle_(TxOperationKind::SINGLE_FIELD, false);
@@ -4166,10 +4165,7 @@ void DaikinEkhheComponent::check_pending_restore_(const std::vector<uint8_t> &bu
                  millis() - tx_sent_ms_, tx_operation_.attempts_sent);
     }
     if (wrote_any) {
-      restore_ui_sync_.active = true;
-      restore_ui_sync_.main_synced = false;
-      restore_ui_sync_.extended_synced = false;
-      restore_ui_sync_.cycles_waited = 0;
+      start_restore_ui_sync_();
     }
     clear_tx_wait_markers_();
     reset_tx_lifecycle_(TxOperationKind::RESTORE_DEFAULTS, false);
@@ -4285,11 +4281,7 @@ void DaikinEkhheComponent::check_pending_profile_restore_(const std::vector<uint
                  millis() - tx_sent_ms_, tx_operation_.attempts_sent);
     }
     if (wrote_any) {
-      profile_ui_sync_.active = true;
-      profile_ui_sync_.known_good = target.known_good;
-      profile_ui_sync_.main_synced = false;
-      profile_ui_sync_.extended_synced = false;
-      profile_ui_sync_.cycles_waited = 0;
+      start_profile_restore_ui_sync_(target.known_good);
     }
     clear_tx_wait_markers_();
     reset_tx_lifecycle_(TxOperationKind::PROFILE_RESTORE, false);
@@ -4388,14 +4380,7 @@ void DaikinEkhheComponent::check_pending_time_band_(const std::vector<uint8_t> &
 
     update_time_band_state_from_bus_(buffer, true, true);
     if (tx_operation_.attempts_sent > 0) {
-      time_band_ui_sync_.active = true;
-      time_band_ui_sync_.flag = target.flag;
-      time_band_ui_sync_.start_hour = target.start_hour;
-      time_band_ui_sync_.start_minute = target.start_minute;
-      time_band_ui_sync_.end_hour = target.end_hour;
-      time_band_ui_sync_.end_minute = target.end_minute;
-      time_band_ui_sync_.mode = target.mode;
-      time_band_ui_sync_.cycles_waited = 0;
+      start_time_band_ui_sync_(target);
     }
     clear_tx_wait_markers_();
     reset_tx_lifecycle_(TxOperationKind::TIME_BAND, false);
@@ -4496,9 +4481,7 @@ bool DaikinEkhheComponent::send_uart_command_(TxPacketFamily family, uint8_t ind
     tx_operation_.single_field.bit_width = bit_width;
     tx_operation_.attempts_sent = 0;
     tx_operation_.last_attempt_d2_seq = 0;
-    tx_ui_sync_.active = false;
-    tx_ui_sync_.family = family;
-    tx_ui_sync_.cycles_waited = 0;
+    reset_tx_ui_sync_();
 
     queued_tx_.active = true;
     queued_tx_.scheduled = false;
