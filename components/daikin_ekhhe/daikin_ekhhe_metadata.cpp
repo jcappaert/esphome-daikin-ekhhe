@@ -284,11 +284,11 @@ static const RestoreFieldSpec RESTORE_DEFAULT_EXTENDED_FIELDS[] = {
      DaikinEkhheComponent::EXT_PACKET_P72_IDX, BIT_POSITION_NO_BITMASK, 0, 5},
 };
 
-constexpr size_t RESTORE_DEFAULT_MAIN_FIELD_COUNT =
+extern const size_t RESTORE_DEFAULT_MAIN_FIELD_COUNT =
     sizeof(RESTORE_DEFAULT_FIELDS) / sizeof(RESTORE_DEFAULT_FIELDS[0]);
-constexpr size_t RESTORE_DEFAULT_EXTENDED_FIELD_COUNT =
+extern const size_t RESTORE_DEFAULT_EXTENDED_FIELD_COUNT =
     sizeof(RESTORE_DEFAULT_EXTENDED_FIELDS) / sizeof(RESTORE_DEFAULT_EXTENDED_FIELDS[0]);
-constexpr size_t RESTORE_DEFAULT_FIELD_COUNT =
+extern const size_t RESTORE_DEFAULT_FIELD_COUNT =
     RESTORE_DEFAULT_MAIN_FIELD_COUNT + RESTORE_DEFAULT_EXTENDED_FIELD_COUNT;
 
 const RestoreFieldSpec *restore_default_fields(bool extended, size_t &count) {
@@ -539,11 +539,11 @@ static const ManagedFieldSpec PROFILE_MANAGED_EXTENDED_FIELDS[] = {
      DaikinEkhheComponent::EXT_PACKET_P72_IDX, BIT_POSITION_NO_BITMASK, 0},
 };
 
-constexpr size_t PROFILE_MANAGED_MAIN_FIELD_COUNT =
+extern const size_t PROFILE_MANAGED_MAIN_FIELD_COUNT =
     sizeof(PROFILE_MANAGED_FIELDS) / sizeof(PROFILE_MANAGED_FIELDS[0]);
-constexpr size_t PROFILE_MANAGED_EXTENDED_FIELD_COUNT =
+extern const size_t PROFILE_MANAGED_EXTENDED_FIELD_COUNT =
     sizeof(PROFILE_MANAGED_EXTENDED_FIELDS) / sizeof(PROFILE_MANAGED_EXTENDED_FIELDS[0]);
-constexpr size_t PROFILE_MANAGED_FIELD_COUNT =
+extern const size_t PROFILE_MANAGED_FIELD_COUNT =
     PROFILE_MANAGED_MAIN_FIELD_COUNT + PROFILE_MANAGED_EXTENDED_FIELD_COUNT;
 
 const ManagedFieldSpec *profile_managed_fields(bool extended, size_t &count) {

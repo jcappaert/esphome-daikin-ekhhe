@@ -25,6 +25,12 @@ constexpr uint32_t KNOWN_GOOD_PROFILE_PREF_KEY = 0x444b4d31U;
 constexpr uint32_t AUTO_SNAPSHOT_PREF_KEY = 0x444b4d32U;
 
 extern const std::map<uint8_t, uint8_t> PACKET_SIZES;
+extern const size_t RESTORE_DEFAULT_MAIN_FIELD_COUNT;
+extern const size_t RESTORE_DEFAULT_EXTENDED_FIELD_COUNT;
+extern const size_t RESTORE_DEFAULT_FIELD_COUNT;
+extern const size_t PROFILE_MANAGED_MAIN_FIELD_COUNT;
+extern const size_t PROFILE_MANAGED_EXTENDED_FIELD_COUNT;
+extern const size_t PROFILE_MANAGED_FIELD_COUNT;
 
 struct PacketFieldRef {
   uint8_t index;
