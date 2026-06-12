@@ -17,6 +17,9 @@
 #if defined(USE_BUTTON)
 #include "esphome/components/button/button.h"
 #endif
+#if defined(USE_WATER_HEATER)
+#include "esphome/components/water_heater/water_heater.h"
+#endif
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/time/real_time_clock.h"
@@ -96,6 +99,31 @@ class DaikinEkhheActionButton : public button::Button {
 };
 #endif
 
+#if defined(USE_WATER_HEATER)
+enum WaterHeaterCurrentTemperatureSource : uint8_t {
+  WATER_HEATER_TEMP_SOURCE_DISPLAY,
+  WATER_HEATER_TEMP_SOURCE_UPPER,
+  WATER_HEATER_TEMP_SOURCE_LOWER,
+};
+
+class DaikinEkhheWaterHeater : public water_heater::WaterHeater {
+ public:
+  water_heater::WaterHeaterCallInternal make_call() override;
+  void control(const water_heater::WaterHeaterCall &call) override;
+  void set_parent(DaikinEkhheComponent *parent) { this->parent_ = parent; }
+  void set_current_temperature_source(WaterHeaterCurrentTemperatureSource source) {
+    this->current_temperature_source_ = source;
+  }
+
+ protected:
+  water_heater::WaterHeaterTraits traits() override;
+
+ private:
+  DaikinEkhheComponent *parent_{nullptr};
+  WaterHeaterCurrentTemperatureSource current_temperature_source_{WATER_HEATER_TEMP_SOURCE_DISPLAY};
+};
+#endif
+
 class DaikinEkhheComponent : public Component, public uart::UARTDevice {
  public:
 
@@ -128,6 +156,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
 #if defined(USE_SWITCH)
   void register_switch(const std::string &switch_name, switch_::Switch *sw);
+#endif
+#if defined(USE_WATER_HEATER)
+  void register_water_heater(DaikinEkhheWaterHeater *water_heater);
 #endif
   void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
@@ -407,6 +438,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   std::map<std::string, DaikinEkhheSelect *> selects_;
 #if defined(USE_SWITCH)
   std::map<std::string, switch_::Switch *> switches_;
+#endif
+#if defined(USE_WATER_HEATER)
+  DaikinEkhheWaterHeater *water_heater_ = nullptr;
 #endif
   std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;

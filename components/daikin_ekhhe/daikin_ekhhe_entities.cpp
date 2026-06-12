@@ -139,6 +139,39 @@ void DaikinEkhheComponent::register_switch(const std::string &switch_name, switc
 }
 #endif
 
+#if defined(USE_WATER_HEATER)
+water_heater::WaterHeaterCallInternal DaikinEkhheWaterHeater::make_call() {
+  return water_heater::WaterHeaterCallInternal(this);
+}
+
+void DaikinEkhheWaterHeater::control(const water_heater::WaterHeaterCall &call) {
+  (void) call;
+  ESP_LOGW(TAG, "Native water heater control is not implemented yet");
+  this->publish_state();
+}
+
+water_heater::WaterHeaterTraits DaikinEkhheWaterHeater::traits() {
+  water_heater::WaterHeaterTraits traits;
+  traits.set_supports_current_temperature(true);
+  traits.set_supports_away_mode(true);
+  traits.set_min_temperature(30.0f);
+  traits.set_max_temperature(75.0f);
+  traits.set_target_temperature_step(1.0f);
+  traits.set_supported_modes({
+      water_heater::WATER_HEATER_MODE_OFF,
+      water_heater::WATER_HEATER_MODE_PERFORMANCE,
+      water_heater::WATER_HEATER_MODE_HEAT_PUMP,
+      water_heater::WATER_HEATER_MODE_HIGH_DEMAND,
+      water_heater::WATER_HEATER_MODE_ELECTRIC,
+  });
+  return traits;
+}
+
+void DaikinEkhheComponent::register_water_heater(DaikinEkhheWaterHeater *water_heater) {
+  this->water_heater_ = water_heater;
+}
+#endif
+
 void DaikinEkhheComponent::register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor) {
   this->known_good_profile_status_sensor_ = sensor;
   publish_profile_status_(true);
