@@ -192,6 +192,8 @@ water_heater::WaterHeaterTraits DaikinEkhheWaterHeater::traits() {
   water_heater::WaterHeaterTraits traits;
   traits.set_supports_current_temperature(true);
   traits.set_supports_away_mode(true);
+  traits.add_feature_flags(water_heater::WATER_HEATER_SUPPORTS_TARGET_TEMPERATURE |
+                           water_heater::WATER_HEATER_SUPPORTS_OPERATION_MODE);
   traits.set_min_temperature(30.0f);
   traits.set_max_temperature(75.0f);
   traits.set_target_temperature_step(1.0f);
@@ -374,6 +376,15 @@ bool DaikinEkhheComponent::request_water_heater_control_(const water_heater::Wat
   bool power_requested = false;
   bool away_requested = false;
 
+  const bool empty_native_call = !call.get_mode().has_value() &&
+                                 std::isnan(call.get_target_temperature()) &&
+                                 std::isnan(call.get_target_temperature_low()) &&
+                                 std::isnan(call.get_target_temperature_high()) &&
+                                 call.get_state() == 0;
+  if (empty_native_call) {
+    DAIKIN_DBG(TAG, "Native water heater empty command interpreted as away toggle.");
+  }
+
   if (call.get_mode().has_value()) {
     const water_heater::WaterHeaterMode native_mode = *call.get_mode();
     mode_requested = true;
@@ -398,13 +409,18 @@ bool DaikinEkhheComponent::request_water_heater_control_(const water_heater::Wat
     power_requested = true;
     mode_requested = true;
     away_requested = true;
-  } else if (!call.get_mode().has_value() && std::isnan(call.get_target_temperature()) &&
-             this->water_heater_power_on_ &&
+  } else if (empty_native_call && this->water_heater_power_on_ &&
              this->water_heater_operational_mode_ == kOperationalModeVacation) {
     desired_power_on = true;
     desired_mode = this->water_heater_restore_mode_for_away_clear_();
     power_requested = true;
     mode_requested = true;
+  } else if (empty_native_call) {
+    desired_power_on = true;
+    desired_mode = kOperationalModeVacation;
+    power_requested = true;
+    mode_requested = true;
+    away_requested = true;
   } else if ((state & water_heater::WATER_HEATER_STATE_ON) != 0 && !call.get_mode().has_value()) {
     desired_power_on = true;
     desired_mode = this->water_heater_restore_mode_for_on_();
