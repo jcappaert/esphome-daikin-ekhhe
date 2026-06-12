@@ -13,6 +13,18 @@ using namespace daikin_ekhhe;
 
 static const char *const TAG = "daikin_ekhhe";
 
+#if defined(USE_WATER_HEATER)
+static bool water_heater_float_equal(float lhs, float rhs) {
+  if (std::isnan(lhs) && std::isnan(rhs)) {
+    return true;
+  }
+  if (std::isnan(lhs) || std::isnan(rhs)) {
+    return false;
+  }
+  return fabsf(lhs - rhs) <= 0.01f;
+}
+#endif
+
 bool DaikinEkhheComponent::should_publish_float_(const std::string &key, float value,
                                                  std::map<std::string, float> &last_values,
                                                  std::map<std::string, uint32_t> &last_publish_ms,
@@ -150,6 +162,32 @@ void DaikinEkhheWaterHeater::control(const water_heater::WaterHeaterCall &call) 
   this->publish_state();
 }
 
+void DaikinEkhheWaterHeater::publish_readback(float current_temperature, float target_temperature,
+                                              water_heater::WaterHeaterMode mode,
+                                              bool on, bool away) {
+  uint32_t state = 0;
+  if (on) {
+    state |= water_heater::WATER_HEATER_STATE_ON;
+  }
+  if (away) {
+    state |= water_heater::WATER_HEATER_STATE_AWAY;
+  }
+
+  const bool changed =
+      !water_heater_float_equal(this->current_temperature_, current_temperature) ||
+      !water_heater_float_equal(this->target_temperature_, target_temperature) ||
+      this->mode_ != mode || this->state_ != state;
+
+  this->set_current_temperature(current_temperature);
+  this->set_target_temperature_(target_temperature);
+  this->set_mode_(mode);
+  this->set_state_(state);
+
+  if (changed) {
+    this->publish_state();
+  }
+}
+
 water_heater::WaterHeaterTraits DaikinEkhheWaterHeater::traits() {
   water_heater::WaterHeaterTraits traits;
   traits.set_supports_current_temperature(true);
@@ -169,6 +207,144 @@ water_heater::WaterHeaterTraits DaikinEkhheWaterHeater::traits() {
 
 void DaikinEkhheComponent::register_water_heater(DaikinEkhheWaterHeater *water_heater) {
   this->water_heater_ = water_heater;
+}
+
+void DaikinEkhheComponent::update_water_heater_temperature_cache_(float lower_temperature,
+                                                                  float upper_temperature) {
+  this->water_heater_lower_temperature_ = lower_temperature;
+  this->water_heater_upper_temperature_ = upper_temperature;
+  this->water_heater_have_temperatures_ = true;
+}
+
+void DaikinEkhheComponent::update_water_heater_main_cache_from_bus_(const std::vector<uint8_t> &buffer,
+                                                                    bool d2_packet) {
+  const uint8_t mask1_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_MASK1_IDX)
+                                      : static_cast<uint8_t>(CC_PACKET_MASK1_IDX);
+  const uint8_t mask2_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_MASK2_IDX)
+                                      : static_cast<uint8_t>(CC_PACKET_MASK2_IDX);
+  const uint8_t mode_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_MODE_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_MODE_IDX);
+  const uint8_t auto_target_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_AUTO_TTARGET_IDX)
+                                           : static_cast<uint8_t>(CC_PACKET_AUTO_TTARGET_IDX);
+  const uint8_t eco_target_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_ECO_TTARGET_IDX)
+                                          : static_cast<uint8_t>(CC_PACKET_ECO_TTARGET_IDX);
+  const uint8_t boost_target_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_BOOST_TTGARGET_IDX)
+                                            : static_cast<uint8_t>(CC_PACKET_BOOST_TTGARGET_IDX);
+  const uint8_t electric_target_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_ELECTRIC_TTARGET_IDX)
+                                               : static_cast<uint8_t>(CC_PACKET_ELECTRIC_TTARGET_IDX);
+
+  if (buffer.size() <= electric_target_idx) {
+    return;
+  }
+
+  this->water_heater_power_on_ = (buffer[mask1_idx] & 0x01) != 0;
+  this->water_heater_display_probe_ = buffer[mask2_idx] & 0x01;
+  this->water_heater_operational_mode_ = buffer[mode_idx];
+  this->water_heater_auto_target_ = buffer[auto_target_idx];
+  this->water_heater_eco_target_ = buffer[eco_target_idx];
+  this->water_heater_boost_target_ = buffer[boost_target_idx];
+  this->water_heater_electric_target_ = buffer[electric_target_idx];
+  this->water_heater_have_main_state_ = true;
+
+  if (this->water_heater_target_capable_mode_(this->water_heater_operational_mode_)) {
+    this->water_heater_last_target_mode_ = this->water_heater_operational_mode_;
+    this->water_heater_have_last_target_mode_ = true;
+    if (this->water_heater_power_on_) {
+      this->water_heater_last_non_vacation_mode_ = this->water_heater_operational_mode_;
+      this->water_heater_have_last_non_vacation_mode_ = true;
+      this->water_heater_last_non_standby_mode_ = this->water_heater_operational_mode_;
+      this->water_heater_have_last_non_standby_mode_ = true;
+    }
+  }
+
+  this->publish_water_heater_state_();
+}
+
+bool DaikinEkhheComponent::water_heater_target_capable_mode_(uint8_t mode) const {
+  return mode == kOperationalModeAuto || mode == kOperationalModeEco ||
+         mode == kOperationalModeBoost || mode == kOperationalModeElectric;
+}
+
+uint8_t DaikinEkhheComponent::water_heater_readback_target_mode_() const {
+  if (this->water_heater_target_capable_mode_(this->water_heater_operational_mode_)) {
+    return this->water_heater_operational_mode_;
+  }
+  if (this->water_heater_have_last_target_mode_) {
+    return this->water_heater_last_target_mode_;
+  }
+  return kOperationalModeAuto;
+}
+
+float DaikinEkhheComponent::water_heater_target_for_mode_(uint8_t mode) const {
+  switch (mode) {
+    case kOperationalModeEco:
+      return this->water_heater_eco_target_;
+    case kOperationalModeBoost:
+      return this->water_heater_boost_target_;
+    case kOperationalModeElectric:
+      return this->water_heater_electric_target_;
+    case kOperationalModeAuto:
+    default:
+      return this->water_heater_auto_target_;
+  }
+}
+
+water_heater::WaterHeaterMode DaikinEkhheComponent::water_heater_native_mode_(uint8_t mode) const {
+  uint8_t effective_mode = mode;
+  if (mode == kOperationalModeVacation) {
+    effective_mode = this->water_heater_have_last_non_vacation_mode_
+                         ? this->water_heater_last_non_vacation_mode_
+                         : kOperationalModeAuto;
+  }
+
+  switch (effective_mode) {
+    case kOperationalModeEco:
+      return water_heater::WATER_HEATER_MODE_HEAT_PUMP;
+    case kOperationalModeBoost:
+      return water_heater::WATER_HEATER_MODE_HIGH_DEMAND;
+    case kOperationalModeElectric:
+      return water_heater::WATER_HEATER_MODE_ELECTRIC;
+    case kOperationalModeAuto:
+      return water_heater::WATER_HEATER_MODE_PERFORMANCE;
+    case kOperationalModeFan:
+    default:
+      return water_heater::WATER_HEATER_MODE_OFF;
+  }
+}
+
+void DaikinEkhheComponent::publish_water_heater_state_() {
+  if (this->water_heater_ == nullptr || !this->cycle_publish_allowed_ ||
+      !this->water_heater_have_temperatures_ || !this->water_heater_have_main_state_) {
+    return;
+  }
+
+  float current_temperature = this->water_heater_upper_temperature_;
+  switch (this->water_heater_->get_current_temperature_source()) {
+    case WATER_HEATER_TEMP_SOURCE_LOWER:
+      current_temperature = this->water_heater_lower_temperature_;
+      break;
+    case WATER_HEATER_TEMP_SOURCE_DISPLAY:
+      current_temperature = this->water_heater_display_probe_ == 0
+                                ? this->water_heater_lower_temperature_
+                                : this->water_heater_upper_temperature_;
+      break;
+    case WATER_HEATER_TEMP_SOURCE_UPPER:
+    default:
+      current_temperature = this->water_heater_upper_temperature_;
+      break;
+  }
+
+  const bool away = this->water_heater_power_on_ &&
+                    this->water_heater_operational_mode_ == kOperationalModeVacation;
+  const uint8_t target_mode = this->water_heater_readback_target_mode_();
+  const float target_temperature = this->water_heater_target_for_mode_(target_mode);
+  const water_heater::WaterHeaterMode mode =
+      this->water_heater_power_on_
+          ? this->water_heater_native_mode_(this->water_heater_operational_mode_)
+          : water_heater::WATER_HEATER_MODE_OFF;
+
+  this->water_heater_->publish_readback(current_temperature, target_temperature, mode,
+                                        this->water_heater_power_on_, away);
 }
 #endif
 

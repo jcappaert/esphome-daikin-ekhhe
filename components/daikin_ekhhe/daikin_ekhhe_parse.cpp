@@ -50,10 +50,17 @@ void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
 }
 
 void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
+  const float lower_water_temperature = static_cast<int8_t>(buffer[DD_PACKET_A_IDX]);
+  const float upper_water_temperature = static_cast<int8_t>(buffer[DD_PACKET_B_IDX]);
+
+#if defined(USE_WATER_HEATER)
+  update_water_heater_temperature_cache_(lower_water_temperature, upper_water_temperature);
+#endif
+
   // update sensors
   std::map<std::string, float> sensor_values = {
-      {A_LOW_WAT_T_PROBE,      (int8_t)buffer[DD_PACKET_A_IDX]},
-      {B_UP_WAT_T_PROBE,       (int8_t)buffer[DD_PACKET_B_IDX]},
+      {A_LOW_WAT_T_PROBE,      lower_water_temperature},
+      {B_UP_WAT_T_PROBE,       upper_water_temperature},
       {C_DEFROST_T_PROBE,      (int8_t)buffer[DD_PACKET_C_IDX]},
       {D_SUPPLY_AIR_T_PROBE,   (int8_t)buffer[DD_PACKET_D_IDX]},
       {E_EVA_INLET_T_PROBE,    (int8_t)buffer[DD_PACKET_E_IDX]},
@@ -256,6 +263,10 @@ void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
 #endif
 
   update_timestamp(buffer[D2_PACKET_HOUR_IDX], buffer[D2_PACKET_MIN_IDX]);
+
+#if defined(USE_WATER_HEATER)
+  update_water_heater_main_cache_from_bus_(buffer, true);
+#endif
 
   return;
 }
@@ -477,6 +488,10 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   set_text_sensor_value_(L_UI_FW_VERSION, "U" + std::to_string(buffer[CC_PACKET_L_FW_IDX]));
 
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
+
+#if defined(USE_WATER_HEATER)
+  update_water_heater_main_cache_from_bus_(buffer, false);
+#endif
 
   if (single_field_main_ui_sync_active) {
     if (cc_sync_matched) {

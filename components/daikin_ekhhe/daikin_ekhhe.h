@@ -114,6 +114,11 @@ class DaikinEkhheWaterHeater : public water_heater::WaterHeater {
   void set_current_temperature_source(WaterHeaterCurrentTemperatureSource source) {
     this->current_temperature_source_ = source;
   }
+  WaterHeaterCurrentTemperatureSource get_current_temperature_source() const {
+    return this->current_temperature_source_;
+  }
+  void publish_readback(float current_temperature, float target_temperature,
+                        water_heater::WaterHeaterMode mode, bool on, bool away);
 
  protected:
   water_heater::WaterHeaterTraits traits() override;
@@ -421,6 +426,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint8_t kOperationalModeAuto = 0;
   static constexpr uint8_t kOperationalModeEco = 1;
   static constexpr uint8_t kOperationalModeBoost = 2;
+  static constexpr uint8_t kOperationalModeElectric = 3;
+  static constexpr uint8_t kOperationalModeFan = 4;
+  static constexpr uint8_t kOperationalModeVacation = 5;
 
   static constexpr uint8_t kPacketMaskDD = 1 << 0;
   static constexpr uint8_t kPacketMaskD2 = 1 << 1;
@@ -441,6 +449,23 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #endif
 #if defined(USE_WATER_HEATER)
   DaikinEkhheWaterHeater *water_heater_ = nullptr;
+  bool water_heater_have_temperatures_ = false;
+  bool water_heater_have_main_state_ = false;
+  bool water_heater_have_last_target_mode_ = false;
+  bool water_heater_have_last_non_vacation_mode_ = false;
+  bool water_heater_have_last_non_standby_mode_ = false;
+  float water_heater_lower_temperature_ = 0.0f;
+  float water_heater_upper_temperature_ = 0.0f;
+  float water_heater_auto_target_ = 0.0f;
+  float water_heater_eco_target_ = 0.0f;
+  float water_heater_boost_target_ = 0.0f;
+  float water_heater_electric_target_ = 0.0f;
+  bool water_heater_power_on_ = false;
+  uint8_t water_heater_operational_mode_ = kOperationalModeAuto;
+  uint8_t water_heater_display_probe_ = 1;
+  uint8_t water_heater_last_target_mode_ = kOperationalModeAuto;
+  uint8_t water_heater_last_non_vacation_mode_ = kOperationalModeAuto;
+  uint8_t water_heater_last_non_standby_mode_ = kOperationalModeAuto;
 #endif
   std::map<std::string, esphome::text_sensor::TextSensor *> text_sensors_;
   text_sensor::TextSensor *timestamp_sensor_ = nullptr;
@@ -494,6 +519,15 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void restore_profile_(bool known_good);
   void update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer, bool d2_packet,
                                         bool force = false);
+#if defined(USE_WATER_HEATER)
+  void update_water_heater_temperature_cache_(float lower_temperature, float upper_temperature);
+  void update_water_heater_main_cache_from_bus_(const std::vector<uint8_t> &buffer, bool d2_packet);
+  void publish_water_heater_state_();
+  bool water_heater_target_capable_mode_(uint8_t mode) const;
+  uint8_t water_heater_readback_target_mode_() const;
+  float water_heater_target_for_mode_(uint8_t mode) const;
+  water_heater::WaterHeaterMode water_heater_native_mode_(uint8_t mode) const;
+#endif
   void update_dd_b1_bit_sensors_();
   void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
   const RawFrameEntry *find_latest_frame_by_type_(uint8_t packet_type, size_t &index, bool require_ok) const;
