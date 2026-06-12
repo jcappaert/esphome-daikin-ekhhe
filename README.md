@@ -9,7 +9,7 @@ ESPHome external component for Daikin EKHHE domestic hot water heat pumps, also 
 
 The component exposes known heat-pump readings, operating controls, installer parameters, target temperatures, recovery buttons, and an optional native Home Assistant water heater entity through ESPHome and Home Assistant.
 
-![Home Assistant water heater card for Daikin DHW](docs/images/native-water-heater.png)
+<img src="docs/images/native-water-heater.png" alt="Home Assistant water heater card for Daikin DHW" width="420">
 
 ## Status And Safety
 
