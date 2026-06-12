@@ -42,3 +42,9 @@ jobs:
 
       - name: Compile minimal firmware
         run: esphome compile .github/fixtures/minimal/ci.yaml
+
+      - name: Validate water heater config
+        run: esphome config .github/fixtures/water_heater/ci.yaml
+
+      - name: Compile water heater firmware
+        run: esphome compile .github/fixtures/water_heater/ci.yaml

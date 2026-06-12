@@ -31,10 +31,11 @@ When adding code, prefer the module that owns the behavior rather than growing t
 
 ## Local Validation
 
-The GitHub Actions workflow validates and compiles two fixture configurations:
+The GitHub Actions workflow validates and compiles three fixture configurations:
 
 - `.github/fixtures/minimal/ci.yaml`
 - `.github/fixtures/production/ci.yaml`
+- `.github/fixtures/water_heater/ci.yaml`
 
 Useful local commands:
 
@@ -44,6 +45,8 @@ esphome config .github/fixtures/minimal/ci.yaml
 esphome compile .github/fixtures/minimal/ci.yaml
 esphome config .github/fixtures/production/ci.yaml
 esphome compile .github/fixtures/production/ci.yaml
+esphome config .github/fixtures/water_heater/ci.yaml
+esphome compile .github/fixtures/water_heater/ci.yaml
 ```
 
 Run at least the relevant fixture when changing optional entities, schema, packet write logic, receive-cycle behavior, or recovery/profile features.

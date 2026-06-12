@@ -43,7 +43,7 @@ The optional `tx_send_calibration` number entity can expose this timing as a Num
 
 ## Entity Groups
 
-Entities are optional and are declared under the normal ESPHome platforms (`sensor`, `binary_sensor`, `select`, `number`, `button`, and `text_sensor`). The groups below are organized by device functionality instead of YAML platform.
+Entities are optional and are declared under the normal ESPHome platforms (`water_heater`, `sensor`, `binary_sensor`, `select`, `number`, `button`, `switch`, and `text_sensor`). The groups below are organized by device functionality instead of YAML platform.
 
 ### Temperature And Runtime Readings
 
@@ -64,6 +64,7 @@ Useful read-only values for monitoring the heat pump:
 
 Common day-to-day controls and state indicators:
 
+- native `water_heater` entity
 - `power_status`
 - `operational_mode`
 - `silent_mode`
@@ -73,6 +74,41 @@ Common day-to-day controls and state indicators:
 - `vacation_days`
 
 `silent_mode` can be enabled only while the unit is in Auto, Eco, or Boost mode. Disabling it is allowed from any mode so the setting can be cleared safely if the operating mode changes.
+
+The optional native water heater entity provides a Home Assistant DHW card on
+top of the same readback and write logic used by the detailed entities:
+
+```yaml
+water_heater:
+  - platform: daikin_ekhhe
+    ekhhe_id: daikin_component
+    name: "Daikin DHW"
+    current_temperature_source: display
+```
+
+`current_temperature_source` controls which probe is shown as the current
+temperature:
+
+| Value | Description |
+| --- | --- |
+| `display` | Default. Follow the device/display setting for which water probe is active. |
+| `upper` | Always use the upper water temperature probe. |
+| `lower` | Always use the lower water temperature probe. |
+
+Native water heater modes map to Daikin operation as follows:
+
+| Home Assistant mode | Daikin behavior |
+| --- | --- |
+| `Performance` | Auto |
+| `Heat pump` | Eco |
+| `High demand` | Boost |
+| `Electric` | Electric |
+| `Off` | Standby/off |
+| `Away mode` | Vacation |
+
+The native entity is intended for everyday Home Assistant control. The detailed
+entities remain available for direct access to individual settings, diagnostics,
+profiles, and recovery operations.
 
 ### Fault And Alarm Indicators
 
