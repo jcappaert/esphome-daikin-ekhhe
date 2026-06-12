@@ -54,6 +54,8 @@ void DaikinEkhheComponent::loop() {
       DAIKIN_WARN(TAG, "Cycle partial: missing=%s bytes=%u packets=%u crc=%u frame=%u",
                   missing.c_str(), cycle_bytes_read_, cycle_packets_seen_, cycle_checksum_errors_,
                   cycle_framing_errors_);
+      start_uart_cycle();
+      return;
     }
   }
 
