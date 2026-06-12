@@ -384,6 +384,13 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   const bool profile_ui_sync_active = tx_ui_sync_active_(TxOperationKind::PROFILE_RESTORE);
   const bool time_band_ui_sync_active = tx_ui_sync_active_(TxOperationKind::TIME_BAND);
   const auto &time_band_sync = tx_ui_sync_.time_band;
+#if defined(USE_WATER_HEATER)
+  const bool water_heater_ui_sync_active = tx_ui_sync_active_(TxOperationKind::WATER_HEATER);
+  const auto &water_heater_sync = tx_ui_sync_.water_heater;
+  const bool water_heater_cc_sync_matched =
+      water_heater_ui_sync_active &&
+      water_heater_tx_matches_base_packet_(water_heater_sync, buffer);
+#endif
   const bool cc_sync_matched =
       single_field_main_ui_sync_active &&
       field_matches_target_(buffer, single_field_sync.index, single_field_sync.value,
@@ -490,7 +497,9 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
   update_timestamp(buffer[CC_PACKET_HOUR_IDX], buffer[CC_PACKET_MIN_IDX]);
 
 #if defined(USE_WATER_HEATER)
-  update_water_heater_main_cache_from_bus_(buffer, false);
+  if (!water_heater_ui_sync_active || water_heater_cc_sync_matched) {
+    update_water_heater_main_cache_from_bus_(buffer, false);
+  }
 #endif
 
   if (single_field_main_ui_sync_active) {
@@ -598,6 +607,42 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
       }
     }
   }
+
+#if defined(USE_WATER_HEATER)
+  if (water_heater_ui_sync_active) {
+    if (water_heater_cc_sync_matched) {
+      DAIKIN_DBG(TAG, "Native water heater UI synced: cc_cycles=%u", tx_ui_sync_.cycles_waited + 1);
+      reset_tx_ui_sync_();
+    } else {
+      tx_ui_sync_.cycles_waited++;
+      if (tx_ui_sync_.cycles_waited >= kTxUiSyncMaxCycles) {
+        const WaterHeaterTxField *first_mismatch = nullptr;
+        water_heater_tx_matches_base_packet_(water_heater_sync, buffer, &first_mismatch);
+        if (first_mismatch != nullptr && first_mismatch->write_index < buffer.size()) {
+          uint8_t current_value = buffer[first_mismatch->write_index];
+          uint8_t expected_value = first_mismatch->write_value;
+          if (first_mismatch->write_bit_position != BIT_POSITION_NO_BITMASK) {
+            current_value = extract_field_value(buffer, first_mismatch->write_index,
+                                                first_mismatch->write_bit_position,
+                                                first_mismatch->write_bit_width);
+            expected_value &= field_value_mask(first_mismatch->write_index,
+                                               first_mismatch->write_bit_position,
+                                               first_mismatch->write_bit_width);
+          }
+          DAIKIN_WARN(TAG,
+                      "Native water heater UI sync timeout: first_mismatch=%s expected=0x%02X current=0x%02X cc_cycles=%u",
+                      first_mismatch->name, expected_value, current_value, tx_ui_sync_.cycles_waited);
+        } else {
+          DAIKIN_WARN(TAG, "Native water heater UI sync timeout: fields=%u cc_cycles=%u",
+                      static_cast<unsigned>(water_heater_sync.fields.size()),
+                      tx_ui_sync_.cycles_waited);
+        }
+        reset_tx_ui_sync_();
+        update_water_heater_main_cache_from_bus_(buffer, false);
+      }
+    }
+  }
+#endif
 
   return;
 }

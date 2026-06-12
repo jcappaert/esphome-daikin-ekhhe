@@ -164,6 +164,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #endif
 #if defined(USE_WATER_HEATER)
   void register_water_heater(DaikinEkhheWaterHeater *water_heater);
+  bool request_water_heater_control_(const water_heater::WaterHeaterCall &call);
 #endif
   void register_known_good_profile_status_sensor(esphome::text_sensor::TextSensor *sensor);
   void register_auto_snapshot_status_sensor(esphome::text_sensor::TextSensor *sensor);
@@ -527,6 +528,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint8_t water_heater_readback_target_mode_() const;
   float water_heater_target_for_mode_(uint8_t mode) const;
   water_heater::WaterHeaterMode water_heater_native_mode_(uint8_t mode) const;
+  bool water_heater_native_mode_to_operational_mode_(water_heater::WaterHeaterMode mode,
+                                                     uint8_t &operational_mode) const;
+  uint8_t water_heater_restore_mode_for_on_() const;
+  uint8_t water_heater_restore_mode_for_away_clear_() const;
 #endif
   void update_dd_b1_bit_sensors_();
   void set_text_sensor_value_(const std::string &text_sensor_name, const std::string &value);
@@ -627,12 +632,18 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   bool add_water_heater_tx_field_(WaterHeaterTxPayload &payload, const char *name,
                                   uint8_t write_index, uint8_t write_value,
                                   uint8_t write_bit_position, uint8_t write_bit_width);
+  bool water_heater_add_power_field_(WaterHeaterTxPayload &payload, bool power_on);
+  bool water_heater_add_mode_field_(WaterHeaterTxPayload &payload, uint8_t mode);
+  bool water_heater_add_target_field_(WaterHeaterTxPayload &payload, uint8_t mode, uint8_t target);
   bool build_water_heater_tx_command_(const WaterHeaterTxPayload &payload,
                                       std::vector<uint8_t> &command,
                                       std::string &reason);
   bool water_heater_tx_matches_packet_(const WaterHeaterTxPayload &payload,
                                        const std::vector<uint8_t> &buffer,
                                        const WaterHeaterTxField **first_mismatch = nullptr) const;
+  bool water_heater_tx_matches_base_packet_(const WaterHeaterTxPayload &payload,
+                                            const std::vector<uint8_t> &buffer,
+                                            const WaterHeaterTxField **first_mismatch = nullptr) const;
   bool validate_water_heater_tx_command_(const WaterHeaterTxPayload &payload,
                                          const std::vector<uint8_t> &command,
                                          std::string &reason);
@@ -657,6 +668,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void send_profile_restore_packet_(TxPacketFamily family, const std::vector<uint8_t> &base_packet,
                                     const std::vector<uint8_t> &packet, bool known_good);
   void send_time_band_packet_(const std::vector<uint8_t> &base_packet);
+#if defined(USE_WATER_HEATER)
+  void send_water_heater_packet_(const std::vector<uint8_t> &base_packet);
+#endif
   void request_time_band_tx_(uint8_t flag, uint8_t start_hour, uint8_t start_minute,
                              uint8_t end_hour, uint8_t end_minute, uint8_t mode);
   bool time_band_matches_packet_(const std::vector<uint8_t> &buffer, bool d2_packet,
@@ -671,6 +685,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void schedule_queued_profile_restore_from_d2_(const RawFrameEntry &d2_entry);
   void check_pending_time_band_(const std::vector<uint8_t> &buffer);
   void schedule_queued_time_band_from_d2_(const RawFrameEntry &d2_entry);
+#if defined(USE_WATER_HEATER)
+  void check_pending_water_heater_(const std::vector<uint8_t> &buffer);
+  void schedule_queued_water_heater_from_d2_(const RawFrameEntry &d2_entry);
+#endif
   TxOperationKind active_tx_operation_kind_() const;
   const char *tx_operation_kind_label_(TxOperationKind kind) const;
   TxPacketFamily active_tx_operation_family_() const;
@@ -729,6 +747,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void reset_queued_time_band_();
 #if defined(USE_WATER_HEATER)
   void reset_pending_water_heater_();
+  void reset_queued_water_heater_();
 #endif
   uint8_t tx_readback_index_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
   uint8_t tx_readback_bit_position_(TxPacketFamily family, uint8_t write_index, uint8_t bit_position) const;
@@ -887,6 +906,17 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     uint32_t anchor_seq = 0;
   };
   QueuedTimeBandTx queued_time_band_tx_;
+#if defined(USE_WATER_HEATER)
+  struct QueuedWaterHeaterTx {
+    bool active = false;
+    bool scheduled = false;
+    uint32_t generation = 0;
+    uint32_t request_ms = 0;
+    uint32_t anchor_ms = 0;
+    uint32_t anchor_seq = 0;
+  };
+  QueuedWaterHeaterTx queued_water_heater_tx_;
+#endif
   uint32_t tx_request_ms_ = 0;
   uint32_t tx_sent_ms_ = 0;
   bool tx_waiting_for_first_rx_ = false;

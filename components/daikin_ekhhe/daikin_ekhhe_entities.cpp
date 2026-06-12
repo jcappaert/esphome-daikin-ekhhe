@@ -157,9 +157,9 @@ water_heater::WaterHeaterCallInternal DaikinEkhheWaterHeater::make_call() {
 }
 
 void DaikinEkhheWaterHeater::control(const water_heater::WaterHeaterCall &call) {
-  (void) call;
-  ESP_LOGW(TAG, "Native water heater control is not implemented yet");
-  this->publish_state();
+  if (this->parent_ == nullptr || !this->parent_->request_water_heater_control_(call)) {
+    this->publish_state();
+  }
 }
 
 void DaikinEkhheWaterHeater::publish_readback(float current_temperature, float target_temperature,
@@ -310,6 +310,181 @@ water_heater::WaterHeaterMode DaikinEkhheComponent::water_heater_native_mode_(ui
     default:
       return water_heater::WATER_HEATER_MODE_OFF;
   }
+}
+
+bool DaikinEkhheComponent::water_heater_native_mode_to_operational_mode_(
+    water_heater::WaterHeaterMode mode, uint8_t &operational_mode) const {
+  switch (mode) {
+    case water_heater::WATER_HEATER_MODE_PERFORMANCE:
+      operational_mode = kOperationalModeAuto;
+      return true;
+    case water_heater::WATER_HEATER_MODE_HEAT_PUMP:
+      operational_mode = kOperationalModeEco;
+      return true;
+    case water_heater::WATER_HEATER_MODE_HIGH_DEMAND:
+      operational_mode = kOperationalModeBoost;
+      return true;
+    case water_heater::WATER_HEATER_MODE_ELECTRIC:
+      operational_mode = kOperationalModeElectric;
+      return true;
+    case water_heater::WATER_HEATER_MODE_OFF:
+    case water_heater::WATER_HEATER_MODE_ECO:
+    case water_heater::WATER_HEATER_MODE_GAS:
+    default:
+      return false;
+  }
+}
+
+uint8_t DaikinEkhheComponent::water_heater_restore_mode_for_on_() const {
+  if (this->water_heater_have_last_non_standby_mode_ &&
+      this->water_heater_target_capable_mode_(this->water_heater_last_non_standby_mode_)) {
+    return this->water_heater_last_non_standby_mode_;
+  }
+  return kOperationalModeAuto;
+}
+
+uint8_t DaikinEkhheComponent::water_heater_restore_mode_for_away_clear_() const {
+  if (this->water_heater_have_last_non_vacation_mode_ &&
+      this->water_heater_target_capable_mode_(this->water_heater_last_non_vacation_mode_)) {
+    return this->water_heater_last_non_vacation_mode_;
+  }
+  return kOperationalModeAuto;
+}
+
+bool DaikinEkhheComponent::request_water_heater_control_(const water_heater::WaterHeaterCall &call) {
+  if (!this->water_heater_have_main_state_) {
+    DAIKIN_WARN(TAG, "Native water heater command rejected: no main state has been read yet.");
+    return false;
+  }
+  if (this->any_write_busy_()) {
+    DAIKIN_WARN(TAG, "Native water heater command rejected: another write is active.");
+    return false;
+  }
+
+  WaterHeaterTxPayload payload;
+  std::string reason;
+  if (!this->prepare_water_heater_tx_payload_(payload, reason)) {
+    DAIKIN_WARN(TAG, "Native water heater command rejected: %s", reason.c_str());
+    return false;
+  }
+
+  bool desired_power_on = this->water_heater_power_on_;
+  uint8_t desired_mode = this->water_heater_operational_mode_;
+  bool mode_requested = false;
+  bool power_requested = false;
+  bool away_requested = false;
+
+  if (call.get_mode().has_value()) {
+    const water_heater::WaterHeaterMode native_mode = *call.get_mode();
+    mode_requested = true;
+    if (native_mode == water_heater::WATER_HEATER_MODE_OFF) {
+      desired_power_on = false;
+      power_requested = true;
+      mode_requested = false;
+    } else if (this->water_heater_native_mode_to_operational_mode_(native_mode, desired_mode)) {
+      desired_power_on = true;
+      power_requested = true;
+    } else {
+      DAIKIN_WARN(TAG, "Native water heater command rejected: unsupported mode %u",
+                  static_cast<unsigned>(native_mode));
+      return false;
+    }
+  }
+
+  const uint32_t state = call.get_state();
+  if ((state & water_heater::WATER_HEATER_STATE_AWAY) != 0) {
+    desired_power_on = true;
+    desired_mode = kOperationalModeVacation;
+    power_requested = true;
+    mode_requested = true;
+    away_requested = true;
+  } else if (!call.get_mode().has_value() && std::isnan(call.get_target_temperature()) &&
+             this->water_heater_power_on_ &&
+             this->water_heater_operational_mode_ == kOperationalModeVacation) {
+    desired_power_on = true;
+    desired_mode = this->water_heater_restore_mode_for_away_clear_();
+    power_requested = true;
+    mode_requested = true;
+  } else if ((state & water_heater::WATER_HEATER_STATE_ON) != 0 && !call.get_mode().has_value()) {
+    desired_power_on = true;
+    desired_mode = this->water_heater_restore_mode_for_on_();
+    power_requested = true;
+    mode_requested = true;
+  }
+
+  if (power_requested) {
+    if (!this->water_heater_add_power_field_(payload, desired_power_on)) {
+      DAIKIN_WARN(TAG, "Native water heater command rejected: failed to stage power field.");
+      return false;
+    }
+  }
+  if (mode_requested) {
+    if (!this->water_heater_add_mode_field_(payload, desired_mode)) {
+      DAIKIN_WARN(TAG, "Native water heater command rejected: failed to stage mode field.");
+      return false;
+    }
+  }
+
+  const float target_temperature = call.get_target_temperature();
+  if (!std::isnan(target_temperature)) {
+    if (!desired_power_on || !this->water_heater_target_capable_mode_(desired_mode)) {
+      DAIKIN_WARN(TAG, "Native water heater target rejected: target writes require Auto/Eco/Boost/Electric mode.");
+      return false;
+    }
+    if (target_temperature < 30.0f || target_temperature > 75.0f) {
+      DAIKIN_WARN(TAG, "Native water heater target rejected: %.1f C outside 30..75 C range.",
+                  target_temperature);
+      return false;
+    }
+    if (!this->water_heater_add_target_field_(payload, desired_mode,
+                                              static_cast<uint8_t>(roundf(target_temperature)))) {
+      DAIKIN_WARN(TAG, "Native water heater command rejected: failed to stage target field.");
+      return false;
+    }
+  }
+
+  if (payload.fields.empty()) {
+    DAIKIN_DBG(TAG, "Native water heater command already current.");
+    this->publish_water_heater_state_();
+    return true;
+  }
+
+  this->auto_save_snapshot_if_needed_();
+  tx_request_ms_ = millis();
+  reset_tx_operation_();
+  tx_operation_.kind = TxOperationKind::WATER_HEATER;
+  tx_operation_.water_heater = payload;
+  tx_operation_.attempts_sent = 0;
+  tx_operation_.last_attempt_d2_seq = 0;
+  reset_tx_ui_sync_();
+
+  reset_queued_water_heater_();
+  queued_water_heater_tx_.active = true;
+  queued_water_heater_tx_.scheduled = false;
+  queued_water_heater_tx_.generation++;
+  queued_water_heater_tx_.request_ms = tx_request_ms_;
+  clear_tx_wait_markers_();
+
+  ESP_LOGI(TAG, "Native water heater command requested: fields=%u mode=%u power=%u away=%u",
+           static_cast<unsigned>(payload.fields.size()), desired_mode, desired_power_on, away_requested);
+
+  if (!uart_active_ && !uart_tx_active_) {
+    start_uart_cycle();
+  }
+
+  size_t d2_index = 0;
+  const RawFrameEntry *d2_entry = find_latest_frame_by_type_(D2_PACKET_START_BYTE, d2_index, true);
+  if (d2_entry != nullptr) {
+    const uint32_t d2_age_ms = millis() - d2_entry->timestamp_ms;
+    if (d2_age_ms <= tx_delay_after_d2_ms_) {
+      schedule_queued_water_heater_from_d2_(*d2_entry);
+      return true;
+    }
+  }
+
+  DAIKIN_DBG(TAG, "Native water heater scheduling: waiting_for_next_d2 fields=%u",
+             static_cast<unsigned>(payload.fields.size()));
+  return true;
 }
 
 void DaikinEkhheComponent::publish_water_heater_state_() {
