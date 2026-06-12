@@ -2,13 +2,14 @@
 
 [![CI](https://github.com/jcappaert/esphome-daikin-ekhhe/actions/workflows/ci.yml/badge.svg)](https://github.com/jcappaert/esphome-daikin-ekhhe/actions/workflows/ci.yml)
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
-[![ESPHome external component](https://img.shields.io/badge/ESPHome-external_component-00B9D8.svg)](https://esphome.io/components/external_components/)
+[![Made for ESPHome](https://img.shields.io/badge/Made_for-ESPHome-black?logo=esphome)](https://esphome.io/)
+[![ESPHome >= 2026.5.3](https://img.shields.io/badge/ESPHome-%3E%3D2026.5.3-00B9D8.svg)](https://esphome.io/)
 
 ESPHome external component for Daikin EKHHE domestic hot water heat pumps, also known as Altherma M HW.
 
-The component exposes known heat-pump readings, operating controls, installer parameters, target temperatures, and recovery buttons through ESPHome and Home Assistant.
+The component exposes known heat-pump readings, operating controls, installer parameters, target temperatures, recovery buttons, and an optional native Home Assistant water heater entity through ESPHome and Home Assistant.
 
-<!-- Screenshot placeholder: add refreshed Home Assistant overview screenshot here before release. -->
+<img src="docs/images/native-water-heater.png" alt="Home Assistant water heater card for Daikin DHW" width="420">
 
 ## Status And Safety
 
@@ -29,6 +30,7 @@ Recommended safety steps:
 ## Features
 
 - Temperature and runtime sensors for the known EKHHE probe values.
+- Optional native Home Assistant water heater entity for everyday DHW control.
 - Binary status indicators for digital inputs, heat-pump activity, and electric-heater activity.
 - Read-only indicators for confirmed display faults and alarms.
 - Select entities for power state, operating mode, and known menu-style parameters.
@@ -50,6 +52,10 @@ Typical wiring uses:
 See [hardware](docs/hardware.md) for wiring notes and safety cautions.
 
 ## Quick Start
+
+This component is tested with ESPHome `2026.5.3` or newer. Older ESPHome
+versions may not include the native water heater command handling used by the
+optional Home Assistant water heater entity.
 
 Add this repository as an ESPHome external component:
 
@@ -81,6 +87,11 @@ daikin_ekhhe:
 Then add only the entities you want:
 
 ```yaml
+water_heater:
+  - platform: daikin_ekhhe
+    ekhhe_id: daikin_component
+    name: "Daikin DHW"
+
 sensor:
   - platform: daikin_ekhhe
     low_water_temp_probe:
@@ -95,6 +106,8 @@ select:
     operational_mode:
       name: "Operational mode"
 ```
+
+The native water heater entity is the simplest Home Assistant UI for everyday use. The lower-level entities remain available when you want direct access to individual readings, parameters, recovery buttons, or diagnostics.
 
 For complete starting points, use:
 

@@ -33,6 +33,37 @@ Recommended Home Assistant patterns:
 
 If you need a robust multi-step automation, make it state-driven: send one change, wait until the entity reports the requested state, then send the next change.
 
+## Native Water Heater Entity
+
+The optional native water heater entity is a convenience layer for Home
+Assistant's DHW UI. It uses the same write scheduling, retry, readback
+confirmation, and UI-sync behavior as the detailed entities.
+
+In normal conditions, mode, target-temperature, standby, and Away/Vacation
+changes should settle in the same 1 to 3 second window as other writes. If the
+first transmit attempt is not reflected in readback, the same retry limit and
+`TX not applied` warning behavior applies.
+
+Native Home Assistant modes map to the Daikin operating modes:
+
+| Home Assistant mode | Daikin behavior |
+| --- | --- |
+| `Performance` | Auto |
+| `Heat pump` | Eco |
+| `High demand` | Boost |
+| `Electric` | Electric |
+| `Off` | Standby/off |
+| `Away mode` | Vacation |
+
+The native water heater entity does not replace the lower-level controls. Use
+the native entity for everyday dashboard control, and use detailed entities for
+installer parameters, profile recovery, restore-defaults, time bands, timing
+calibration, and diagnostics.
+
+Avoid sending native water heater writes and detailed entity writes at the same
+time from Home Assistant automations. If an automation needs both, make it
+state-driven and wait for the first value to settle before writing the next.
+
 ## Time Bands
 
 Time-band controls are staged. Editing `time_band_start_hour`, `time_band_start_minute`, `time_band_end_hour`, `time_band_end_minute`, or `time_band_mode` changes the ESPHome entity state only; it does not immediately write to the heat pump.

@@ -144,6 +144,11 @@ DaikinEkhheComponent::TxOperationKind DaikinEkhheComponent::active_tx_operation_
   if (time_band_tx_active_()) {
     return TxOperationKind::TIME_BAND;
   }
+#if defined(USE_WATER_HEATER)
+  if (water_heater_tx_active_()) {
+    return TxOperationKind::WATER_HEATER;
+  }
+#endif
   return TxOperationKind::NONE;
 }
 
@@ -157,6 +162,10 @@ const char *DaikinEkhheComponent::tx_operation_kind_label_(TxOperationKind kind)
       return "profile_restore";
     case TxOperationKind::TIME_BAND:
       return "time_band";
+#if defined(USE_WATER_HEATER)
+    case TxOperationKind::WATER_HEATER:
+      return "water_heater";
+#endif
     case TxOperationKind::NONE:
     default:
       return "none";
@@ -171,6 +180,10 @@ DaikinEkhheComponent::TxPacketFamily DaikinEkhheComponent::active_tx_operation_f
       return restore_tx_().family;
     case TxOperationKind::PROFILE_RESTORE:
       return profile_restore_tx_().family;
+#if defined(USE_WATER_HEATER)
+    case TxOperationKind::WATER_HEATER:
+      return water_heater_tx_().family;
+#endif
     case TxOperationKind::TIME_BAND:
     case TxOperationKind::NONE:
     default:
@@ -241,6 +254,25 @@ const DaikinEkhheComponent::TimeBandTxPayload &DaikinEkhheComponent::time_band_t
   return tx_operation_.time_band;
 }
 
+#if defined(USE_WATER_HEATER)
+bool DaikinEkhheComponent::water_heater_tx_active_() const {
+  return tx_operation_.kind == TxOperationKind::WATER_HEATER;
+}
+
+DaikinEkhheComponent::WaterHeaterTxPayload &DaikinEkhheComponent::water_heater_tx_() {
+  return tx_operation_.water_heater;
+}
+
+const DaikinEkhheComponent::WaterHeaterTxPayload &DaikinEkhheComponent::water_heater_tx_() const {
+  return tx_operation_.water_heater;
+}
+
+bool DaikinEkhheComponent::water_heater_tx_busy_() const {
+  return water_heater_tx_active_() || queued_water_heater_tx_.active ||
+         queued_water_heater_tx_.scheduled || tx_ui_sync_active_(TxOperationKind::WATER_HEATER);
+}
+#endif
+
 bool DaikinEkhheComponent::single_field_tx_busy_() const {
   return single_field_tx_active_() || queued_tx_.active || queued_tx_.scheduled ||
          tx_ui_sync_active_(TxOperationKind::SINGLE_FIELD);
@@ -263,8 +295,12 @@ bool DaikinEkhheComponent::time_band_tx_busy_() const {
 }
 
 bool DaikinEkhheComponent::any_write_busy_() const {
-  return single_field_tx_busy_() || restore_tx_busy_() || profile_restore_tx_busy_() ||
-         time_band_tx_busy_();
+  bool busy = single_field_tx_busy_() || restore_tx_busy_() || profile_restore_tx_busy_() ||
+              time_band_tx_busy_();
+#if defined(USE_WATER_HEATER)
+  busy = busy || water_heater_tx_busy_();
+#endif
+  return busy;
 }
 
 bool DaikinEkhheComponent::any_tx_or_ui_sync_active_() const {
@@ -306,6 +342,14 @@ void DaikinEkhheComponent::start_time_band_ui_sync_(const TimeBandTxPayload &tar
   tx_ui_sync_.time_band = target;
 }
 
+#if defined(USE_WATER_HEATER)
+void DaikinEkhheComponent::start_water_heater_ui_sync_(const WaterHeaterTxPayload &target) {
+  reset_tx_ui_sync_();
+  tx_ui_sync_.kind = TxOperationKind::WATER_HEATER;
+  tx_ui_sync_.water_heater = target;
+}
+#endif
+
 void DaikinEkhheComponent::clear_tx_wait_markers_() {
   tx_waiting_for_first_rx_ = false;
   tx_waiting_for_first_cc_ = false;
@@ -317,6 +361,9 @@ void DaikinEkhheComponent::reset_tx_operation_() {
   tx_operation_.restore = RestoreTxPayload{};
   tx_operation_.profile_restore = ProfileRestoreTxPayload{};
   tx_operation_.time_band = TimeBandTxPayload{};
+#if defined(USE_WATER_HEATER)
+  tx_operation_.water_heater = WaterHeaterTxPayload{};
+#endif
   tx_operation_.attempts_sent = 0;
   tx_operation_.last_attempt_d2_seq = 0;
 }
@@ -354,6 +401,16 @@ void DaikinEkhheComponent::reset_time_band_tx_lifecycle_(bool clear_ui_sync) {
   }
 }
 
+#if defined(USE_WATER_HEATER)
+void DaikinEkhheComponent::reset_water_heater_tx_lifecycle_(bool clear_ui_sync) {
+  reset_pending_water_heater_();
+  reset_queued_water_heater_();
+  if (clear_ui_sync && tx_ui_sync_active_(TxOperationKind::WATER_HEATER)) {
+    reset_tx_ui_sync_();
+  }
+}
+#endif
+
 void DaikinEkhheComponent::reset_tx_lifecycle_(TxOperationKind kind, bool clear_ui_sync) {
   switch (kind) {
     case TxOperationKind::SINGLE_FIELD:
@@ -368,6 +425,11 @@ void DaikinEkhheComponent::reset_tx_lifecycle_(TxOperationKind kind, bool clear_
     case TxOperationKind::TIME_BAND:
       reset_time_band_tx_lifecycle_(clear_ui_sync);
       break;
+#if defined(USE_WATER_HEATER)
+    case TxOperationKind::WATER_HEATER:
+      reset_water_heater_tx_lifecycle_(clear_ui_sync);
+      break;
+#endif
     case TxOperationKind::NONE:
     default:
       break;
@@ -403,12 +465,27 @@ void DaikinEkhheComponent::reset_pending_time_band_() {
   reset_tx_operation_();
 }
 
+#if defined(USE_WATER_HEATER)
+void DaikinEkhheComponent::reset_pending_water_heater_() {
+  reset_tx_operation_();
+}
+#endif
+
 void DaikinEkhheComponent::reset_queued_time_band_() {
   queued_time_band_tx_.active = false;
   queued_time_band_tx_.scheduled = false;
   queued_time_band_tx_.anchor_ms = 0;
   queued_time_band_tx_.anchor_seq = 0;
 }
+
+#if defined(USE_WATER_HEATER)
+void DaikinEkhheComponent::reset_queued_water_heater_() {
+  queued_water_heater_tx_.active = false;
+  queued_water_heater_tx_.scheduled = false;
+  queued_water_heater_tx_.anchor_ms = 0;
+  queued_water_heater_tx_.anchor_seq = 0;
+}
+#endif
 
 bool DaikinEkhheComponent::defer_single_field_tx_(TxPacketFamily family, uint8_t index, uint8_t value,
                                                   uint8_t bit_position, uint8_t bit_width) {
@@ -560,6 +637,22 @@ bool DaikinEkhheComponent::schedule_tx_after_d2_(TxOperationKind kind, const Raw
                  d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_time_band_tx_.request_ms);
       break;
     }
+#if defined(USE_WATER_HEATER)
+    case TxOperationKind::WATER_HEATER: {
+      if (!water_heater_tx_active_() || queued_water_heater_tx_.scheduled) {
+        return false;
+      }
+      generation = queued_water_heater_tx_.generation;
+      queued_water_heater_tx_.active = true;
+      queued_water_heater_tx_.scheduled = true;
+      queued_water_heater_tx_.anchor_ms = d2_entry.timestamp_ms;
+      queued_water_heater_tx_.anchor_seq = d2_entry.seq;
+
+      DAIKIN_DBG(TAG, "Native water heater scheduling: d2_seq=%u d2_age=%u delay=%u request_age=%u",
+                 d2_entry.seq, d2_age_ms, delay_ms, now_ms - queued_water_heater_tx_.request_ms);
+      break;
+    }
+#endif
     case TxOperationKind::NONE:
     default:
       return false;
@@ -579,6 +672,10 @@ bool DaikinEkhheComponent::tx_d2_schedule_current_(TxOperationKind kind, uint32_
       return queued_profile_restore_.active && queued_profile_restore_.generation == generation;
     case TxOperationKind::TIME_BAND:
       return queued_time_band_tx_.active && queued_time_band_tx_.generation == generation;
+#if defined(USE_WATER_HEATER)
+    case TxOperationKind::WATER_HEATER:
+      return queued_water_heater_tx_.active && queued_water_heater_tx_.generation == generation;
+#endif
     case TxOperationKind::NONE:
     default:
       return false;
@@ -731,6 +828,30 @@ void DaikinEkhheComponent::run_tx_after_d2_(TxOperationKind kind, uint32_t gener
       send_time_band_packet_(base_packet);
       return;
     }
+#if defined(USE_WATER_HEATER)
+    case TxOperationKind::WATER_HEATER: {
+      const uint32_t anchor_seq = queued_water_heater_tx_.anchor_seq;
+      const uint32_t anchor_ms = queued_water_heater_tx_.anchor_ms;
+      queued_water_heater_tx_.active = false;
+      queued_water_heater_tx_.scheduled = false;
+
+      std::vector<uint8_t> base_packet = last_cc_packet_;
+      auto latest_cc = latest_packets_.find(CC_PACKET_START_BYTE);
+      if (latest_cc != latest_packets_.end()) {
+        base_packet = latest_cc->second;
+      }
+
+      tx_operation_.attempts_sent++;
+      tx_operation_.last_attempt_d2_seq = anchor_seq;
+
+      DAIKIN_DBG(TAG,
+                 "Native water heater scheduling: sending_after_d2 d2_seq=%u d2_to_send=%u attempt=%u/%u using_current_cycle_cc=%u",
+                 anchor_seq, millis() - anchor_ms, tx_operation_.attempts_sent, kTxMaxRepeats,
+                 latest_cc != latest_packets_.end());
+      send_water_heater_packet_(base_packet);
+      return;
+    }
+#endif
     case TxOperationKind::NONE:
     default:
       return;
@@ -753,6 +874,12 @@ void DaikinEkhheComponent::schedule_queued_time_band_from_d2_(const RawFrameEntr
   schedule_tx_after_d2_(TxOperationKind::TIME_BAND, d2_entry);
 }
 
+#if defined(USE_WATER_HEATER)
+void DaikinEkhheComponent::schedule_queued_water_heater_from_d2_(const RawFrameEntry &d2_entry) {
+  schedule_tx_after_d2_(TxOperationKind::WATER_HEATER, d2_entry);
+}
+#endif
+
 const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_family_spec_(
     TxPacketFamily family) const {
   static const TxPacketFamilySpec main_family = {
@@ -774,6 +901,312 @@ const DaikinEkhheComponent::TxPacketFamilySpec &DaikinEkhheComponent::tx_packet_
 
   return family == TxPacketFamily::EXTENDED ? extended_family : main_family;
 }
+
+#if defined(USE_WATER_HEATER)
+bool DaikinEkhheComponent::prepare_water_heater_tx_payload_(WaterHeaterTxPayload &payload,
+                                                            std::string &reason) const {
+  payload = WaterHeaterTxPayload{};
+  payload.family = TxPacketFamily::MAIN;
+  const auto &spec = tx_packet_family_spec_(payload.family);
+
+  auto latest_base = latest_packets_.find(spec.base_packet_type);
+  if (latest_base != latest_packets_.end()) {
+    payload.base_packet = latest_base->second;
+  } else {
+    payload.base_packet = last_cc_packet_;
+  }
+
+  if (payload.base_packet.empty()) {
+    reason = "no CC base packet captured";
+    return false;
+  }
+  if (payload.base_packet.size() != spec.packet_size) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "CC base packet size %u is not expected %u",
+             static_cast<unsigned>(payload.base_packet.size()), static_cast<unsigned>(spec.packet_size));
+    reason = msg;
+    return false;
+  }
+  if (payload.base_packet[0] != spec.base_packet_type) {
+    char msg[80];
+    snprintf(msg, sizeof(msg), "CC base start byte 0x%02X is not %s",
+             payload.base_packet[0], packet_type_to_string_(spec.base_packet_type).c_str());
+    reason = msg;
+    return false;
+  }
+
+  return true;
+}
+
+bool DaikinEkhheComponent::add_water_heater_tx_field_(WaterHeaterTxPayload &payload,
+                                                      const char *name,
+                                                      uint8_t write_index,
+                                                      uint8_t write_value,
+                                                      uint8_t write_bit_position,
+                                                      uint8_t write_bit_width) {
+  if (payload.family != TxPacketFamily::MAIN) {
+    return false;
+  }
+  const uint8_t effective_width = effective_bit_width(write_bit_position, write_bit_width);
+  if (!payload.base_packet.empty() && write_index >= payload.base_packet.size()) {
+    return false;
+  }
+
+  WaterHeaterTxField field;
+  field.name = name;
+  field.write_index = write_index;
+  field.write_value = write_value;
+  field.write_bit_position = write_bit_position;
+  field.write_bit_width = effective_width;
+  field.readback_index = tx_readback_index_(payload.family, write_index, write_bit_position);
+  field.readback_value = write_value;
+  field.readback_bit_position = tx_readback_bit_position_(payload.family, write_index, write_bit_position);
+  field.readback_bit_width = tx_readback_bit_width_(payload.family, write_index,
+                                                    write_bit_position, effective_width);
+
+  for (auto &existing : payload.fields) {
+    if (existing.write_index == field.write_index &&
+        existing.write_bit_position == field.write_bit_position) {
+      existing = field;
+      return true;
+    }
+  }
+
+  payload.fields.push_back(field);
+  return true;
+}
+
+bool DaikinEkhheComponent::water_heater_add_power_field_(WaterHeaterTxPayload &payload, bool power_on) {
+  const uint8_t value = power_on ? 1 : 0;
+  if (field_matches_target_(payload.base_packet, CC_PACKET_MASK1_IDX, value, 0, 1)) {
+    return true;
+  }
+  return add_water_heater_tx_field_(payload, "power", CC_PACKET_MASK1_IDX, value, 0, 1);
+}
+
+bool DaikinEkhheComponent::water_heater_add_mode_field_(WaterHeaterTxPayload &payload, uint8_t mode) {
+  if (field_matches_target_(payload.base_packet, CC_PACKET_MODE_IDX, mode, BIT_POSITION_NO_BITMASK, 1)) {
+    return true;
+  }
+  return add_water_heater_tx_field_(payload, "mode", CC_PACKET_MODE_IDX, mode,
+                                    BIT_POSITION_NO_BITMASK, 1);
+}
+
+bool DaikinEkhheComponent::water_heater_add_target_field_(WaterHeaterTxPayload &payload,
+                                                          uint8_t mode,
+                                                          uint8_t target) {
+  uint8_t index = CC_PACKET_AUTO_TTARGET_IDX;
+  const char *name = "auto_target";
+  switch (mode) {
+    case kOperationalModeEco:
+      index = CC_PACKET_ECO_TTARGET_IDX;
+      name = "eco_target";
+      break;
+    case kOperationalModeBoost:
+      index = CC_PACKET_BOOST_TTGARGET_IDX;
+      name = "boost_target";
+      break;
+    case kOperationalModeElectric:
+      index = CC_PACKET_ELECTRIC_TTARGET_IDX;
+      name = "electric_target";
+      break;
+    case kOperationalModeAuto:
+      break;
+    default:
+      return false;
+  }
+  if (field_matches_target_(payload.base_packet, index, target, BIT_POSITION_NO_BITMASK, 1)) {
+    return true;
+  }
+  return add_water_heater_tx_field_(payload, name, index, target, BIT_POSITION_NO_BITMASK, 1);
+}
+
+bool DaikinEkhheComponent::build_water_heater_tx_command_(const WaterHeaterTxPayload &payload,
+                                                          std::vector<uint8_t> &command,
+                                                          std::string &reason) {
+  if (payload.family != TxPacketFamily::MAIN) {
+    reason = "water-heater transactions are only valid for the main packet family";
+    return false;
+  }
+  const auto &spec = tx_packet_family_spec_(payload.family);
+  if (payload.base_packet.empty()) {
+    reason = "base packet empty";
+    return false;
+  }
+  if (payload.base_packet.size() != spec.packet_size) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "base packet size %u is not expected %u",
+             static_cast<unsigned>(payload.base_packet.size()), static_cast<unsigned>(spec.packet_size));
+    reason = msg;
+    return false;
+  }
+  if (payload.base_packet[0] != spec.base_packet_type) {
+    char msg[80];
+    snprintf(msg, sizeof(msg), "base start byte 0x%02X is not %s",
+             payload.base_packet[0], packet_type_to_string_(spec.base_packet_type).c_str());
+    reason = msg;
+    return false;
+  }
+  if (payload.fields.empty()) {
+    reason = "no transaction fields";
+    return false;
+  }
+
+  command = payload.base_packet;
+  command[0] = spec.write_packet_type;
+  for (const auto &field : payload.fields) {
+    if (field.write_index >= command.size()) {
+      char msg[96];
+      snprintf(msg, sizeof(msg), "field %s write index %u out of range",
+               field.name, field.write_index);
+      reason = msg;
+      return false;
+    }
+    if (field.write_bit_position == BIT_POSITION_NO_BITMASK) {
+      command[field.write_index] = field.write_value;
+    } else {
+      apply_field_value(command, field.write_index, field.write_bit_position,
+                        effective_bit_width(field.write_bit_position, field.write_bit_width),
+                        field.write_value);
+    }
+  }
+  command.back() = ekhhe_checksum(command);
+
+  return validate_water_heater_tx_command_(payload, command, reason);
+}
+
+bool DaikinEkhheComponent::water_heater_tx_matches_packet_(const WaterHeaterTxPayload &payload,
+                                                           const std::vector<uint8_t> &buffer,
+                                                           const WaterHeaterTxField **first_mismatch) const {
+  if (first_mismatch != nullptr) {
+    *first_mismatch = nullptr;
+  }
+  for (const auto &field : payload.fields) {
+    if (field.readback_index >= buffer.size() ||
+        !field_matches_target_(buffer, field.readback_index, field.readback_value,
+                               field.readback_bit_position, field.readback_bit_width)) {
+      if (first_mismatch != nullptr) {
+        *first_mismatch = &field;
+      }
+      return false;
+    }
+  }
+  return !payload.fields.empty();
+}
+
+bool DaikinEkhheComponent::water_heater_tx_matches_base_packet_(
+    const WaterHeaterTxPayload &payload, const std::vector<uint8_t> &buffer,
+    const WaterHeaterTxField **first_mismatch) const {
+  if (first_mismatch != nullptr) {
+    *first_mismatch = nullptr;
+  }
+  for (const auto &field : payload.fields) {
+    if (field.write_index >= buffer.size() ||
+        !field_matches_target_(buffer, field.write_index, field.write_value,
+                               field.write_bit_position, field.write_bit_width)) {
+      if (first_mismatch != nullptr) {
+        *first_mismatch = &field;
+      }
+      return false;
+    }
+  }
+  return !payload.fields.empty();
+}
+
+bool DaikinEkhheComponent::validate_water_heater_tx_command_(const WaterHeaterTxPayload &payload,
+                                                             const std::vector<uint8_t> &command,
+                                                             std::string &reason) {
+  if (payload.family != TxPacketFamily::MAIN) {
+    reason = "water-heater transactions are only valid for the main packet family";
+    return false;
+  }
+  const auto &spec = tx_packet_family_spec_(payload.family);
+  if (payload.base_packet.empty() || command.empty()) {
+    reason = "base or command packet empty";
+    return false;
+  }
+  if (payload.base_packet.size() != command.size()) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "size mismatch base=%u command=%u",
+             static_cast<unsigned>(payload.base_packet.size()), static_cast<unsigned>(command.size()));
+    reason = msg;
+    return false;
+  }
+  if (command.size() != spec.packet_size) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "packet size %u is not expected %u",
+             static_cast<unsigned>(command.size()), static_cast<unsigned>(spec.packet_size));
+    reason = msg;
+    return false;
+  }
+  if (payload.base_packet[0] != spec.base_packet_type) {
+    char msg[80];
+    snprintf(msg, sizeof(msg), "base start byte 0x%02X is not %s",
+             payload.base_packet[0], packet_type_to_string_(spec.base_packet_type).c_str());
+    reason = msg;
+    return false;
+  }
+  if (command[0] != spec.write_packet_type) {
+    char msg[80];
+    snprintf(msg, sizeof(msg), "command start byte 0x%02X is not %s",
+             command[0], packet_type_to_string_(spec.write_packet_type).c_str());
+    reason = msg;
+    return false;
+  }
+  const uint8_t expected_checksum = ekhhe_checksum(command);
+  if (command.back() != expected_checksum) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "checksum mismatch expected=0x%02X actual=0x%02X",
+             expected_checksum, command.back());
+    reason = msg;
+    return false;
+  }
+
+  std::vector<uint8_t> expected = payload.base_packet;
+  expected[0] = spec.write_packet_type;
+  for (const auto &field : payload.fields) {
+    if (field.write_index >= expected.size()) {
+      char msg[96];
+      snprintf(msg, sizeof(msg), "field %s write index %u out of range",
+               field.name, field.write_index);
+      reason = msg;
+      return false;
+    }
+    if (field.write_bit_position == BIT_POSITION_NO_BITMASK) {
+      expected[field.write_index] = field.write_value;
+    } else {
+      apply_field_value(expected, field.write_index, field.write_bit_position,
+                        effective_bit_width(field.write_bit_position, field.write_bit_width),
+                        field.write_value);
+    }
+  }
+  expected.back() = ekhhe_checksum(expected);
+
+  if (expected == command) {
+    return true;
+  }
+
+  size_t first_diff = 0;
+  size_t diff_count = 0;
+  for (size_t i = 0; i < expected.size(); ++i) {
+    if (expected[i] == command[i]) {
+      continue;
+    }
+    if (diff_count == 0) {
+      first_diff = i;
+    }
+    diff_count++;
+  }
+
+  char msg[192];
+  snprintf(msg, sizeof(msg),
+           "water-heater command changed unexpected bytes count=%u first_byte=%u expected=0x%02X actual=0x%02X",
+           static_cast<unsigned>(diff_count), static_cast<unsigned>(first_diff),
+           expected[first_diff], command[first_diff]);
+  reason = msg;
+  return false;
+}
+#endif
 
 void DaikinEkhheComponent::request_time_band_tx_(uint8_t flag, uint8_t start_hour, uint8_t start_minute,
                                                  uint8_t end_hour, uint8_t end_minute, uint8_t mode) {
@@ -925,6 +1358,15 @@ void DaikinEkhheComponent::send_prebuilt_cd_packet_(TxPacketFamily family, const
              attempts_sent, kTxMaxRepeats, static_cast<unsigned>(command.size()));
     DAIKIN_DBG(TAG, "TX timing: time_band_request_to_send=%u since_last_rx=%u base_age=%u",
                tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
+#if defined(USE_WATER_HEATER)
+  } else if (kind == TxPacketKind::WATER_HEATER) {
+    const auto &target = water_heater_tx_();
+    ESP_LOGI(TAG, "TX water heater sent: fields=%u attempt=%u/%u len=%u",
+             static_cast<unsigned>(target.fields.size()), attempts_sent, kTxMaxRepeats,
+             static_cast<unsigned>(command.size()));
+    DAIKIN_DBG(TAG, "TX timing: water_heater_request_to_send=%u since_last_rx=%u base_age=%u",
+               tx_sent_ms_ - tx_request_ms_, time_since_last_rx, base_age_ms);
+#endif
   } else {
     ESP_LOGI(TAG, "TX %s sent: snapshot len=%u", tx_type.c_str(), static_cast<unsigned>(command.size()));
     DAIKIN_DBG(TAG, "TX timing: snapshot_send since_last_rx=%u base_age=%u",
@@ -1036,6 +1478,14 @@ bool DaikinEkhheComponent::validate_outbound_cd_packet_(TxPacketFamily family,
       }
     }
     return true;
+#if defined(USE_WATER_HEATER)
+  } else if (kind == TxPacketKind::WATER_HEATER) {
+    if (!water_heater_tx_active_()) {
+      reason = "no active water-heater transaction";
+      return false;
+    }
+    return validate_water_heater_tx_command_(water_heater_tx_(), command, reason);
+#endif
   }
 
   expected.back() = ekhhe_checksum(expected);
@@ -1247,6 +1697,43 @@ void DaikinEkhheComponent::send_time_band_packet_(const std::vector<uint8_t> &ba
   send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::TIME_BAND, 0, 0,
                            BIT_POSITION_NO_BITMASK, 0, tx_operation_.attempts_sent);
 }
+
+#if defined(USE_WATER_HEATER)
+void DaikinEkhheComponent::send_water_heater_packet_(const std::vector<uint8_t> &base_packet) {
+  if (!water_heater_tx_active_()) {
+    return;
+  }
+  if (base_packet.empty()) {
+    DAIKIN_WARN(TAG, "Native water heater TX blocked: base CC packet empty.");
+    reset_tx_lifecycle_(TxOperationKind::WATER_HEATER, false);
+    return;
+  }
+  if (base_packet.size() != CC_PACKET_SIZE) {
+    DAIKIN_WARN(TAG, "Native water heater TX blocked: base CC packet length %u invalid.",
+                static_cast<unsigned>(base_packet.size()));
+    reset_tx_lifecycle_(TxOperationKind::WATER_HEATER, false);
+    return;
+  }
+
+  auto &target = water_heater_tx_();
+  target.base_packet = base_packet;
+
+  std::vector<uint8_t> command;
+  std::string validation_error;
+  if (!build_water_heater_tx_command_(target, command, validation_error)) {
+    DAIKIN_WARN(TAG, "Native water heater TX blocked: %s", validation_error.c_str());
+    clear_tx_wait_markers_();
+    reset_tx_lifecycle_(TxOperationKind::WATER_HEATER, false);
+    if (!uart_active_ && !uart_tx_active_) {
+      start_uart_cycle();
+    }
+    return;
+  }
+
+  send_prebuilt_cd_packet_(TxPacketFamily::MAIN, command, TxPacketKind::WATER_HEATER, 0, 0,
+                           BIT_POSITION_NO_BITMASK, 0, tx_operation_.attempts_sent);
+}
+#endif
 
 void DaikinEkhheComponent::check_pending_tx_(const std::vector<uint8_t> &buffer) {
   if (!single_field_tx_active_()) {
@@ -1682,6 +2169,100 @@ void DaikinEkhheComponent::check_pending_time_band_(const std::vector<uint8_t> &
   reset_tx_lifecycle_(TxOperationKind::TIME_BAND, false);
   flush_deferred_user_tx_();
 }
+
+#if defined(USE_WATER_HEATER)
+void DaikinEkhheComponent::check_pending_water_heater_(const std::vector<uint8_t> &buffer) {
+  if (!water_heater_tx_active_()) {
+    return;
+  }
+
+  const auto &target = water_heater_tx_();
+  const auto &spec = tx_packet_family_spec_(target.family);
+  const WaterHeaterTxField *first_mismatch = nullptr;
+  const bool matched = water_heater_tx_matches_packet_(target, buffer, &first_mismatch);
+
+  if (matched) {
+    if (tx_operation_.attempts_sent == 0) {
+      DAIKIN_DBG(TAG, "Native water heater already current: fields=%u",
+                 static_cast<unsigned>(target.fields.size()));
+    } else if (tx_operation_.attempts_sent > 1) {
+      DAIKIN_WARN(TAG, "Native water heater applied after retries: fields=%u attempts=%u",
+                  static_cast<unsigned>(target.fields.size()), tx_operation_.attempts_sent);
+      DAIKIN_DBG(TAG, "TX timing: water_heater_applied_after=%u attempts=%u",
+                 millis() - tx_sent_ms_, tx_operation_.attempts_sent);
+    } else {
+      ESP_LOGI(TAG, "Native water heater applied: fields=%u",
+               static_cast<unsigned>(target.fields.size()));
+      DAIKIN_DBG(TAG, "TX timing: water_heater_applied_after=%u attempts=%u",
+                 millis() - tx_sent_ms_, tx_operation_.attempts_sent);
+    }
+
+    update_water_heater_main_cache_from_bus_(buffer, true);
+    if (tx_operation_.attempts_sent > 0) {
+      start_water_heater_ui_sync_(target);
+    }
+    clear_tx_wait_markers_();
+    reset_tx_lifecycle_(TxOperationKind::WATER_HEATER, false);
+    flush_deferred_user_tx_();
+    return;
+  }
+
+  if (tx_operation_.attempts_sent == 0) {
+    return;
+  }
+
+  if (tx_operation_.attempts_sent < kTxMaxRepeats) {
+    if (first_mismatch != nullptr && first_mismatch->readback_index < buffer.size()) {
+      uint8_t current_value = buffer[first_mismatch->readback_index];
+      uint8_t expected_value = first_mismatch->readback_value;
+      if (first_mismatch->readback_bit_position != BIT_POSITION_NO_BITMASK) {
+        current_value = extract_field_value(buffer, first_mismatch->readback_index,
+                                            first_mismatch->readback_bit_position,
+                                            first_mismatch->readback_bit_width);
+        expected_value &= field_value_mask(first_mismatch->readback_index,
+                                           first_mismatch->readback_bit_position,
+                                           first_mismatch->readback_bit_width);
+      }
+      DAIKIN_DBG(TAG,
+                 "Native water heater retry pending: first_mismatch=%s expected=0x%02X current=0x%02X attempt=%u/%u",
+                 first_mismatch->name, expected_value, current_value,
+                 tx_operation_.attempts_sent, kTxMaxRepeats);
+    } else {
+      DAIKIN_DBG(TAG, "Native water heater retry pending: readback=%s attempt=%u/%u",
+                 packet_type_to_string_(spec.readback_packet_type).c_str(),
+                 tx_operation_.attempts_sent, kTxMaxRepeats);
+    }
+    return;
+  }
+
+  if (first_mismatch != nullptr && first_mismatch->readback_index < buffer.size()) {
+    uint8_t current_value = buffer[first_mismatch->readback_index];
+    uint8_t expected_value = first_mismatch->readback_value;
+    if (first_mismatch->readback_bit_position != BIT_POSITION_NO_BITMASK) {
+      current_value = extract_field_value(buffer, first_mismatch->readback_index,
+                                          first_mismatch->readback_bit_position,
+                                          first_mismatch->readback_bit_width);
+      expected_value &= field_value_mask(first_mismatch->readback_index,
+                                         first_mismatch->readback_bit_position,
+                                         first_mismatch->readback_bit_width);
+    }
+    DAIKIN_WARN(TAG,
+                "Native water heater not applied: first_mismatch=%s readback_index=%u expected=0x%02X current=0x%02X attempts=%u",
+                first_mismatch->name, first_mismatch->readback_index, expected_value, current_value,
+                tx_operation_.attempts_sent);
+  } else {
+    DAIKIN_WARN(TAG, "Native water heater not applied: readback=%s attempts=%u",
+                packet_type_to_string_(spec.readback_packet_type).c_str(), tx_operation_.attempts_sent);
+  }
+  DAIKIN_DBG(TAG, "TX timing: water_heater_failed_after=%u attempts=%u",
+             millis() - tx_sent_ms_, tx_operation_.attempts_sent);
+
+  update_water_heater_main_cache_from_bus_(buffer, true);
+  clear_tx_wait_markers_();
+  reset_tx_lifecycle_(TxOperationKind::WATER_HEATER, true);
+  flush_deferred_user_tx_();
+}
+#endif
 
 bool DaikinEkhheComponent::send_uart_cc_command(uint8_t index, uint8_t value,
                                                 uint8_t bit_position, uint8_t bit_width) {

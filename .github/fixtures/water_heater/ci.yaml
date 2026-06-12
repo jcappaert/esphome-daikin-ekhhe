@@ -1,0 +1,47 @@
+esphome:
+  name: daikin-ekhhe-ci-water-heater
+  friendly_name: Daikin EKHHE CI Water Heater
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "ci-placeholder"
+  password: "ci-placeholder"
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [daikin_ekhhe]
+
+uart:
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+  id: my_uart
+
+daikin_ekhhe:
+  - id: daikin_component
+    update_interval: 10
+
+water_heater:
+  - platform: daikin_ekhhe
+    ekhhe_id: daikin_component
+    name: "CI Domestic Hot Water"
+    current_temperature_source: display

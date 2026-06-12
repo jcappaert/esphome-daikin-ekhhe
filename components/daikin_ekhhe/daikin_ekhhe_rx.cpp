@@ -71,6 +71,11 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
   if (packet_type == D2_PACKET_START_BYTE && time_band_tx_active_()) {
     check_pending_time_band_(packet);
   }
+#if defined(USE_WATER_HEATER)
+  if (packet_type == D2_PACKET_START_BYTE && water_heater_tx_active_()) {
+    check_pending_water_heater_(packet);
+  }
+#endif
   if (single_field_tx_active_() &&
       packet_type == tx_packet_family_spec_(single_field_tx_().family).readback_packet_type) {
     check_pending_tx_(packet);
@@ -85,6 +90,10 @@ void DaikinEkhheComponent::handle_complete_packet_(uint8_t packet_type, const ui
         schedule_queued_profile_restore_from_d2_(*d2_entry);
       } else if (time_band_tx_active_()) {
         schedule_queued_time_band_from_d2_(*d2_entry);
+#if defined(USE_WATER_HEATER)
+      } else if (water_heater_tx_active_()) {
+        schedule_queued_water_heater_from_d2_(*d2_entry);
+#endif
       } else if (single_field_tx_active_()) {
         schedule_queued_tx_from_d2_(*d2_entry);
       }
