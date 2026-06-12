@@ -157,8 +157,12 @@ water_heater::WaterHeaterCallInternal DaikinEkhheWaterHeater::make_call() {
 }
 
 void DaikinEkhheWaterHeater::control(const water_heater::WaterHeaterCall &call) {
-  if (this->parent_ == nullptr || !this->parent_->request_water_heater_control_(call)) {
+  if (this->parent_ == nullptr) {
     this->publish_state();
+    return;
+  }
+  if (!this->parent_->request_water_heater_control_(call)) {
+    this->parent_->publish_water_heater_state_(true);
   }
 }
 
@@ -498,8 +502,8 @@ bool DaikinEkhheComponent::request_water_heater_control_(const water_heater::Wat
   return true;
 }
 
-void DaikinEkhheComponent::publish_water_heater_state_() {
-  if (this->water_heater_ == nullptr || !this->cycle_publish_allowed_ ||
+void DaikinEkhheComponent::publish_water_heater_state_(bool force) {
+  if (this->water_heater_ == nullptr || (!force && !this->cycle_publish_allowed_) ||
       !this->water_heater_have_temperatures_ || !this->water_heater_have_main_state_) {
     return;
   }

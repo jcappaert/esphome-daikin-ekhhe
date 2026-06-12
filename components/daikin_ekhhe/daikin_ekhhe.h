@@ -523,7 +523,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
 #if defined(USE_WATER_HEATER)
   void update_water_heater_temperature_cache_(float lower_temperature, float upper_temperature);
   void update_water_heater_main_cache_from_bus_(const std::vector<uint8_t> &buffer, bool d2_packet);
-  void publish_water_heater_state_();
+  void publish_water_heater_state_(bool force = false);
   bool water_heater_target_capable_mode_(uint8_t mode) const;
   uint8_t water_heater_readback_target_mode_() const;
   float water_heater_target_for_mode_(uint8_t mode) const;
