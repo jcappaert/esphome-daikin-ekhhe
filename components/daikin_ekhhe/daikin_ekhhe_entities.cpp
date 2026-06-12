@@ -561,7 +561,7 @@ void DaikinEkhheComponent::set_sensor_value(const std::string &sensor_name, floa
     }
     if (should_publish_float_(sensor_name, value, last_published_sensor_values_,
                               last_published_sensor_ms_, kFastPublishMinIntervalMs,
-                              kFloatPublishEpsilon, kSlowPublishRefreshMs)) {
+                              kFloatPublishEpsilon, kRuntimeSensorRefreshMs)) {
       defer([this, sensor_name, value]() {
         sensors_[sensor_name]->publish_state(value);
       });

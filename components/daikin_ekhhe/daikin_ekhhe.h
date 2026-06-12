@@ -410,6 +410,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
  private:
   static constexpr float kFloatPublishEpsilon = 0.5f;
   static constexpr uint32_t kFastPublishMinIntervalMs = 1000;
+  static constexpr uint32_t kRuntimeSensorRefreshMs = 5 * 60 * 1000;
   static constexpr uint32_t kSlowPublishRefreshMs = 30 * 60 * 1000;
   static constexpr uint32_t kTimestampRefreshMs = 5 * 60 * 1000;
   static constexpr uint32_t kCycleTimeoutMs = 2000;
