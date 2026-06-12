@@ -376,15 +376,6 @@ bool DaikinEkhheComponent::request_water_heater_control_(const water_heater::Wat
   bool power_requested = false;
   bool away_requested = false;
 
-  const bool empty_native_call = !call.get_mode().has_value() &&
-                                 std::isnan(call.get_target_temperature()) &&
-                                 std::isnan(call.get_target_temperature_low()) &&
-                                 std::isnan(call.get_target_temperature_high()) &&
-                                 call.get_state() == 0;
-  if (empty_native_call) {
-    DAIKIN_DBG(TAG, "Native water heater empty command interpreted as away toggle.");
-  }
-
   if (call.get_mode().has_value()) {
     const water_heater::WaterHeaterMode native_mode = *call.get_mode();
     mode_requested = true;
@@ -402,30 +393,34 @@ bool DaikinEkhheComponent::request_water_heater_control_(const water_heater::Wat
     }
   }
 
-  const uint32_t state = call.get_state();
-  if ((state & water_heater::WATER_HEATER_STATE_AWAY) != 0) {
-    desired_power_on = true;
-    desired_mode = kOperationalModeVacation;
-    power_requested = true;
-    mode_requested = true;
-    away_requested = true;
-  } else if (empty_native_call && this->water_heater_power_on_ &&
-             this->water_heater_operational_mode_ == kOperationalModeVacation) {
-    desired_power_on = true;
-    desired_mode = this->water_heater_restore_mode_for_away_clear_();
-    power_requested = true;
-    mode_requested = true;
-  } else if (empty_native_call) {
-    desired_power_on = true;
-    desired_mode = kOperationalModeVacation;
-    power_requested = true;
-    mode_requested = true;
-    away_requested = true;
-  } else if ((state & water_heater::WATER_HEATER_STATE_ON) != 0 && !call.get_mode().has_value()) {
-    desired_power_on = true;
-    desired_mode = this->water_heater_restore_mode_for_on_();
-    power_requested = true;
-    mode_requested = true;
+  const auto away = call.get_away();
+  if (away.has_value()) {
+    if (*away) {
+      desired_power_on = true;
+      desired_mode = kOperationalModeVacation;
+      power_requested = true;
+      mode_requested = true;
+      away_requested = true;
+    } else if (this->water_heater_power_on_ &&
+               this->water_heater_operational_mode_ == kOperationalModeVacation) {
+      desired_power_on = true;
+      desired_mode = this->water_heater_restore_mode_for_away_clear_();
+      power_requested = true;
+      mode_requested = true;
+    }
+  }
+
+  const auto on = call.get_on();
+  if (on.has_value() && !call.get_mode().has_value()) {
+    if (*on) {
+      desired_power_on = true;
+      desired_mode = this->water_heater_restore_mode_for_on_();
+      power_requested = true;
+      mode_requested = true;
+    } else {
+      desired_power_on = false;
+      power_requested = true;
+    }
   }
 
   if (power_requested) {

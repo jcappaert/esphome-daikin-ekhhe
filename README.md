@@ -3,6 +3,7 @@
 [![CI](https://github.com/jcappaert/esphome-daikin-ekhhe/actions/workflows/ci.yml/badge.svg)](https://github.com/jcappaert/esphome-daikin-ekhhe/actions/workflows/ci.yml)
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![ESPHome external component](https://img.shields.io/badge/ESPHome-external_component-00B9D8.svg)](https://esphome.io/components/external_components/)
+[![ESPHome >= 2026.5.3](https://img.shields.io/badge/ESPHome-%3E%3D2026.5.3-00B9D8.svg)](https://esphome.io/)
 
 ESPHome external component for Daikin EKHHE domestic hot water heat pumps, also known as Altherma M HW.
 
@@ -51,6 +52,10 @@ Typical wiring uses:
 See [hardware](docs/hardware.md) for wiring notes and safety cautions.
 
 ## Quick Start
+
+This component is tested with ESPHome `2026.5.3` or newer. Older ESPHome
+versions may not include the native water heater command handling used by the
+optional Home Assistant water heater entity.
 
 Add this repository as an ESPHome external component:
 

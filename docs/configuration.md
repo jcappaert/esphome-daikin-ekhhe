@@ -9,6 +9,9 @@ All entities are optional. Start with a small config, confirm stable reads, then
 
 ## Component Setup
 
+Use ESPHome `2026.5.3` or newer. The native water heater entity depends on
+modern ESPHome water heater command handling for away/vacation mode.
+
 ```yaml
 external_components:
   - source:
