@@ -14,6 +14,21 @@ examples/                  Public example YAML files
 
 Public examples are designed for humans to copy from. CI fixtures are designed for automated validation and may intentionally be smaller or use local component paths.
 
+## Component Module Map
+
+The C++ component keeps one public `DaikinEkhheComponent` class, with method implementations split by ownership:
+
+- `daikin_ekhhe.cpp`: top-level setup, loop, config logging, checksum helpers, and small coordinator glue.
+- `daikin_ekhhe_metadata.cpp`: runtime field descriptors, default/profile descriptor helpers, and lookup helpers.
+- `daikin_ekhhe_profiles.cpp`: known-good profile, auto snapshot, restore defaults, and preference persistence behavior.
+- `daikin_ekhhe_entities.cpp`: ESPHome entity registration, state publishing, cached UI updates, and entity control adapters.
+- `daikin_ekhhe_parse.cpp`: complete-frame parsing and conversion from raw frame values into component state.
+- `daikin_ekhhe_rx.cpp`: UART receive buffering, frame assembly, cycle collection, and completed-frame handoff.
+- `daikin_ekhhe_tx.cpp`: write admission, TX scheduling, packet construction, retries, readback checks, and write completion.
+- `daikin_ekhhe_internal.h`: internal helper types and declarations shared by the split modules.
+
+When adding code, prefer the module that owns the behavior rather than growing the coordinator. Keep single-file helpers file-local with `static` or an anonymous namespace unless another module genuinely needs them.
+
 ## Local Validation
 
 The GitHub Actions workflow validates and compiles two fixture configurations:
@@ -51,8 +66,8 @@ For any key that is also used by C++, add the same string constant to both `cons
 
 Runtime packet mapping lives in C++ descriptors and helper tables:
 
-- Use number/select field descriptors in `daikin_ekhhe.h` for single-parameter writes.
-- Use restore/profile field descriptors in `daikin_ekhhe.cpp` for bulk restore and profile operations.
+- Use number/select field descriptors in `daikin_ekhhe_metadata.cpp` for single-parameter writes.
+- Use restore/profile field descriptors in `daikin_ekhhe_metadata.cpp` for bulk restore and profile operations.
 - Keep packet offsets, bit positions, bit widths, signedness, defaults, and readback locations easy to audit.
 - Avoid combining unrelated concepts into one broad table; schema metadata and runtime packet metadata serve different jobs.
 
