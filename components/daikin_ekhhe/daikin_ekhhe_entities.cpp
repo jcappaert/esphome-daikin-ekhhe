@@ -161,8 +161,9 @@ void DaikinEkhheWaterHeater::control(const water_heater::WaterHeaterCall &call) 
     this->publish_state();
     return;
   }
-  if (!this->parent_->request_water_heater_control_(call)) {
-    this->parent_->publish_water_heater_state_(true);
+  if (!this->parent_->request_water_heater_control_(call) &&
+      !this->parent_->republish_water_heater_state()) {
+    this->publish_state();
   }
 }
 
@@ -213,6 +214,10 @@ water_heater::WaterHeaterTraits DaikinEkhheWaterHeater::traits() {
 
 void DaikinEkhheComponent::register_water_heater(DaikinEkhheWaterHeater *water_heater) {
   this->water_heater_ = water_heater;
+}
+
+bool DaikinEkhheComponent::republish_water_heater_state() {
+  return this->publish_water_heater_state_(true);
 }
 
 void DaikinEkhheComponent::update_water_heater_temperature_cache_(float lower_temperature,
@@ -502,10 +507,10 @@ bool DaikinEkhheComponent::request_water_heater_control_(const water_heater::Wat
   return true;
 }
 
-void DaikinEkhheComponent::publish_water_heater_state_(bool force) {
+bool DaikinEkhheComponent::publish_water_heater_state_(bool force) {
   if (this->water_heater_ == nullptr || (!force && !this->cycle_publish_allowed_) ||
       !this->water_heater_have_temperatures_ || !this->water_heater_have_main_state_) {
-    return;
+    return false;
   }
 
   float current_temperature = this->water_heater_upper_temperature_;
@@ -535,6 +540,7 @@ void DaikinEkhheComponent::publish_water_heater_state_(bool force) {
 
   this->water_heater_->publish_readback(current_temperature, target_temperature, mode,
                                         this->water_heater_power_on_, away);
+  return true;
 }
 #endif
 
