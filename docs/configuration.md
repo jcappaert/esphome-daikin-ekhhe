@@ -137,11 +137,18 @@ manual as the primary diagnostic reference when a fault is active.
 `master_fault` is an aggregate OR of the confirmed fault/alarm indicators and
 is intended as the simplest Home Assistant automation trigger.
 
+`communication_error` is a local ESPHome/interface-health indicator. It turns
+on when the component has not received a complete valid bus update within the
+communication timeout window, and turns off again after the next complete valid
+update. It is useful for alerting on disconnected RS485 wiring, stalled bus
+capture, or stale values.
+
 `E04` and `E08` are not exposed yet. They are intentionally omitted because
 they have not been reproducibly observed on this unit in a bus-visible form:
 `E04` may not be present on all manual/hardware variants, and `E08` appears to
 be display-local or otherwise not reported as a confirmed status bit on the
-captured display bus.
+captured display bus. `communication_error` is the recommended ESPHome-side
+health check for that class of issue, but it is not a decoded Daikin `E08`.
 
 ### Target Temperatures
 

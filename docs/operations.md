@@ -136,11 +136,22 @@ that transition instead of hiding it.
 Use `master_fault` when you only need a single alert/automation trigger. It is
 on whenever any confirmed fault/protection/alarm indicator is active.
 
+Use `communication_error` when you want to alert on the ESPHome interface
+itself. It is on when the component has not received a complete valid bus update
+within the communication timeout window. The timeout is the greater of 30
+seconds or three times `update_interval`, so normal non-continuous polling does
+not report false errors between expected reads.
+
+`communication_error` is intentionally separate from `master_fault`: it reports
+stale or missing RS485 data from the ESPHome component's point of view, not a
+confirmed device fault shown by the Daikin display.
+
 `E04` and `E08` are intentionally not included at this time. They are not just
 missing from the entity list; they have not been reproduced with a reliable
 bus-visible status bit. In particular, `E04` may depend on hardware/manual
 variant behavior, and `E08` may be local to the display when communication is
-lost.
+lost. Use `communication_error` for integration-side detection of missing or
+stale bus data.
 
 ## Log Expectations
 
@@ -152,6 +163,7 @@ At `WARN` level, pay attention to:
 - Write applied after more than one attempt: the change worked, but timing or state conditions were not ideal.
 - Restore/profile warnings: the restore was blocked, missing recent source data, missing a stored profile, failed one internal stage, or failed confirmation.
 - Time-band validation warnings: the staged values were rejected before any command was sent.
+- Communication error warnings: the component has stopped receiving complete valid bus updates, or has recovered after such an outage.
 
 At `DEBUG` level, expect more operational timing detail:
 
@@ -176,6 +188,7 @@ For ordinary use, `INFO` is usually enough. Use `DEBUG` while tuning `tx_send_ca
 - Check common ground.
 - Check UART pins and baud settings.
 - Confirm the original display still works.
+- Expose `communication_error` to alert when ESPHome is connected but no longer receiving complete valid bus updates.
 - Temporarily set `continuous_rx: true` if you need to confirm the node can keep up with every bus cycle.
 
 ### Values update but writes fail

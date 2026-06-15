@@ -55,6 +55,8 @@ binary_sensor:
   - platform: daikin_ekhhe
     master_fault:
       name: "Fault active"
+    communication_error:
+      name: "Communication error"
     hp_active:
       name: "Heat pump active"
     eh_active:
