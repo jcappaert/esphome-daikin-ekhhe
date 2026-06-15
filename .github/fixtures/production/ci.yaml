@@ -59,6 +59,8 @@ binary_sensor:
       name: "CI Electric Heater Active"
     master_fault:
       name: "CI Master Fault"
+    communication_error:
+      name: "CI Communication Error"
     p01_tank_lower_probe_fault:
       name: "CI P01 Tank Lower Probe Fault"
     p02_tank_upper_probe_fault:
