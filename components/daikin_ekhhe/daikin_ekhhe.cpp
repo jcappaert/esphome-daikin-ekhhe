@@ -4,6 +4,7 @@
 #include "daikin_ekhhe_log.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <numeric>
 
 namespace esphome {
@@ -14,6 +15,7 @@ using namespace daikin_ekhhe;
 static const char *const TAG = "daikin_ekhhe";
 
 void DaikinEkhheComponent::setup() {
+  this->communication_health_start_ms_ = millis();
   this->known_good_profile_pref_ =
       global_preferences->make_preference<StoredProfileBlob>(KNOWN_GOOD_PROFILE_PREF_KEY, true);
   this->auto_snapshot_pref_ =
@@ -23,11 +25,13 @@ void DaikinEkhheComponent::setup() {
 }
 
 void DaikinEkhheComponent::loop() {
+  const unsigned long now = millis();
+  check_communication_error_(now);
+
   if (processing_updates_ || uart_tx_active_) {
     return;
   }
 
-  const unsigned long now = millis();
   if (!uart_active_) {
     if (now - last_process_time_ >= update_interval_ || last_process_time_ == 0) {
       start_uart_cycle();
@@ -62,6 +66,54 @@ void DaikinEkhheComponent::loop() {
   if (packet_set_complete()) {
     process_packet_set();
   }
+}
+
+uint32_t DaikinEkhheComponent::communication_error_timeout_ms_() const {
+  const uint32_t scaled_interval =
+      this->update_interval_ > (UINT32_MAX / 3UL) ? UINT32_MAX : static_cast<uint32_t>(this->update_interval_ * 3UL);
+  return std::max(kCommunicationErrorMinTimeoutMs, scaled_interval);
+}
+
+void DaikinEkhheComponent::check_communication_error_(uint32_t now_ms) {
+  if (binary_sensors_.find(COMMUNICATION_ERROR) == binary_sensors_.end()) {
+    return;
+  }
+
+  const uint32_t reference_ms =
+      last_valid_cycle_ms_ != 0 ? last_valid_cycle_ms_ : communication_health_start_ms_;
+  if ((now_ms - reference_ms) < communication_error_timeout_ms_()) {
+    return;
+  }
+
+  publish_communication_error_(true, now_ms);
+}
+
+void DaikinEkhheComponent::publish_communication_error_(bool error, uint32_t now_ms) {
+  auto sensor_it = binary_sensors_.find(COMMUNICATION_ERROR);
+  if (sensor_it == binary_sensors_.end() || sensor_it->second == nullptr) {
+    return;
+  }
+
+  if (!should_publish_bool_(COMMUNICATION_ERROR, error, last_published_binary_values_,
+                            last_published_binary_ms_, 0)) {
+    return;
+  }
+
+  if (error) {
+    if (!communication_error_active_) {
+      communication_error_active_since_ms_ = now_ms;
+      DAIKIN_WARN(TAG, "Communication error: no complete valid packet cycle for %u ms (threshold=%u ms)",
+                  now_ms - (last_valid_cycle_ms_ != 0 ? last_valid_cycle_ms_ : communication_health_start_ms_),
+                  communication_error_timeout_ms_());
+    }
+  } else if (communication_error_active_) {
+    DAIKIN_WARN(TAG, "Communication recovered after %u ms",
+                communication_error_active_since_ms_ == 0 ? 0 : now_ms - communication_error_active_since_ms_);
+    communication_error_active_since_ms_ = 0;
+  }
+
+  communication_error_active_ = error;
+  defer([sensor = sensor_it->second, error]() { sensor->publish_state(error); });
 }
 
 uint8_t DaikinEkhheComponent::ekhhe_checksum(const std::vector<uint8_t>& data_bytes) {

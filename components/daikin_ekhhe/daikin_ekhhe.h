@@ -414,6 +414,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   static constexpr uint32_t kSlowPublishRefreshMs = 30 * 60 * 1000;
   static constexpr uint32_t kTimestampRefreshMs = 5 * 60 * 1000;
   static constexpr uint32_t kCycleTimeoutMs = 2000;
+  static constexpr uint32_t kCommunicationErrorMinTimeoutMs = 30 * 1000;
   static constexpr uint32_t kFrameReadTimeoutMs = 120;
   static constexpr size_t kRawFrameMaxLen = 71;
   static constexpr size_t kRawFrameBufferSize = 16;
@@ -489,6 +490,9 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void start_uart_cycle();
   void process_packet_set();
   bool packet_set_complete();
+  uint32_t communication_error_timeout_ms_() const;
+  void check_communication_error_(uint32_t now_ms);
+  void publish_communication_error_(bool error, uint32_t now_ms);
   uint8_t read_rx_byte_();
   void reset_rx_frame_();
   void consume_uart_byte_(uint8_t byte, uint32_t now_ms);
@@ -975,6 +979,10 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   // Cycle management
   unsigned long last_process_time_ = 0;
   unsigned long update_interval_ = 10000;
+  uint32_t communication_health_start_ms_ = 0;
+  uint32_t last_valid_cycle_ms_ = 0;
+  uint32_t communication_error_active_since_ms_ = 0;
+  bool communication_error_active_ = false;
   uint32_t tx_delay_after_d2_ms_ = kDefaultTxDelayAfterD2Ms;
 };
 

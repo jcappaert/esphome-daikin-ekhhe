@@ -356,6 +356,11 @@ void DaikinEkhheComponent::process_packet_set() {
 
   bool has_required = (cycle_packet_types_seen_ & kRequiredPacketMask) == kRequiredPacketMask;
   cycle_publish_allowed_ = has_required;
+  const uint32_t now_ms = millis();
+  if (has_required) {
+    last_valid_cycle_ms_ = now_ms;
+    publish_communication_error_(false, now_ms);
+  }
 
   // Assign stored packets to last known packet values.
   last_dd_packet_ = latest_packets_[DD_PACKET_START_BYTE];
@@ -401,7 +406,7 @@ void DaikinEkhheComponent::process_packet_set() {
 
   // Reset UART cycle.
   processing_updates_ = false;
-  last_process_time_ = millis();
+  last_process_time_ = now_ms;
   if (any_tx_or_ui_sync_active_() || continuous_rx_) {
     start_uart_cycle();
   } else {
