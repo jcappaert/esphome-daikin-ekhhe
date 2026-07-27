@@ -62,6 +62,12 @@ SENSOR_SPECS = [
         state_class=STATE_CLASS_MEASUREMENT,
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
+    SensorSchemaSpec(
+        VACATION_DAYS_LEFT,
+        unit_of_measurement=UNIT_EMPTY,
+        accuracy_decimals=0,
+        state_class=STATE_CLASS_MEASUREMENT,
+    ),
 ]
 
 TYPES = [spec.key for spec in SENSOR_SPECS]

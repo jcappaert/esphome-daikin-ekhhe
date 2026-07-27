@@ -479,6 +479,11 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   binary_sensor::BinarySensor *heating_demand_ = nullptr;
   binary_sensor::BinarySensor *hp_active_ = nullptr;
   binary_sensor::BinarySensor *eh_active_ = nullptr;
+  bool have_vacation_main_state_ = false;
+  bool have_vacation_day_counter_ = false;
+  uint8_t vacation_operational_mode_ = kOperationalModeAuto;
+  uint8_t vacation_configured_days_ = 0;
+  uint8_t vacation_day_counter_ = 0;
   esphome::time::RealTimeClock *clock = nullptr;
 
   // UART Processing
@@ -494,6 +499,8 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   uint32_t communication_error_timeout_ms_() const;
   void check_communication_error_(uint32_t now_ms);
   void publish_communication_error_(bool error, uint32_t now_ms);
+  void update_vacation_main_state_from_bus_(const std::vector<uint8_t> &buffer, bool d2_packet);
+  void publish_vacation_days_left_();
   uint8_t read_rx_byte_();
   void reset_rx_frame_();
   void consume_uart_byte_(uint8_t byte, uint32_t now_ms);

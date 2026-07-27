@@ -10,6 +10,7 @@ H_SOLAR_T_PROBE         = "solar_collector_temp_probe"
 I_EEV_STEP              = "eev_opening_step"
 FAN_SPEED_RPM           = "fan_speed_rpm"
 VACATION_DAY_COUNTER    = "vacation_day_counter"
+VACATION_DAYS_LEFT      = "vacation_days_left"
 J_POWER_FW_VERSION      = "power_board_firmware_version"
 L_UI_FW_VERSION         = "ui_firmware_version"
 

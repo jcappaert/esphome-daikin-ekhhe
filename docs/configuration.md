@@ -63,11 +63,16 @@ Useful read-only values for monitoring the heat pump:
 - `eev_opening_step`
 - `fan_speed_rpm`
 - `vacation_day_counter`
+- `vacation_days_left`
 
 `vacation_day_counter` is an observed runtime counter that increments while
 the device is in Vacation mode and resets when Vacation mode ends. It is
 exposed as a diagnostic sensor because the exact manufacturer semantics and
 off-by-one behavior are still being validated.
+
+`vacation_days_left` is derived from bus readback while Vacation mode is active
+using `max(vacation_days - vacation_day_counter, 0)`. It publishes `0` outside
+Vacation mode.
 
 ### Basic Operation
 

@@ -48,6 +48,8 @@ sensor:
       name: "CI Fan Speed RPM"
     vacation_day_counter:
       name: "CI Vacation Day Counter"
+    vacation_days_left:
+      name: "CI Vacation Days Left"
 
 binary_sensor:
   - platform: daikin_ekhhe

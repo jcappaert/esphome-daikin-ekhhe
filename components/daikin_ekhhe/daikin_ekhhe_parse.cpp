@@ -52,6 +52,8 @@ void DaikinEkhheComponent::update_dd_b1_bit_sensors_() {
 void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
   const float lower_water_temperature = static_cast<int8_t>(buffer[DD_PACKET_A_IDX]);
   const float upper_water_temperature = static_cast<int8_t>(buffer[DD_PACKET_B_IDX]);
+  this->vacation_day_counter_ = buffer[DD_PACKET_VACATION_DAY_COUNTER_IDX];
+  this->have_vacation_day_counter_ = true;
 
 #if defined(USE_WATER_HEATER)
   update_water_heater_temperature_cache_(lower_water_temperature, upper_water_temperature);
@@ -68,13 +70,14 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
       {G_COMP_GAS_T_PROBE,     buffer[DD_PACKET_G_IDX]},
       {H_SOLAR_T_PROBE,        buffer[DD_PACKET_H_IDX]},
       {I_EEV_STEP,             (float)((buffer[DD_PACKET_I_IDX] << 8) | buffer[DD_PACKET_I_IDX + 1])},
-      {VACATION_DAY_COUNTER,   static_cast<float>(buffer[DD_PACKET_VACATION_DAY_COUNTER_IDX])},
+      {VACATION_DAY_COUNTER,   static_cast<float>(this->vacation_day_counter_)},
       {FAN_SPEED_RPM,          (float)((buffer[DD_PACKET_FAN_RPM_IDX] << 8) | buffer[DD_PACKET_FAN_RPM_IDX + 1])},
   };
 
   for (const auto &entry : sensor_values) {
     set_sensor_value(entry.first, entry.second);
   }
+  publish_vacation_days_left_();
 
   set_text_sensor_value_(J_POWER_FW_VERSION, "U" + std::to_string(buffer[DD_PACKET_J_FW_IDX]));
 
@@ -124,6 +127,40 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
   return;
 }
 
+void DaikinEkhheComponent::update_vacation_main_state_from_bus_(const std::vector<uint8_t> &buffer,
+                                                                bool d2_packet) {
+  const uint8_t mode_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_MODE_IDX)
+                                     : static_cast<uint8_t>(CC_PACKET_MODE_IDX);
+  const uint8_t vacation_days_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_VAC_DAYS)
+                                              : static_cast<uint8_t>(CC_PACKET_VAC_DAYS);
+  if (buffer.size() <= mode_idx || buffer.size() <= vacation_days_idx) {
+    return;
+  }
+
+  this->vacation_operational_mode_ = buffer[mode_idx];
+  this->vacation_configured_days_ = buffer[vacation_days_idx];
+  this->have_vacation_main_state_ = true;
+  publish_vacation_days_left_();
+}
+
+void DaikinEkhheComponent::publish_vacation_days_left_() {
+  if (!this->have_vacation_main_state_) {
+    return;
+  }
+
+  float days_left = 0.0f;
+  if (this->vacation_operational_mode_ == kOperationalModeVacation) {
+    if (!this->have_vacation_day_counter_) {
+      return;
+    }
+    if (this->vacation_configured_days_ > this->vacation_day_counter_) {
+      days_left = static_cast<float>(this->vacation_configured_days_ - this->vacation_day_counter_);
+    }
+  }
+
+  set_sensor_value(VACATION_DAYS_LEFT, days_left);
+}
+
 void DaikinEkhheComponent::update_time_band_state_from_bus_(const std::vector<uint8_t> &buffer,
                                                             bool d2_packet, bool force) {
   const uint8_t flag_idx = d2_packet ? static_cast<uint8_t>(D2_PACKET_TIME_BAND_FLAG_IDX)
@@ -163,6 +200,7 @@ void DaikinEkhheComponent::update_time_band_state_from_bus_(const std::vector<ui
 }
 
 void DaikinEkhheComponent::parse_d2_packet(std::vector<uint8_t> buffer) {
+  update_vacation_main_state_from_bus_(buffer, true);
   update_time_band_state_from_bus_(buffer, true);
 
   // update numbers
@@ -412,6 +450,7 @@ void DaikinEkhheComponent::parse_cc_packet(std::vector<uint8_t> buffer) {
                                 time_band_sync.mode);
   const bool pending_profile_active = profile_restore_tx_active_();
 
+  update_vacation_main_state_from_bus_(buffer, false);
   update_time_band_state_from_bus_(buffer, false, time_band_cc_sync_matched);
 
   for (const auto &entry : NUMBER_FIELD_SPECS) {
