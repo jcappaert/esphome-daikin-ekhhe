@@ -73,6 +73,7 @@ off-by-one behavior are still being validated.
 `vacation_days_left` is derived from bus readback while Vacation mode is active
 using `max(vacation_days - vacation_day_counter, 0)`. It publishes `0` outside
 Vacation mode.
+If `vacation_days` is changed while Vacation mode is already active, the configured total updates but the observed runtime counter does not reset.
 
 ### Basic Operation
 
