@@ -68,6 +68,7 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
       {G_COMP_GAS_T_PROBE,     buffer[DD_PACKET_G_IDX]},
       {H_SOLAR_T_PROBE,        buffer[DD_PACKET_H_IDX]},
       {I_EEV_STEP,             (float)((buffer[DD_PACKET_I_IDX] << 8) | buffer[DD_PACKET_I_IDX + 1])},
+      {VACATION_COUNTER,       static_cast<float>(buffer[DD_PACKET_VACATION_COUNTER_IDX])},
       {FAN_SPEED_RPM,          (float)((buffer[DD_PACKET_FAN_RPM_IDX] << 8) | buffer[DD_PACKET_FAN_RPM_IDX + 1])},
   };
 

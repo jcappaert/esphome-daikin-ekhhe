@@ -62,6 +62,12 @@ Useful read-only values for monitoring the heat pump:
 - `solar_collector_temp_probe`
 - `eev_opening_step`
 - `fan_speed_rpm`
+- `vacation_counter`
+
+`vacation_counter` is an observed runtime counter that increments while the
+device is in Vacation mode and resets when Vacation mode ends. It is exposed as
+a diagnostic sensor because the exact manufacturer semantics are still being
+validated.
 
 ### Basic Operation
 
