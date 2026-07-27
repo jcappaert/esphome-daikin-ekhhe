@@ -46,8 +46,8 @@ sensor:
       name: "CI Low Water Temperature probe"
     fan_speed_rpm:
       name: "CI Fan Speed RPM"
-    vacation_counter:
-      name: "CI Vacation Counter"
+    vacation_day_counter:
+      name: "CI Vacation Day Counter"
 
 binary_sensor:
   - platform: daikin_ekhhe

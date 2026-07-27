@@ -56,7 +56,7 @@ SENSOR_SPECS = [
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     SensorSchemaSpec(
-        VACATION_COUNTER,
+        VACATION_DAY_COUNTER,
         unit_of_measurement=UNIT_EMPTY,
         accuracy_decimals=0,
         state_class=STATE_CLASS_MEASUREMENT,

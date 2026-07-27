@@ -217,7 +217,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
     DD_PACKET_H_IDX     = 14,
     DD_PACKET_I_IDX     = 17,
     DD_PACKET_DIG_IDX     = 21,
-    DD_PACKET_VACATION_COUNTER_IDX = 24,
+    DD_PACKET_VACATION_DAY_COUNTER_IDX = 24,
     DD_PACKET_FAN_RPM_IDX = 26,
     DD_PACKET_J_FW_IDX    = 39,
     DD_PACKET_END       = 40,
