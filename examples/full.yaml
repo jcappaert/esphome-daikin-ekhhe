@@ -70,6 +70,10 @@ sensor:
       name: "I: EEV opening step"
     fan_speed_rpm:
       name: "Fan speed RPM"
+    vacation_day_counter:
+      name: "Vacation day counter"
+    vacation_days_left:
+      name: "Vacation days left"
 
 binary_sensor:
   - platform: daikin_ekhhe

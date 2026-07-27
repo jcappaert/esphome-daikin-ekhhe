@@ -40,7 +40,7 @@ PLATFORM_SOURCE_PATHS = [
 ]
 
 REQUIRED_PRODUCTION_FIXTURE_KEYS = {
-    "sensor": ["A_LOW_WAT_T_PROBE", "FAN_SPEED_RPM"],
+    "sensor": ["A_LOW_WAT_T_PROBE", "FAN_SPEED_RPM", "VACATION_DAY_COUNTER", "VACATION_DAYS_LEFT"],
     "runtime binary sensor": ["HEATING_DEMAND", "HP_ACTIVE", "EH_ACTIVE"],
     "fault binary sensor": ["MASTER_FAULT", "P01_TANK_LOWER_PROBE_FAULT"],
     "main number": ["P1_LOW_WAT_PROBE_HYST"],
