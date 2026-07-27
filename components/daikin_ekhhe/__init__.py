@@ -29,7 +29,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_UPDATE_INTERVAL, default=10): cv.positive_int,
             cv.Optional(CONF_MODE): cv.one_of("production", "debug", lower=True),
             cv.Optional(CONF_CONTINUOUS_RX, default=False): cv.boolean,
-            cv.Optional(CONF_TX_SEND_CALIBRATION, default=75): cv.int_range(min=0, max=250),
+            cv.Optional(CONF_TX_SEND_CALIBRATION, default=150): cv.int_range(min=0, max=250),
         }
     )
     .extend(uart.UART_DEVICE_SCHEMA)
