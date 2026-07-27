@@ -40,7 +40,7 @@ daikin_ekhhe:
 | `update_interval` | `10` | Idle polling interval in seconds. Higher values can reduce CPU load on more constrained ESP variants. Writes temporarily keep RX active until confirmation and UI sync complete. |
 | `continuous_rx` | `false` | When true, RX starts another cycle immediately after each complete cycle instead of waiting for `update_interval`. Writes and restore/profile actions keep RX active as needed even when this is false. |
 | `mode` | none | Deprecated compatibility shim. Accepted legacy values are ignored at runtime; remove this option from new YAML. |
-| `tx_send_calibration` | `75` | Delay in milliseconds used when scheduling write packets. This might need to be calibrated for your specific ESP32 chip if parameters writes are not working. |
+| `tx_send_calibration` | `150` | Delay in milliseconds used when scheduling write packets. This might need to be calibrated for your specific ESP32 chip if parameters writes are not working. |
 
 The optional `tx_send_calibration` number entity can expose this timing as a Number. Changes made through the number entity apply immediately but are not persisted unless you also update YAML.
 
