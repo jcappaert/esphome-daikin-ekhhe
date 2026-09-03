@@ -42,6 +42,11 @@ The currently useful mental model is to group packets by ownership and purpose. 
 
 The implementation uses these families when selecting the packet to send and the packet to trust for confirmation.
 
+Known `DD` runtime indicators include heat demand, heat-pump activity,
+electric-heater activity, and anti-legionella cycle activity. The latter is
+reported by `DD[19]` bit 1. It remains asserted during the cycle's final hold
+period after the electric-heater-active bit clears.
+
 ## Observed Idle Cycle
 
 With continuous RX enabled, the stable cycle is roughly 1.49 to 1.50 seconds. A commonly observed order is:

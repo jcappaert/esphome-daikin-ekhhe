@@ -27,6 +27,7 @@ static const std::string DIG3_CONFIG             = "dig3_config";
 
 static const std::string MASTER_FAULT = "master_fault";
 static const std::string COMMUNICATION_ERROR = "communication_error";
+static const std::string LEGIONELLA_CYCLE_ACTIVE = "legionella_cycle_active";
 static const std::string P01_TANK_LOWER_PROBE_FAULT = "p01_tank_lower_probe_fault";
 static const std::string P02_TANK_UPPER_PROBE_FAULT = "p02_tank_upper_probe_fault";
 static const std::string P03_DEFROST_PROBE_FAULT = "p03_defrost_probe_fault";
