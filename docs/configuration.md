@@ -86,6 +86,7 @@ Common day-to-day controls and state indicators:
 - `hp_active`
 - `eh_active`
 - `heating_demand`
+- `legionella_cycle_active`
 - `vacation_days`
 
 `silent_mode` can be enabled only while the unit is in Auto, Eco, or Boost mode. Disabling it is allowed from any mode so the setting can be cleared safely if the operating mode changes.

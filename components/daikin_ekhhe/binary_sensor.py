@@ -29,6 +29,10 @@ BINARY_SENSOR_SPECS = [
         device_class=DEVICE_CLASS_PROBLEM,
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
+    BinarySensorSchemaSpec(
+        LEGIONELLA_CYCLE_ACTIVE,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
     *[
         BinarySensorSchemaSpec(key, entity_category=ENTITY_CATEGORY_DIAGNOSTIC)
         for key in [

@@ -94,6 +94,7 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
   const bool e02_solar_recirculation_alarm = (buffer[DD_PACKET_ALARM_IDX] & 0x02) != 0;
   const bool e03_electronic_fan_fault = (buffer[DD_PACKET_ALARM2_IDX] & 0x08) != 0;
   const bool pa_heat_pump_temp_unsuitable_alarm = (buffer[DD_PACKET_ALARM_IDX] & 0x10) != 0;
+  const bool legionella_cycle_active = (buffer[DD_PACKET_LEGIONELLA_STATUS_IDX] & 0x02) != 0;
   const bool master_fault = p01_tank_lower_probe_fault || p02_tank_upper_probe_fault || p03_defrost_probe_fault ||
                             p04_inlet_air_probe_fault || p05_evaporator_inlet_probe_fault ||
                             p06_evaporator_outlet_probe_fault || p07_compressor_flow_probe_fault ||
@@ -106,6 +107,7 @@ void DaikinEkhheComponent::parse_dd_packet(std::vector<uint8_t> buffer) {
       {DIG2_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x02)},
       {DIG3_CONFIG, (bool)(buffer[DD_PACKET_DIG_IDX] & 0x04)},
       {MASTER_FAULT, master_fault},
+      {LEGIONELLA_CYCLE_ACTIVE, legionella_cycle_active},
       {P01_TANK_LOWER_PROBE_FAULT, p01_tank_lower_probe_fault},
       {P02_TANK_UPPER_PROBE_FAULT, p02_tank_upper_probe_fault},
       {P03_DEFROST_PROBE_FAULT, p03_defrost_probe_fault},

@@ -93,6 +93,8 @@ binary_sensor:
       name: "Master fault"
     communication_error:
       name: "Communication error"
+    legionella_cycle_active:
+      name: "Legionella Cycle Active"
     p01_tank_lower_probe_fault:
       name: "P01: Tank lower probe fault"
     p02_tank_upper_probe_fault:
