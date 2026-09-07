@@ -1,0 +1,45 @@
+substitutions:
+  name: ekhhe-esp-interface
+  friendly_name: EKHHE ESP Interface
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.5.3
+  name_add_mac_suffix: true
+  project:
+    name: ekhhe.esp_interface
+    version: "1.0.0"
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+
+api:
+
+ota:
+  - platform: esphome
+
+dashboard_import:
+  package_import_url: github://jcappaert/esphome-daikin-ekhhe/examples/companion-pcb/minimal.yaml@main
+  import_full_config: true
+
+wifi:
+  ap: {}
+
+captive_portal:
+
+improv_serial:
+
+switch:
+  - platform: gpio
+    id: rs485_de_holdoff
+    internal: true
+    restore_mode: ALWAYS_OFF
+    pin:
+      number: GPIO2
+      ignore_strapping_warning: true
