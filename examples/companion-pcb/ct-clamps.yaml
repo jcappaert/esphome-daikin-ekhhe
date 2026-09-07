@@ -1,0 +1,199 @@
+substitutions:
+  name: ekhhe-esp-interface
+  friendly_name: EKHHE ESP Interface
+  uart_rx_pin: GPIO5
+  uart_tx_pin: GPIO4
+  rs485_de_pin: GPIO2
+  ct1_adc_pin: GPIO0
+  ct2_adc_pin: GPIO1
+  ct_amps_per_volt: "20.0"
+  nominal_line_voltage: "230.0"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.5.3
+  name_add_mac_suffix: true
+  project:
+    name: ekhhe.esp_interface
+    version: "1.0.0"
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+
+api:
+
+ota:
+  - platform: esphome
+
+dashboard_import:
+  package_import_url: github://jcappaert/esphome-daikin-ekhhe/examples/companion-pcb/ct-clamps.yaml@main
+  import_full_config: true
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  ap: {}
+
+captive_portal:
+
+improv_serial:
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/jcappaert/esphome-daikin-ekhhe
+      ref: main
+    components: [daikin_ekhhe]
+
+uart:
+  id: daikin_uart
+  rx_pin: ${uart_rx_pin}
+  tx_pin: ${uart_tx_pin}
+  flow_control_pin:
+    number: ${rs485_de_pin}
+    ignore_strapping_warning: true
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+
+daikin_ekhhe:
+  - id: daikin_component
+    uart_id: daikin_uart
+    update_interval: 10
+    continuous_rx: false
+    tx_send_calibration: 150
+
+water_heater:
+  - platform: daikin_ekhhe
+    ekhhe_id: daikin_component
+    name: "Daikin DHW"
+    current_temperature_source: display
+
+sensor:
+  - platform: daikin_ekhhe
+    low_water_temp_probe:
+      name: "Lower water temperature"
+    upper_water_temp_probe:
+      name: "Upper water temperature"
+
+  - platform: adc
+    pin: ${ct1_adc_pin}
+    id: ct1_adc_voltage
+    name: "${friendly_name} CT1 ADC Voltage"
+    attenuation: 12db
+    samples: 16
+    update_interval: 2s
+    accuracy_decimals: 3
+
+  - platform: adc
+    pin: ${ct2_adc_pin}
+    id: ct2_adc_voltage
+    name: "${friendly_name} CT2 ADC Voltage"
+    attenuation: 12db
+    samples: 16
+    update_interval: 2s
+    accuracy_decimals: 3
+
+  - platform: ct_clamp
+    sensor: ct1_adc_voltage
+    id: ct1_current
+    name: "${friendly_name} CT1 Current"
+    sample_duration: 400ms
+    update_interval: 2s
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 3
+    filters:
+      - multiply: ${ct_amps_per_volt}
+      - lambda: |-
+          if (x < 0.05f) {
+            return 0.0f;
+          }
+          return x;
+
+  - platform: template
+    id: ct1_apparent_power
+    name: "${friendly_name} CT1 Apparent Power"
+    unit_of_measurement: VA
+    device_class: apparent_power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 2s
+    lambda: |-
+      return id(ct1_current).state * ${nominal_line_voltage}f;
+
+  - platform: ct_clamp
+    sensor: ct2_adc_voltage
+    id: ct2_current
+    name: "${friendly_name} CT2 Current"
+    sample_duration: 400ms
+    update_interval: 2s
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 3
+    filters:
+      - multiply: ${ct_amps_per_volt}
+      - lambda: |-
+          if (x < 0.05f) {
+            return 0.0f;
+          }
+          return x;
+
+  - platform: template
+    id: ct2_apparent_power
+    name: "${friendly_name} CT2 Apparent Power"
+    unit_of_measurement: VA
+    device_class: apparent_power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 2s
+    lambda: |-
+      return id(ct2_current).state * ${nominal_line_voltage}f;
+
+binary_sensor:
+  - platform: status
+    name: "${friendly_name} Status"
+
+  - platform: daikin_ekhhe
+    master_fault:
+      name: "Fault active"
+    communication_error:
+      name: "Communication error"
+    hp_active:
+      name: "Heat pump active"
+    eh_active:
+      name: "Electric heater active"
+
+number:
+  - platform: daikin_ekhhe
+    auto_target_temperature:
+      name: "Auto mode target temperature"
+    eco_target_temperature:
+      name: "Eco mode target temperature"
+    boost_target_temperature:
+      name: "Boost mode target temperature"
+    electric_target_temperature:
+      name: "Electric mode target temperature"
+
+select:
+  - platform: daikin_ekhhe
+    power_status:
+      name: "Power status"
+    operational_mode:
+      name: "Operational mode"
+
+button:
+  - platform: restart
+    name: "${friendly_name} Restart"
+
+  - platform: safe_mode
+    name: "${friendly_name} Safe Mode Restart"
