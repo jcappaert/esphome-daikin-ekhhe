@@ -27,6 +27,22 @@ Recommended safety steps:
 - Keep the original Daikin display connected and available for verification.
 - Read [operations and recovery](docs/operations.md) before using restore buttons or broad parameter writes.
 
+## Hardware & OEM Sister Models
+
+The **Daikin Altherma M HW** series is manufactured as an OEM product by **Ferroli S.p.A.** in Italy. Because the underlying hardware platform, display bus, and Modbus communication structure are shared across brandings, this component should theoretically be compatible with both the Daikin units and their Ferroli Group equivalents.
+
+### Supported Daikin Models
+* **EKHHE200CV37** (Altherma M HW 200l)
+* **EKHHE260CV37** (Altherma M HW 260l)
+* **EKHHE200PCV37** (Altherma M HW 200l with solar / auxiliary heat exchanger)
+* **EKHHE260PCV37** (Altherma M HW 260l with solar / auxiliary heat exchanger)
+
+### OEM Clones & Sister Models (Untested / Likely Compatible)
+* **Ferroli:** EGEA / EGEA Tech / EGEA LT (200 & 260 liter standalone models)
+* **Lamborghini Calor:** Caloreclima DHW / Egea
+
+> **Note:** Testing and feedback for sister models and different firmware revisions are welcome.
+
 ## Features
 
 - Temperature and runtime sensors for the known EKHHE probe values.
@@ -39,7 +55,7 @@ Recommended safety steps:
 - Restore-defaults button for documented default values in supported writable settings.
 - Optional continuous receive mode for installations that need bus capture during normal polling.
 
-## Hardware
+## ESP Hardware
 
 You need an ESP32 with a UART connected through an RS485 transceiver to the display bus on connector `CN23`. The original display must remain connected.
 
@@ -53,9 +69,7 @@ See [hardware](docs/hardware.md) for wiring notes and safety cautions.
 
 ## Quick Start
 
-This component is tested with ESPHome `2026.5.3` or newer. Older ESPHome
-versions may not include the native water heater command handling used by the
-optional Home Assistant water heater entity.
+This component is tested with ESPHome `2026.5.3` or newer. Older ESPHome versions may not include the native water heater command handling used by the optional Home Assistant water heater entity.
 
 Add this repository as an ESPHome external component:
 
