@@ -238,21 +238,8 @@ Diagnostic identity and time values:
 - `power_board_firmware_version`
 - `ui_firmware_version`
 
-`current_time` needs a configured `time` source to supply the date. A single
-source is selected automatically. With multiple sources, select one explicitly:
-
-```yaml
-time:
-  - platform: homeassistant
-    id: homeassistant_time
-
-text_sensor:
-  - platform: daikin_ekhhe
-    current_time:
-      name: "Current Time UTC"
-      time_id: homeassistant_time
-```
-
+`current_time` requires a configured `time:` source. A single source is selected
+automatically; set `time_id` inside `current_time` to select one explicitly.
 Other text sensors do not require a time source.
 
 ### Recovery And Maintenance

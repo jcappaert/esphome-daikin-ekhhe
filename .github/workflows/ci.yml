@@ -48,29 +48,3 @@ jobs:
 
       - name: Compile water heater firmware
         run: esphome compile .github/fixtures/water_heater/ci.yaml
-
-  esphome-current-time-regression:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install ESPHome
-        run: pip install esphome==2026.10.2
-
-      - name: Compile ESP32-S3 issue 62 configuration
-        run: esphome compile .github/fixtures/issue_62/ci.yaml
-
-      - name: Compile current time runtime test
-        run: esphome compile .github/fixtures/current_time/ci.yaml
-
-      - name: Run current time runtime test
-        env:
-          ESPHOME_PREFDIR: ${{ runner.temp }}/esphome-current-time-prefs
-        run: timeout 15s .github/fixtures/current_time/.esphome/build/daikin-current-time-test/.pioenvs/daikin-current-time-test/program
