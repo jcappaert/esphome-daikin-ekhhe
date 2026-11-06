@@ -159,6 +159,7 @@ class DaikinEkhheComponent : public Component, public uart::UARTDevice {
   void register_select(const std::string &select_name, select::Select *select);
   void register_text_sensor(const std::string &text_sensor_name, esphome::text_sensor::TextSensor *sensor);
   void register_timestamp_sensor(esphome::text_sensor::TextSensor *sensor);
+  void set_time(esphome::time::RealTimeClock *clock) { this->clock = clock; }
 #if defined(USE_SWITCH)
   void register_switch(const std::string &switch_name, switch_::Switch *sw);
 #endif

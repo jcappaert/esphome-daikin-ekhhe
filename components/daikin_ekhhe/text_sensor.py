@@ -1,6 +1,7 @@
 import esphome.codegen as cg
-from esphome.components import text_sensor
-from esphome.const import DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
+import esphome.config_validation as cv
+from esphome.components import text_sensor, time
+from esphome.const import CONF_TIME_ID, DEVICE_CLASS_TIMESTAMP, ENTITY_CATEGORY_DIAGNOSTIC
 
 from . import CONF_EKHHE_ID, DaikinEkhhe
 from .const import (
@@ -32,10 +33,20 @@ TEXT_SENSOR_SPECS = [
     ),
 ]
 
+
+def sensor_schema(spec):
+    schema = text_sensor_schema(spec)
+    if spec.key == CURRENT_TIME:
+        schema = schema.extend(
+            {cv.GenerateID(CONF_TIME_ID): cv.use_id(time.RealTimeClock)}
+        )
+    return schema
+
+
 CONFIG_SCHEMA = platform_schema(
     CONF_EKHHE_ID,
     DaikinEkhhe,
-    optional_schema_entries(TEXT_SENSOR_SPECS, text_sensor_schema),
+    optional_schema_entries(TEXT_SENSOR_SPECS, sensor_schema),
 )
 
 
@@ -43,7 +54,10 @@ async def to_code(config):
     hub = await cg.get_variable(config[CONF_EKHHE_ID])
 
     if CURRENT_TIME in config:
-        sens = await text_sensor.new_text_sensor(config[CURRENT_TIME])
+        conf = config[CURRENT_TIME]
+        clock = await cg.get_variable(conf[CONF_TIME_ID])
+        cg.add(hub.set_time(clock))
+        sens = await text_sensor.new_text_sensor(conf)
         cg.add(hub.register_timestamp_sensor(sens))
     if J_POWER_FW_VERSION in config:
         sens = await text_sensor.new_text_sensor(config[J_POWER_FW_VERSION])

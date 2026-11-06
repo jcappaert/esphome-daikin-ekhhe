@@ -1,0 +1,161 @@
+# Reproduction of issue #62: ESP32-S3, ESP-IDF, and the reporter's enabled entities.
+# Network credentials and API key are placeholders. This fixture is for build checks.
+# https://github.com/jcappaert/esphome-daikin-ekhhe/issues/62#issuecomment-6654737207
+esphome:
+  name: daikin-ekhhe-issue-62
+  friendly_name: Daikin EKHHE Issue 62
+  on_boot:
+    priority: 600
+    then:
+      - lambda: |-
+          setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+          tzset();
+
+esp32:
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+
+time:
+  - platform: homeassistant
+    id: my_time
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "ci-placeholder"
+  password: "ci-placeholder"
+
+external_components:
+  - source:
+      type: local
+      path: ../../../components
+    components: [daikin_ekhhe]
+
+uart:
+  rx_pin: GPIO18
+  tx_pin: GPIO17
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+  id: my_uart
+
+daikin_ekhhe:
+  - id: daikin_component
+    update_interval: 10
+
+water_heater:
+  - platform: daikin_ekhhe
+    ekhhe_id: daikin_component
+    name: "Daikin DHW"
+    current_temperature_source: display
+
+sensor:
+  - platform: daikin_ekhhe
+    low_water_temp_probe:
+      name: "A: Low Water Temperature probe"
+    upper_water_temp_probe:
+      name: "B: Upper Water Temperature probe"
+    defrost_temp_probe:
+      name: "C: Defrost Temperature probe"
+    supply_air_temp_probe:
+      name: "D: Supply Air Temperature probe"
+    evaporator_inlet_gas_temp_probe:
+      name: "E: Evaporator Inlet Gas Temperature probe"
+    evaporator_outlet_gas_temp_probe:
+      name: "F: Evaporator Outlet Gas Temperature probe"
+    compressor_discharge_gas_temp_probe:
+      name: "G: Compressor Discharge Gas Temperature probe"
+    solar_collector_temp_probe:
+      name: "H: Solar Collector Temperature probe"
+    eev_opening_step:
+      name: "I: EEV opening step"
+    fan_speed_rpm:
+      name: "Fan speed RPM"
+
+binary_sensor:
+  - platform: daikin_ekhhe
+    dig2_config:
+      name: "DIG2 setting"
+      filters:
+        - invert:
+    dig3_config:
+      name: "DIG3 setting"
+      filters:
+        - invert:
+    heating_demand:
+      name: "Heating demand"
+    hp_active:
+      name: "Heat pump active"
+    eh_active:
+      name: "Electric heater active"
+    master_fault:
+      name: "Master fault"
+    communication_error:
+      name: "Communication error"
+    p01_tank_lower_probe_fault:
+      name: "P01: Tank lower probe fault"
+    p02_tank_upper_probe_fault:
+      name: "P02: Tank upper probe fault"
+    p03_defrost_probe_fault:
+      name: "P03: Defrost probe fault"
+    p04_inlet_air_probe_fault:
+      name: "P04: Inlet air probe fault"
+    p05_evaporator_inlet_probe_fault:
+      name: "P05: Evaporator inlet probe fault"
+    p06_evaporator_outlet_probe_fault:
+      name: "P06: Evaporator outlet probe fault"
+    p07_compressor_flow_probe_fault:
+      name: "P07: Compressor flow probe fault"
+    p08_solar_collector_probe_fault:
+      name: "P08: Solar collector probe fault"
+    e01_high_pressure_protection:
+      name: "E01: High pressure protection"
+    e02_solar_recirculation_alarm:
+      name: "E02: Solar recirculation alarm"
+    e03_electronic_fan_fault:
+      name: "E03: Electronic fan fault"
+    pa_heat_pump_temperature_unsuitable_alarm:
+      name: "PA: Heat pump temperature unsuitable"
+
+number:
+  - platform: daikin_ekhhe
+    upper_water_eh_pv_mode_threshold:
+      name: "P22: Upper water sensor electric heater PV mode threshold"
+    antilegionella_start_hour:
+      name: "P29: Antilegionelle start hour"
+
+select:
+  - platform: daikin_ekhhe
+    power_status:
+      name: "Power status"
+    operational_mode:
+      name: "Operational mode"
+    pv_mode_integration:
+      name: "P23: PV mode integration"
+    off_peak_working_mode:
+      name: "P24: Off peak mode"
+
+switch:
+  - platform: daikin_ekhhe
+    silent_mode:
+      name: "Silent mode"
+
+button:
+  - platform: daikin_ekhhe
+
+text_sensor:
+  - platform: daikin_ekhhe
+    current_time:
+      name: "Current Time UTC"
+    power_board_firmware_version:
+      name: "J: Power board firmware version"
+    ui_firmware_version:
+      name: "L: UI firmware version"
