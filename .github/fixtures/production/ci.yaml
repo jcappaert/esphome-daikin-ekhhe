@@ -142,6 +142,8 @@ button:
 
 text_sensor:
   - platform: daikin_ekhhe
+    current_time:
+      name: "CI Current Time UTC"
     power_board_firmware_version:
       name: "CI Power Board Firmware Version"
     ui_firmware_version:

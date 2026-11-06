@@ -238,6 +238,10 @@ Diagnostic identity and time values:
 - `power_board_firmware_version`
 - `ui_firmware_version`
 
+`current_time` requires a configured `time:` source. A single source is selected
+automatically; set `time_id` inside `current_time` to select one explicitly.
+Other text sensors do not require a time source.
+
 ### Recovery And Maintenance
 
 Recovery controls and status entities:

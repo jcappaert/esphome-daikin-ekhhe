@@ -659,10 +659,10 @@ void DaikinEkhheComponent::set_select_value(const std::string &select_name, int 
 
 void DaikinEkhheComponent::update_timestamp(uint8_t hour, uint8_t minute) {
     if (this->timestamp_sensor_ != nullptr) {
-        if (!cycle_publish_allowed_) {
+        if (!cycle_publish_allowed_ || this->clock == nullptr) {
             return;
         }
-        ESPTime now = (*clock).now();
+        ESPTime now = this->clock->now();
 
         if (!now.is_valid()) {
             DAIKIN_WARN(TAG, "Time not available yet. Skipping timestamp update.");
