@@ -669,20 +669,19 @@ void DaikinEkhheComponent::update_timestamp(uint8_t hour, uint8_t minute) {
             return;
         }
 
-        // Create a struct to hold the time data
-        struct tm timeinfo = now.to_c_tm();  // Get current UTC time in struct tm
+        // The heat pump reports local hour/minute. Convert using ESPHome's
+        // timezone rules rather than libc's independently configured TZ.
+        now.hour = hour;
+        now.minute = minute;
+        now.second = 0;
+        now.recalc_timestamp_local();
+        if (now.timestamp == -1) {
+            return;
+        }
 
-        // Apply the received hour & minute from UART
-        timeinfo.tm_hour = hour;
-        timeinfo.tm_min = minute;
-        timeinfo.tm_sec = 0;  // Default to 0 seconds
-
-        // Convert back to time_t for consistency
-        time_t adjusted_time = mktime(&timeinfo);
-
-        // Format as ISO 8601 UTC timestamp
+        ESPTime utc = ESPTime::from_epoch_utc(now.timestamp);
         char timestamp[25];
-        strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", gmtime(&adjusted_time));
+        utc.strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ");
 
         // Publish the timestamp to Home Assistant
         uint32_t now_ms = millis();
